@@ -110,6 +110,7 @@ public enum Phase {
     PARSE(null),
     /**
      * In this phase parsing of deployment metadata is complete and the component may be registered with the subsystem.
+     * This is prior to working out the components dependency and equivalent to the OSGi INSTALL life cycle.
      */
     REGISTER(null),
     /**
