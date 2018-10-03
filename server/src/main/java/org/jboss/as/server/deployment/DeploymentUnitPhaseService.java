@@ -59,6 +59,8 @@ import org.jboss.msc.value.InjectedValue;
  */
 final class DeploymentUnitPhaseService<T> implements Service<T> {
 
+    private static final AttachmentKey<AttachmentList<DeploymentUnit>> UNVISITED_DEFERRED_MODULES = AttachmentKey.createList(DeploymentUnit.class);
+
     private final InjectedValue<DeployerChains> deployerChainsInjector = new InjectedValue<DeployerChains>();
     private final DeploymentUnit deploymentUnit;
     private final Phase phase;
@@ -87,7 +89,8 @@ final class DeploymentUnitPhaseService<T> implements Service<T> {
 
     @SuppressWarnings("unchecked")
     public synchronized void start(final StartContext context) throws StartException {
-        if(runOnce.get()) {
+	boolean allowRestart = restartAllowed();
+        if(runOnce.get() && !allowRestart) {
             ServerLogger.DEPLOYMENT_LOGGER.deploymentRestartDetected(deploymentUnit.getName());
             //this only happens on deployment restart, which we don't support at the moment.
             //instead we are going to restart the complete deployment.
@@ -121,6 +124,7 @@ final class DeploymentUnitPhaseService<T> implements Service<T> {
         final ListIterator<RegisteredDeploymentUnitProcessor> iterator = list.listIterator();
         final ServiceContainer container = context.getController().getServiceContainer();
         final ServiceTarget serviceTarget = context.getChildTarget().subTarget();
+	final String name = deploymentUnit.getName();
         final DeploymentUnit parent = deploymentUnit.getParent();
 
         final List<DeploymentUnitPhaseDependency> dependencies = new LinkedList<>();
@@ -224,8 +228,29 @@ final class DeploymentUnitPhaseService<T> implements Service<T> {
                 phaseServiceBuilder.requires(du.getServiceName().append(phase.name()));
             }
 
+            // Defer the {@link Phase.FIRST_MODULE_USE} phase
+            List<String> deferredModules = DeploymentUtils.getDeferredModules(deploymentUnit);
+            if (nextPhase == Phase.FIRST_MODULE_USE) {
+                Mode initialMode = getDeferableInitialMode(deploymentUnit, deferredModules);
+                if (initialMode != Mode.ACTIVE) {
+                    ServerLogger.DEPLOYMENT_LOGGER.infoDeferDeploymentPhase(nextPhase, name, initialMode);
+                    phaseServiceBuilder.setInitialMode(initialMode);
+                }
+            }
+
             phaseServiceBuilder.install();
         }
+    }
+
+    private Boolean restartAllowed() {
+        final DeploymentUnit parent;
+        if (deploymentUnit.getParent() == null) {
+            parent = deploymentUnit;
+        } else {
+            parent = deploymentUnit.getParent();
+        }
+        Boolean allowed = parent.getAttachment(Attachments.ALLOW_PHASE_RESTART);
+        return allowed != null && allowed;
     }
 
     public synchronized void stop(final StopContext context) {
