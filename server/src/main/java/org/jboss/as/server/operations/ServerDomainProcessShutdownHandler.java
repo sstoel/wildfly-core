@@ -23,24 +23,25 @@
 package org.jboss.as.server.operations;
 
 
+import static org.jboss.as.server.Services.JBOSS_SUSPEND_CONTROLLER;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.SUSPEND_TIMEOUT;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.TIMEOUT;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.renameTimeoutToSuspendTimeout;
+
 import java.util.EnumSet;
 
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
-import org.jboss.as.controller.SimpleAttributeDefinition;
-import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleOperationDefinition;
 import org.jboss.as.controller.SimpleOperationDefinitionBuilder;
 import org.jboss.as.controller.access.Action;
-import org.jboss.as.controller.client.helpers.MeasurementUnit;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.registry.OperationEntry;
 import org.jboss.as.server.GracefulShutdownService;
 import org.jboss.as.server.controller.descriptions.ServerDescriptions;
 import org.jboss.as.server.suspend.SuspendController;
 import org.jboss.dmr.ModelNode;
-import org.jboss.dmr.ModelType;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceRegistry;
 
@@ -54,22 +55,18 @@ import org.jboss.msc.service.ServiceRegistry;
  */
 public class ServerDomainProcessShutdownHandler implements OperationStepHandler {
 
-    protected static final SimpleAttributeDefinition TIMEOUT = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.TIMEOUT, ModelType.INT)
-            .setDefaultValue(new ModelNode(0))
-            .setRequired(false)
-            .setMeasurementUnit(MeasurementUnit.SECONDS)
-            .build();
 
     public static final SimpleOperationDefinition DOMAIN_DEFINITION = new SimpleOperationDefinitionBuilder(ModelDescriptionConstants.SHUTDOWN, ServerDescriptions.getResourceDescriptionResolver())
-            .setParameters(TIMEOUT)
-            .setPrivateEntry() // For now
+            .setParameters(TIMEOUT, SUSPEND_TIMEOUT)
+            .setPrivateEntry()
             .withFlags(OperationEntry.Flag.HOST_CONTROLLER_ONLY, OperationEntry.Flag.RUNTIME_ONLY)
             .build();
 
     @Override
     public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {
         context.acquireControllerLock();
-        final int timeout = TIMEOUT.resolveModelAttribute(context, operation).asInt(); //in milliseconds, as this is what is passed in from the HC
+        renameTimeoutToSuspendTimeout(operation);
+        final int timeout = SUSPEND_TIMEOUT.resolveModelAttribute(context, operation).asInt(); //in milliseconds, as this is what is passed in from the HC
         // Acquire the controller lock to prevent new write ops and wait until current ones are done
         context.acquireControllerLock();
         context.addStep(new OperationStepHandler() {
@@ -97,7 +94,7 @@ public class ServerDomainProcessShutdownHandler implements OperationStepHandler 
                             // is already shutting down due to receiving a SIGINT
                             final ServiceController<GracefulShutdownService> gracefulController = (ServiceController<GracefulShutdownService>) registry.getService(GracefulShutdownService.SERVICE_NAME);
                             if (gracefulController != null) {
-                                final ServiceController<SuspendController> suspendControllerServiceController = (ServiceController<SuspendController>) registry.getService(SuspendController.SERVICE_NAME);
+                                final ServiceController<SuspendController> suspendControllerServiceController = (ServiceController<SuspendController>) registry.getService(JBOSS_SUSPEND_CONTROLLER);
                                 if (suspendControllerServiceController != null) {
                                     gracefulController.getValue().startGracefulShutdown();
                                     suspendControllerServiceController.getValue().suspend(timeout > 0 ? timeout * 1000 : timeout);

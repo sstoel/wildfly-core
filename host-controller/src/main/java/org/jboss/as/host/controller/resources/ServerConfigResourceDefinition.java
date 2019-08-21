@@ -22,7 +22,20 @@
 
 package org.jboss.as.host.controller.resources;
 
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.DESTROY;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.KILL;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RELOAD;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESTART;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESUME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SERVER_CONFIG;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.START;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.STOP;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUSPEND;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.BLOCKING;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.START_MODE;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.SUSPEND_TIMEOUT;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.TIMEOUT;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.getDomainServerLifecycleDefinition;
 
 import java.io.File;
 import java.util.Arrays;
@@ -88,11 +101,11 @@ public class ServerConfigResourceDefinition extends SimpleResourceDefinition {
 
     public static final SimpleAttributeDefinition AUTO_START = SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.AUTO_START, ModelType.BOOLEAN, true)
             .setAllowExpression(true)
-            .setDefaultValue(new ModelNode(true)).build();
+            .setDefaultValue(ModelNode.TRUE).build();
 
     public static final SimpleAttributeDefinition UPDATE_AUTO_START_WITH_SERVER_STATUS = SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.UPDATE_AUTO_START_WITH_SERVER_STATUS, ModelType.BOOLEAN, true)
             .setAllowExpression(false)
-            .setDefaultValue(new ModelNode(false)).build();
+            .setDefaultValue(ModelNode.FALSE).build();
 
     public static final SimpleAttributeDefinition SOCKET_BINDING_GROUP = SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.SOCKET_BINDING_GROUP, ModelType.STRING, true)
             .setCapabilityReference(SocketBindingGroupResourceDefinition.SOCKET_BINDING_GROUP_CAPABILITY_NAME, SERVER_CONFIG_CAPABILITY_NAME)
@@ -107,7 +120,7 @@ public class ServerConfigResourceDefinition extends SimpleResourceDefinition {
 
     public static final SimpleAttributeDefinition SOCKET_BINDING_PORT_OFFSET = SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.SOCKET_BINDING_PORT_OFFSET, ModelType.INT, true)
             .setAllowExpression(true)
-            .setDefaultValue(new ModelNode(0))
+            .setDefaultValue(ModelNode.ZERO)
             .setXmlName(Attribute.PORT_OFFSET.getLocalName())
             .setValidator(new IntRangeValidator(-65535, 65535, true, true))
             .build();
@@ -153,8 +166,10 @@ public class ServerConfigResourceDefinition extends SimpleResourceDefinition {
      * @param pathManager the {@link PathManagerService} to use for the child {@code path} resources. Cannot be {@code null}
      */
     public ServerConfigResourceDefinition(final LocalHostControllerInfo hostControllerInfo, final ServerInventory serverInventory, final PathManagerService pathManager, final ControlledProcessState processState, final File domainDataDir) {
-        super(PathElement.pathElement(SERVER_CONFIG), HostResolver.getResolver(SERVER_CONFIG, false),
-                ServerAddHandler.create(hostControllerInfo, serverInventory, processState, domainDataDir), ServerRemoveHandler.INSTANCE);
+        super(new SimpleResourceDefinition.Parameters(PathElement.pathElement(SERVER_CONFIG), HostResolver.getResolver(SERVER_CONFIG, false))
+                .setAddHandler(ServerAddHandler.create(hostControllerInfo, serverInventory, processState, domainDataDir))
+                .setRemoveHandler(ServerRemoveHandler.INSTANCE)
+                .addCapabilities(SERVER_CONFIG_CAPABILITY));
 
         assert pathManager != null : "pathManager is null";
 
@@ -213,26 +228,38 @@ public class ServerConfigResourceDefinition extends SimpleResourceDefinition {
         resourceRegistration.registerSubModel(new SslLoopbackResourceDefinition());
     }
 
-    @Override
-    public void registerCapabilities(ManagementResourceRegistration resourceRegistration) {
-        resourceRegistration.registerCapability(SERVER_CONFIG_CAPABILITY);
-    }
-
     public static void registerServerLifecycleOperations(final ManagementResourceRegistration resourceRegistration, final ServerInventory serverInventory) {
-        final ServerStartHandler startHandler = new ServerStartHandler(serverInventory);
-        resourceRegistration.registerOperationHandler(ServerStartHandler.DEFINITION, startHandler);
-        final ServerRestartHandler restartHandler = new ServerRestartHandler(serverInventory);
-        resourceRegistration.registerOperationHandler(ServerRestartHandler.DEFINITION, restartHandler);
-        final ServerStopHandler stopHandler = new ServerStopHandler(serverInventory);
-        resourceRegistration.registerOperationHandler(ServerStopHandler.DEFINITION, stopHandler);
-        final ServerReloadHandler reloadHandler = new ServerReloadHandler(serverInventory);
-        resourceRegistration.registerOperationHandler(ServerReloadHandler.DEFINITION, reloadHandler);
-        resourceRegistration.registerOperationHandler(ServerSuspendHandler.DEFINITION, new ServerSuspendHandler(serverInventory));
-        resourceRegistration.registerOperationHandler(ServerResumeHandler.DEFINITION, new ServerResumeHandler(serverInventory));
-        ServerProcessHandlers.ServerDestroyHandler destroyHandler = new ServerProcessHandlers.ServerDestroyHandler(serverInventory);
-        resourceRegistration.registerOperationHandler(ServerProcessHandlers.DESTROY_OPERATION, destroyHandler);
-        ServerProcessHandlers.ServerKillHandler killHandler = new ServerProcessHandlers.ServerKillHandler(serverInventory);
-        resourceRegistration.registerOperationHandler(ServerProcessHandlers.KILL_OPERATION, killHandler);
+        // Lifecycle ops are deprecated on the server-config resource but not on server
+        boolean serverConfig = resourceRegistration.getPathAddress().getLastElement().getKey().equals(SERVER_CONFIG);
+        // Mark the lifecycle ops on the server-config resources as deprecated.
+        // Some already were deprecated in version 7, so use a different deprecated version for those
+        ModelVersion deprecatedVersion = serverConfig ? ModelVersion.create(9) : null;
+        ModelVersion existingDeprecatedVersion = serverConfig ? ModelVersion.create(7) : null;
+
+        resourceRegistration.registerOperationHandler(
+                getDomainServerLifecycleDefinition(START, ModelType.STRING, deprecatedVersion, BLOCKING, START_MODE),
+                new ServerStartHandler(serverInventory));
+        resourceRegistration.registerOperationHandler(
+                getDomainServerLifecycleDefinition(RESTART, ModelType.STRING, deprecatedVersion, BLOCKING, START_MODE),
+                new ServerRestartHandler(serverInventory));
+        resourceRegistration.registerOperationHandler(
+                getDomainServerLifecycleDefinition(STOP, ModelType.STRING, deprecatedVersion, BLOCKING, TIMEOUT, SUSPEND_TIMEOUT),
+                new ServerStopHandler(serverInventory));
+        resourceRegistration.registerOperationHandler(
+                getDomainServerLifecycleDefinition(RELOAD, ModelType.STRING, existingDeprecatedVersion, BLOCKING, START_MODE),
+                new ServerReloadHandler(serverInventory));
+        resourceRegistration.registerOperationHandler(
+                getDomainServerLifecycleDefinition(SUSPEND, null, existingDeprecatedVersion, TIMEOUT, SUSPEND_TIMEOUT),
+                new ServerSuspendHandler(serverInventory));
+        resourceRegistration.registerOperationHandler(
+                getDomainServerLifecycleDefinition(RESUME, null, existingDeprecatedVersion),
+                new ServerResumeHandler(serverInventory));
+        resourceRegistration.registerOperationHandler(
+                getDomainServerLifecycleDefinition(DESTROY, null, deprecatedVersion),
+                new ServerProcessHandlers.ServerDestroyHandler(serverInventory));
+        resourceRegistration.registerOperationHandler(
+                getDomainServerLifecycleDefinition(KILL, null, deprecatedVersion),
+                new ServerProcessHandlers.ServerKillHandler(serverInventory));
     }
 
 }

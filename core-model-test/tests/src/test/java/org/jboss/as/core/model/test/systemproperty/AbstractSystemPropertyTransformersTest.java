@@ -94,7 +94,8 @@ public abstract class AbstractSystemPropertyTransformersTest extends AbstractCor
         KernelServices legacyServices = mainServices.getLegacyServices(modelVersion);
         Assert.assertTrue(legacyServices.isSuccessfulBoot());
 
-        ModelNode legacyModel = checkCoreModelTransformation(mainServices, modelVersion, StandardServerGroupInitializers.MODEL_FIXER, StandardServerGroupInitializers.MODEL_FIXER);
+        ModelFixer fixer = new StandardServerGroupInitializers.Fixer(modelVersion);
+        ModelNode legacyModel = checkCoreModelTransformation(mainServices, modelVersion, fixer, fixer);
         ModelNode properties = legacyModel;
         if (serverGroup) {
             properties = legacyModel.get(SERVER_GROUP, "test");
@@ -102,9 +103,9 @@ public abstract class AbstractSystemPropertyTransformersTest extends AbstractCor
         properties = properties.get(SYSTEM_PROPERTY);
         Assert.assertEquals(expectedUndefined, properties.get("sys.prop.test.one", BOOT_TIME));
         Assert.assertEquals(1, properties.get("sys.prop.test.one", VALUE).asInt());
-        Assert.assertEquals(new ModelNode(true), properties.get("sys.prop.test.two", BOOT_TIME));
+        Assert.assertEquals(ModelNode.TRUE, properties.get("sys.prop.test.two", BOOT_TIME));
         Assert.assertEquals(2, properties.get("sys.prop.test.two", VALUE).asInt());
-        Assert.assertEquals(new ModelNode(false), properties.get("sys.prop.test.three", BOOT_TIME));
+        Assert.assertEquals(ModelNode.FALSE, properties.get("sys.prop.test.three", BOOT_TIME));
         Assert.assertEquals(3, properties.get("sys.prop.test.three", VALUE).asInt());
         Assert.assertEquals(expectedUndefined, properties.get("sys.prop.test.four", BOOT_TIME));
         Assert.assertFalse(properties.get("sys.prop.test.four", VALUE).isDefined());
@@ -160,9 +161,10 @@ public abstract class AbstractSystemPropertyTransformersTest extends AbstractCor
         }
         ModelTestUtils.checkFailedTransformedBootOperations(mainServices, modelVersion, ops, config);
 
-        checkCoreModelTransformation(mainServices, modelVersion, null, new ModelFixer() {
+        checkCoreModelTransformation(mainServices, modelVersion, new RbacModelFixer(modelVersion), new RbacModelFixer(modelVersion) {
             @Override
             public ModelNode fixModel(ModelNode modelNode) {
+                modelNode = super.fixModel(modelNode);
                 modelNode.remove(SOCKET_BINDING_GROUP);
                 if (!allowExpressions()) {
                     modelNode =  resolve(modelNode);
@@ -184,7 +186,7 @@ public abstract class AbstractSystemPropertyTransformersTest extends AbstractCor
         if (modelVersion_1_4_0_OrGreater()) {
             return new ModelNode();
         } else {
-            return new ModelNode(true);
+            return ModelNode.TRUE;
         }
     }
 

@@ -106,7 +106,7 @@ public class OpTypesExtension implements Extension {
             .setStorageRuntime()
             .build();
     private static final AttributeDefinition METRIC = SimpleAttributeDefinitionBuilder.create("metric", ModelType.BOOLEAN)
-            .setUndefinedMetricValue(new ModelNode(false))
+            .setUndefinedMetricValue(ModelNode.FALSE)
             .build();
 
     @Override
@@ -138,7 +138,7 @@ public class OpTypesExtension implements Extension {
         public void registerOperations(ManagementResourceRegistration resourceRegistration) {
             super.registerOperations(resourceRegistration);
 
-            resourceRegistration.registerOperationHandler(PUBLIC, NoopOperationStepHandler.WITH_RESULT);
+            resourceRegistration.registerOperationHandler(PUBLIC, ((context, operation) -> context.getResult().set(true)));
             resourceRegistration.registerOperationHandler(HIDDEN, NoopOperationStepHandler.WITH_RESULT);
             resourceRegistration.registerOperationHandler(PRIVATE, NoopOperationStepHandler.WITH_RESULT);
             resourceRegistration.registerOperationHandler(RUNTIME_ONLY, RuntimeOnlyHandler.INSTANCE);

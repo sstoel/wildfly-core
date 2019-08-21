@@ -25,6 +25,7 @@ package org.jboss.as.host.controller;
 import static java.security.AccessController.doPrivileged;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.CORE_SERVICE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.DESCRIBE;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ENABLE_AUTO_START;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FAILURE_DESCRIPTION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST_CONNECTION;
@@ -108,7 +109,6 @@ import org.jboss.as.controller.audit.ManagedAuditLogger;
 import org.jboss.as.controller.audit.ManagedAuditLoggerImpl;
 import org.jboss.as.controller.capability.registry.CapabilityScope;
 import org.jboss.as.controller.capability.registry.ImmutableCapabilityRegistry;
-import org.jboss.as.controller.capability.registry.PossibleCapabilityRegistry;
 import org.jboss.as.controller.capability.registry.RegistrationPoint;
 import org.jboss.as.controller.capability.registry.RuntimeCapabilityRegistration;
 import org.jboss.as.controller.capability.registry.RuntimeCapabilityRegistry;
@@ -182,7 +182,7 @@ import org.jboss.as.server.mgmt.UndertowHttpManagementService;
 import org.jboss.as.server.services.security.AbstractVaultReader;
 import org.jboss.dmr.ModelNode;
 import org.jboss.msc.service.Service;
-import org.jboss.msc.service.ServiceController;
+import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceTarget;
 import org.jboss.msc.service.StartContext;
@@ -294,12 +294,11 @@ public class DomainModelControllerService extends AbstractControllerService impl
         ExternalManagementRequestExecutor.install(serviceTarget, threadGroup,
                 EXECUTOR_CAPABILITY.getCapabilityServiceName(), service.getStabilityMonitor());
 
-        serviceTarget.addService(SERVICE_NAME, service)
-                .addDependency(HC_EXECUTOR_SERVICE_NAME, ExecutorService.class, service.getExecutorServiceInjector())
-                .addDependency(ProcessControllerConnectionService.SERVICE_NAME, ProcessControllerConnectionService.class, service.injectedProcessControllerConnection)
-                .addDependency(PATH_MANAGER_CAPABILITY.getCapabilityServiceName()) // ensure this is up
-                .setInitialMode(ServiceController.Mode.ACTIVE)
-                .install();
+        final ServiceBuilder sb = serviceTarget.addService(SERVICE_NAME, service);
+        sb.addDependency(HC_EXECUTOR_SERVICE_NAME, ExecutorService.class, service.getExecutorServiceInjector());
+        sb.addDependency(ProcessControllerConnectionService.SERVICE_NAME, ProcessControllerConnectionService.class, service.injectedProcessControllerConnection);
+        sb.requires(PATH_MANAGER_CAPABILITY.getCapabilityServiceName()); // ensure this is up
+        sb.install();
     }
 
     private DomainModelControllerService(final HostControllerEnvironment environment,
@@ -336,6 +335,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
         this.hostProxies = hostProxies;
         this.serverProxies = serverProxies;
         this.prepareStepHandler = prepareStepHandler;
+        this.prepareStepHandler.setServerInventory(new DelegatingServerInventory());
         this.vaultReader = vaultReader;
         this.ignoredRegistry = ignoredRegistry;
         this.bootstrapListener = bootstrapListener;
@@ -553,7 +553,8 @@ public class DomainModelControllerService extends AbstractControllerService impl
 
     @Override
     protected void initModel(ManagementModel managementModel, Resource modelControllerResource) {
-        HostModelUtil.createRootRegistry(managementModel.getRootResourceRegistration(), environment,
+        ManagementResourceRegistration rootRegistration = managementModel.getRootResourceRegistration();
+        HostModelUtil.createRootRegistry(rootRegistration, environment,
                 ignoredRegistry, this, processType, authorizer, modelControllerResource,
                 hostControllerInfo, managementModel.getCapabilityRegistry());
         VersionModelInitializer.registerRootResource(managementModel.getRootResource(), environment != null ? environment.getProductConfig() : null);
@@ -565,11 +566,10 @@ public class DomainModelControllerService extends AbstractControllerService impl
                 new RuntimeCapabilityRegistration(PATH_MANAGER_CAPABILITY, CapabilityScope.GLOBAL, new RegistrationPoint(PathAddress.EMPTY_ADDRESS, null)));
         capabilityReg.registerCapability(
                 new RuntimeCapabilityRegistration(EXECUTOR_CAPABILITY, CapabilityScope.GLOBAL, new RegistrationPoint(PathAddress.EMPTY_ADDRESS, null)));
-        // TODO consider having ManagementModel provide CapabilityRegistry instead of just RuntimeCapabilityRegistry
-        if (capabilityReg instanceof PossibleCapabilityRegistry) {
-            ((PossibleCapabilityRegistry) capabilityReg).registerPossibleCapability(PATH_MANAGER_CAPABILITY, PathAddress.EMPTY_ADDRESS);
-            ((PossibleCapabilityRegistry) capabilityReg).registerPossibleCapability(EXECUTOR_CAPABILITY, PathAddress.EMPTY_ADDRESS);
-        }
+        // Record the core capabilities with the root MRR so reads of it will show it as their provider
+        // This also gets them recorded as 'possible capabilities' in the capability registry
+        rootRegistration.registerCapability(PATH_MANAGER_CAPABILITY);
+        rootRegistration.registerCapability(EXECUTOR_CAPABILITY);
 
         // Register the slave host info
         ResourceProvider.Tool.addResourceProvider(HOST_CONNECTION, new ResourceProvider() {
@@ -828,22 +828,20 @@ public class DomainModelControllerService extends AbstractControllerService impl
                         getExecutorServiceInjector().getValue(), new InternalExecutor(), this, expressionResolver, environment.getDomainTempDir());
 
                 // demand native mgmt services
-                serviceTarget.addService(ServiceName.JBOSS.append("native-mgmt-startup"), Service.NULL)
-                        .addDependency(ManagementRemotingServices.channelServiceName(ManagementRemotingServices.MANAGEMENT_ENDPOINT, ManagementRemotingServices.SERVER_CHANNEL))
-                        .setInitialMode(ServiceController.Mode.ACTIVE)
-                        .install();
+                final ServiceBuilder nativeSB = serviceTarget.addService(ServiceName.JBOSS.append("native-mgmt-startup"), Service.NULL);
+                nativeSB.requires(ManagementRemotingServices.channelServiceName(ManagementRemotingServices.MANAGEMENT_ENDPOINT, ManagementRemotingServices.SERVER_CHANNEL));
+                nativeSB.install();
 
                 // demand http mgmt services
                 if (capabilityRegistry.hasCapability(UndertowHttpManagementService.EXTENSIBLE_HTTP_MANAGEMENT_CAPABILITY.getName(), CapabilityScope.GLOBAL)) {
-                    serviceTarget.addService(ServiceName.JBOSS.append("http-mgmt-startup"), Service.NULL)
-                            .addDependency(UndertowHttpManagementService.SERVICE_NAME)
-                            .setInitialMode(ServiceController.Mode.ACTIVE)
-                            .install();
+                    final ServiceBuilder httpSB = serviceTarget.addService(ServiceName.JBOSS.append("http-mgmt-startup"), Service.NULL);
+                    httpSB.requires(UndertowHttpManagementService.SERVICE_NAME);
+                    httpSB.install();
                 }
 
                 reachedServers = true;
                 if (currentRunningMode == RunningMode.NORMAL) {
-                    startServers();
+                    startServers(false);
                 }
             }
 
@@ -856,6 +854,9 @@ public class DomainModelControllerService extends AbstractControllerService impl
             if (ok) {
                 try {
                     finishBoot();
+                    if (runningModeControl.getRunningMode() == RunningMode.NORMAL) {
+                        startServers(true);
+                    }
                 } finally {
                     // Trigger the started message
                     Notification notification = new Notification(ModelDescriptionConstants.BOOT_COMPLETE_NOTIFICATION, PathAddress.pathAddress(PathElement.pathElement(CORE_SERVICE, MANAGEMENT),
@@ -1021,10 +1022,11 @@ public class DomainModelControllerService extends AbstractControllerService impl
         }
     }
 
-    private void startServers() {
+    private void startServers(boolean enabledAutoStart) {
         ModelNode addr = new ModelNode();
         addr.add(HOST, hostControllerInfo.getLocalHostName());
         ModelNode op = Util.getEmptyOperation(StartServersHandler.OPERATION_NAME, addr);
+        op.get(ENABLE_AUTO_START).set(enabledAutoStart);
 
         getValue().execute(op, null, null, null);
     }
@@ -1394,6 +1396,11 @@ public class DomainModelControllerService extends AbstractControllerService impl
 
         @Override
         public void registerCapabilities(ManagementResourceRegistration resourceRegistration) {
+            //These will be registered later
+        }
+
+        @Override
+        public void registerAdditionalRuntimePackages(ManagementResourceRegistration resourceRegistration) {
             //These will be registered later
         }
     }

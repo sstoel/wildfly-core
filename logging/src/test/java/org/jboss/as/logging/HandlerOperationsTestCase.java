@@ -61,6 +61,8 @@ import org.jboss.logmanager.Logger;
 import org.jboss.logmanager.config.HandlerConfiguration;
 import org.jboss.logmanager.config.LogContextConfiguration;
 import org.jboss.logmanager.config.LoggerConfiguration;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 /**
@@ -70,6 +72,20 @@ import org.junit.Test;
 public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
 
     private static final String ENCODING = "UTF-8";
+
+    private KernelServices kernelServices;
+
+    @Before
+    public void bootKernelServices() throws Exception {
+        kernelServices = boot();
+    }
+
+    @After
+    public void shutdown() {
+        if (kernelServices != null) {
+            kernelServices.shutdown();
+        }
+    }
 
     @Override
     protected void standardSubsystemTest(final String configId) {
@@ -83,8 +99,6 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
 
     @Test
     public void testOperations() throws Exception {
-        final KernelServices kernelServices = boot();
-
         testConsoleHandler(kernelServices, null);
         testConsoleHandler(kernelServices, PROFILE);
 
@@ -111,8 +125,6 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
 
     @Test
     public void testFormatsNoColor() throws Exception {
-        final KernelServices kernelServices = boot();
-
         final Path logFile = LoggingTestEnvironment.get().getLogDir().resolve("formatter.log");
         // Delete the file if it exists
         Files.deleteIfExists(logFile);
@@ -199,14 +211,12 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
      * {@code named-formatter} is defined it removes the formatter, named the same as the handler, which was created
      * as part of the {@code undefine-attribute} operation of the {@code formatter} attribute.
      *
-     * @throws Exception if an error occurs
      */
     @Test
-    public void testCompositeOperations() throws Exception {
-        final KernelServices kernelServices = boot();
-
+    public void testCompositeOperations() {
         final ModelNode address = createFileHandlerAddress("FILE").toModelNode();
         final String filename = "test-file.log";
+        final String defaultFormatterName = "FILE" + PatternFormatterResourceDefinition.DEFAULT_FORMATTER_SUFFIX;
 
         // Add the handler
         ModelNode addOp = OperationBuilder.createAddOperation(address)
@@ -228,8 +238,8 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         // Get the log context configuration to validate what has been configured
         final LogContextConfiguration configuration = ConfigurationPersistence.getConfigurationPersistence(LogContext.getLogContext());
         assertNotNull("Expected to find the configuration", configuration);
-        assertFalse("Expected the default formatter named FILE to be removed for the handler FILE",
-                configuration.getFormatterNames().contains("FILE"));
+        assertFalse("Expected the default formatter named " + defaultFormatterName + " to be removed for the handler FILE",
+                configuration.getFormatterNames().contains(defaultFormatterName));
         final HandlerConfiguration handlerConfiguration = configuration.getHandlerConfiguration("FILE");
         assertNotNull("Expected to find the configuration for the FILE handler", configuration);
         assertEquals("Expected the handler named FILE to use the PATTERN formatter", "PATTERN",
@@ -237,16 +247,14 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
 
         // Undefine the named-formatter to ensure a formatter is created
         executeOperation(kernelServices, SubsystemOperations.createUndefineAttributeOperation(address, "named-formatter"));
-        assertTrue("Expected the default formatter named FILE to be added",
-                configuration.getFormatterNames().contains("FILE"));
-        assertEquals("Expected the handler named FILE to use the FILE formatter", "FILE",
+        assertTrue("Expected the default formatter named " + defaultFormatterName + " to be added",
+                configuration.getFormatterNames().contains(defaultFormatterName));
+        assertEquals("Expected the handler named FILE to use the FILE formatter", defaultFormatterName,
                 handlerConfiguration.getFormatterName());
     }
 
     @Test
-    public void testAddHandlerComposite() throws Exception {
-        final KernelServices kernelServices = boot();
-
+    public void testAddHandlerComposite() {
         final ModelNode handlerAddress = createFileHandlerAddress("FILE").toModelNode();
         final String filename = "test-file-2.log";
 
@@ -467,6 +475,8 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         verifyFile(newFilename);
 
         testWrite(kernelServices, address, PeriodicHandlerResourceDefinition.SUFFIX, ".yyyy-MM-dd-HH");
+        testWrite(kernelServices, address, PeriodicHandlerResourceDefinition.SUFFIX, ".yyyy-MM-dd-HH.zip");
+        testWrite(kernelServices, address, PeriodicHandlerResourceDefinition.SUFFIX, ".yyyy-MM-dd-HH.gz");
 
         // Undefine attributes
         testUndefineCommonAttributes(kernelServices, address);
@@ -506,7 +516,9 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
 
         testWrite(kernelServices, address, SizeRotatingHandlerResourceDefinition.MAX_BACKUP_INDEX, 20);
         testWrite(kernelServices, address, SizeRotatingHandlerResourceDefinition.ROTATE_SIZE, "50m");
-        testWrite(kernelServices, address, PeriodicHandlerResourceDefinition.SUFFIX, ".yyyy-MM-dd-HH");
+        testWrite(kernelServices, address, SizeRotatingHandlerResourceDefinition.SUFFIX, ".yyyy-MM-dd-HH");
+        testWrite(kernelServices, address, SizeRotatingHandlerResourceDefinition.SUFFIX, ".yyyy-MM-dd-HH.zip");
+        testWrite(kernelServices, address, SizeRotatingHandlerResourceDefinition.SUFFIX, ".yyyy-MM-dd-HH.gz");
 
         // Undefine attributes
         testUndefineCommonAttributes(kernelServices, address);
@@ -547,6 +559,8 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         testWrite(kernelServices, address, SizeRotatingHandlerResourceDefinition.MAX_BACKUP_INDEX, 20);
         testWrite(kernelServices, address, SizeRotatingHandlerResourceDefinition.ROTATE_SIZE, "50m");
         testWrite(kernelServices, address, SizeRotatingHandlerResourceDefinition.SUFFIX, ".yyyy-MM-dd'T'HH:mm:ssZ");
+        testWrite(kernelServices, address, SizeRotatingHandlerResourceDefinition.SUFFIX, ".zip");
+        testWrite(kernelServices, address, SizeRotatingHandlerResourceDefinition.SUFFIX, ".gz");
 
         // Undefine attributes
         testUndefineCommonAttributes(kernelServices, address);

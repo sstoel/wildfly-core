@@ -21,6 +21,11 @@
  */
 package org.jboss.as.remoting;
 
+import static org.jboss.as.remoting.RemotingSubsystemRootResource.HTTP_LISTENER_REGISTRY_CAPABILITY;
+import static org.jboss.as.remoting.RemotingSubsystemRootResource.REMOTING_ENDPOINT_CAPABILITY;
+
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import javax.net.ssl.SSLContext;
 
 import org.jboss.as.controller.OperationContext;
@@ -29,7 +34,6 @@ import org.jboss.as.network.NetworkInterfaceBinding;
 import org.jboss.as.network.SocketBinding;
 import org.jboss.as.network.SocketBindingManager;
 import org.jboss.msc.service.ServiceBuilder;
-import org.jboss.msc.service.ServiceController.Mode;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceTarget;
 import org.jboss.remoting3.Endpoint;
@@ -39,9 +43,11 @@ import org.xnio.StreamConnection;
 import org.xnio.XnioWorker;
 import org.xnio.channels.AcceptingChannel;
 
+import io.undertow.server.ListenerRegistry;
+
 /**
- *
  * @author <a href="kabir.khan@jboss.com">Kabir Khan</a>
+ * @author <a href="mailto:ropalka@redhat.com">Richard Opalka</a>
  */
 public class RemotingServices {
 
@@ -49,13 +55,15 @@ public class RemotingServices {
     public static final ServiceName REMOTING_BASE = ServiceName.JBOSS.append("remoting");
 
     /** The name of the endpoint service installed by the remoting subsystem.  */
-    public static final ServiceName SUBSYSTEM_ENDPOINT = RemotingSubsystemRootResource.REMOTING_ENDPOINT_CAPABILITY.getCapabilityServiceName(Endpoint.class);//REMOTING_BASE.append("endpoint", "subsystem");
+    public static final ServiceName SUBSYSTEM_ENDPOINT = REMOTING_ENDPOINT_CAPABILITY.getCapabilityServiceName(Endpoint.class);//REMOTING_BASE.append("endpoint", "subsystem");
 
     /** The base name of the connector services */
     private static final ServiceName CONNECTOR_BASE = REMOTING_BASE.append("connector");
 
     /** The base name of the stream server services */
     private static final ServiceName SERVER_BASE = REMOTING_BASE.append("server");
+
+    public static final ServiceName HTTP_LISTENER_REGISTRY = HTTP_LISTENER_REGISTRY_CAPABILITY.getCapabilityServiceName(ListenerRegistry.class);
 
     /**
      * Create the service name for a connector
@@ -97,11 +105,11 @@ public class RemotingServices {
 
     public static void installRemotingManagementEndpoint(final ServiceTarget serviceTarget, final ServiceName endpointName,
                                                          final String hostName, final EndpointService.EndpointType type, final OptionMap options) {
-        EndpointService service = new EndpointService(hostName, type, options);
-        serviceTarget.addService(endpointName, service)
-                .setInitialMode(Mode.ACTIVE)
-                .addDependency(ServiceName.JBOSS.append("serverManagement", "controller", "management", "worker"), XnioWorker.class, service.getWorker())
-                .install();
+        final ServiceBuilder<?> builder = serviceTarget.addService(endpointName);
+        final Consumer<Endpoint> endpointConsumer = builder.provides(endpointName);
+        final Supplier<XnioWorker> workerSupplier = builder.requires(ServiceName.JBOSS.append("serverManagement", "controller", "management", "worker"));
+        builder.setInstance(new EndpointService(endpointConsumer, workerSupplier, hostName, type, options));
+        builder.install();
     }
 
     @Deprecated

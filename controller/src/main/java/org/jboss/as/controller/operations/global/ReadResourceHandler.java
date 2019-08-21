@@ -23,8 +23,6 @@
 package org.jboss.as.controller.operations.global;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ACCESS_CONTROL;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ATTRIBUTES;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.DEFAULT;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FAILURE_DESCRIPTION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
@@ -34,6 +32,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RES
 import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.INCLUDE_ALIASES;
 import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.INCLUDE_DEFAULTS;
 import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.INCLUDE_RUNTIME;
+import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.INCLUDE_UNDEFINED_METRIC_VALUES;
 import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.PROXIES;
 import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.RECURSIVE;
 import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.RECURSIVE_DEPTH;
@@ -43,7 +42,6 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -62,7 +60,6 @@ import org.jboss.as.controller.UnauthorizedException;
 import org.jboss.as.controller.access.Action;
 import org.jboss.as.controller.access.AuthorizationResult;
 import org.jboss.as.controller.access.ResourceNotAddressableException;
-import org.jboss.as.controller.descriptions.DescriptionProvider;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.descriptions.common.ControllerResolver;
 import org.jboss.as.controller.logging.ControllerLogger;
@@ -88,11 +85,11 @@ public class ReadResourceHandler extends GlobalOperationHandlers.AbstractMultiTa
 
     private static final SimpleAttributeDefinition ATTRIBUTES_ONLY = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.ATTRIBUTES_ONLY, ModelType.BOOLEAN)
             .setRequired(false)
-            .setDefaultValue(new ModelNode(false))
+            .setDefaultValue(ModelNode.FALSE)
             .build();
 
     public static final OperationDefinition DEFINITION = new SimpleOperationDefinitionBuilder(READ_RESOURCE_OPERATION, ControllerResolver.getResolver("global"))
-            .setParameters(RECURSIVE, RECURSIVE_DEPTH, PROXIES, INCLUDE_RUNTIME, INCLUDE_DEFAULTS, ATTRIBUTES_ONLY, INCLUDE_ALIASES)
+            .setParameters(RECURSIVE, RECURSIVE_DEPTH, PROXIES, INCLUDE_RUNTIME, INCLUDE_DEFAULTS, ATTRIBUTES_ONLY, INCLUDE_ALIASES, INCLUDE_UNDEFINED_METRIC_VALUES)
             .setReadOnly()
             .setReplyType(ModelType.OBJECT)
             .build();
@@ -101,7 +98,7 @@ public class ReadResourceHandler extends GlobalOperationHandlers.AbstractMultiTa
 
     private static final SimpleAttributeDefinition RESOLVE = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.RESOLVE_EXPRESSIONS, ModelType.BOOLEAN)
             .setRequired(false)
-            .setDefaultValue(new ModelNode(false))
+            .setDefaultValue(ModelNode.FALSE)
             .build();
 
     public static final OperationDefinition RESOLVE_DEFINITION = new SimpleOperationDefinitionBuilder(READ_RESOURCE_OPERATION, ControllerResolver.getResolver("global"))
@@ -218,6 +215,7 @@ public class ReadResourceHandler extends GlobalOperationHandlers.AbstractMultiTa
         final boolean proxies = operation.get(ModelDescriptionConstants.PROXIES).asBoolean(false);
         final boolean aliases = operation.get(ModelDescriptionConstants.INCLUDE_ALIASES).asBoolean(false);
         final boolean defaults = operation.get(ModelDescriptionConstants.INCLUDE_DEFAULTS).asBoolean(true);
+        final boolean includeUndefinedMetricValues = operation.get(ModelDescriptionConstants.INCLUDE_UNDEFINED_METRIC_VALUES).asBoolean(false);
         final boolean attributesOnly = operation.get(ModelDescriptionConstants.ATTRIBUTES_ONLY).asBoolean(false);
         final boolean resolve = RESOLVE.resolveModelAttribute(context, operation).asBoolean();
 
@@ -276,7 +274,7 @@ public class ReadResourceHandler extends GlobalOperationHandlers.AbstractMultiTa
 
                     if (recursive) {
                         boolean getChild = false;
-                        ImmutableManagementResourceRegistration childReg = registry.getSubModel(relativeAddr);
+                        ImmutableManagementResourceRegistration childReg = registry == null ? null : registry.getSubModel(relativeAddr);
                         if (childReg != null) {
                             // Decide if we want to invoke on this child resource
                             boolean proxy = childReg.isRemote();
@@ -344,42 +342,8 @@ public class ReadResourceHandler extends GlobalOperationHandlers.AbstractMultiTa
 
                 AttributeDefinition ad = access.getAttributeDefinition();
                 AttributeDefinition.NameAndGroup nag = ad == null ? new AttributeDefinition.NameAndGroup(attributeName) : new AttributeDefinition.NameAndGroup(ad);
-                addReadAttributeStep(context, address, defaults, resolve, localFilteredData, registry, nag, responseMap);
+                addReadAttributeStep(context, address, defaults, resolve, includeUndefinedMetricValues, localFilteredData, registry, nag, responseMap);
 
-            }
-        }
-
-        // Any attributes stored in the model but without a registry entry
-        final ModelNode model = resource.getModel();
-        if (model.isDefined()) {
-            for (String key : model.keys()) {
-                AttributeDefinition.NameAndGroup nag = new AttributeDefinition.NameAndGroup(key);
-                // Skip children and attributes already handled
-                if (!otherAttributes.containsKey(nag) && !childrenByType.containsKey(key) && !metrics.containsKey(nag)) {
-                    addReadAttributeStep(context, address, defaults, resolve, localFilteredData, registry, nag, otherAttributes);
-                }
-            }
-        }
-
-        // Last, if defaults are desired, look for unregistered attributes also not in the model
-        // by checking the resource description
-        if (defaults) {
-            //get the model description
-            final DescriptionProvider descriptionProvider = registry.getModelDescription(PathAddress.EMPTY_ADDRESS);
-            final Locale locale = GlobalOperationHandlers.getLocale(context, operation);
-            final ModelNode nodeDescription = descriptionProvider.getModelDescription(locale);
-
-            if (nodeDescription.isDefined() && nodeDescription.hasDefined(ATTRIBUTES)) {
-                for (String key : nodeDescription.get(ATTRIBUTES).keys()) {
-                    AttributeDefinition.NameAndGroup nag = new AttributeDefinition.NameAndGroup(key);
-                    if ((!childrenByType.containsKey(key)) &&
-                            !otherAttributes.containsKey(nag) &&
-                            !metrics.containsKey(nag) &&
-                            nodeDescription.get(ATTRIBUTES).hasDefined(key) &&
-                            nodeDescription.get(ATTRIBUTES, key).hasDefined(DEFAULT)) {
-                        addReadAttributeStep(context, address, defaults, resolve, localFilteredData, registry, nag, otherAttributes);
-                    }
-                }
             }
         }
     }
@@ -405,7 +369,7 @@ public class ReadResourceHandler extends GlobalOperationHandlers.AbstractMultiTa
         return registry.getSubModel(PathAddress.pathAddress(PathElement.pathElement(childName))).isAlias();
     }
 
-    private void addReadAttributeStep(OperationContext context, PathAddress address, boolean defaults, boolean resolve, FilteredData localFilteredData,
+    private void addReadAttributeStep(OperationContext context, PathAddress address, boolean defaults, boolean resolve, boolean includeUndefinedMetricValues, FilteredData localFilteredData,
                                       ImmutableManagementResourceRegistration registry,
                                       AttributeDefinition.NameAndGroup attributeKey, Map<AttributeDefinition.NameAndGroup, GlobalOperationHandlers.AvailableResponse> responseMap) {
         // See if there was an override registered for the standard :read-attribute handling (unlikely!!!)
@@ -421,6 +385,7 @@ public class ReadResourceHandler extends GlobalOperationHandlers.AbstractMultiTa
         final ModelNode attributeOperation = Util.getReadAttributeOperation(address, attributeKey.getName());
         attributeOperation.get(ModelDescriptionConstants.INCLUDE_DEFAULTS).set(defaults);
         attributeOperation.get(ModelDescriptionConstants.RESOLVE_EXPRESSIONS).set(resolve);
+        attributeOperation.get(ModelDescriptionConstants.INCLUDE_UNDEFINED_METRIC_VALUES).set(includeUndefinedMetricValues);
 
         final ModelNode attrResponse = new ModelNode();
         GlobalOperationHandlers.AvailableResponse availableResponse = new GlobalOperationHandlers.AvailableResponse(attrResponse);

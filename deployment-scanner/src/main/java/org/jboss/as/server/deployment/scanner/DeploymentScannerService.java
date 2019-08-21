@@ -47,8 +47,8 @@ import org.jboss.as.server.deployment.scanner.api.DeploymentScanner;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
 import org.jboss.msc.service.Service;
+import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceController;
-import org.jboss.msc.service.ServiceController.Mode;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.StartContext;
 import org.jboss.msc.service.StartException;
@@ -133,18 +133,16 @@ public class DeploymentScannerService implements Service<DeploymentScanner> {
         final DeploymentScannerService service = new DeploymentScannerService(resourceAddress, relativeTo, path, scanInterval, unit, autoDeployZip,
                 autoDeployExploded, autoDeployXml, scanEnabled, deploymentTimeout, rollbackOnRuntimeFailure, bootTimeService);
         final ServiceName serviceName = getServiceName(resourceAddress.getLastElement().getValue());
-
-        return context.getServiceTarget().addService(serviceName, service)
-                .addDependency(context.getCapabilityServiceName(PATH_MANAGER_CAPABILITY, PathManager.class), PathManager.class, service.pathManagerValue)
-                .addDependency(context.getCapabilityServiceName("org.wildfly.management.notification-handler-registry", null),
-                        NotificationHandlerRegistry.class, service.notificationRegistryValue)
-                .addDependency(context.getCapabilityServiceName("org.wildfly.management.model-controller-client-factory", null),
-                        ModelControllerClientFactory.class, service.clientFactoryValue)
-                .addDependency(org.jboss.as.server.deployment.Services.JBOSS_DEPLOYMENT_CHAINS)
-                .addDependency(ControlledProcessStateService.SERVICE_NAME, ControlledProcessStateService.class, service.controlledProcessStateServiceValue)
-                .addInjection(service.scheduledExecutorValue, scheduledExecutorService)
-                .setInitialMode(Mode.ACTIVE)
-                .install();
+        service.scheduledExecutorValue.inject(scheduledExecutorService);
+        final ServiceBuilder<DeploymentScanner> sb = context.getServiceTarget().addService(serviceName, service);
+        sb.addDependency(context.getCapabilityServiceName(PATH_MANAGER_CAPABILITY, PathManager.class), PathManager.class, service.pathManagerValue);
+        sb.addDependency(context.getCapabilityServiceName("org.wildfly.management.notification-handler-registry", null),
+                        NotificationHandlerRegistry.class, service.notificationRegistryValue);
+        sb.addDependency(context.getCapabilityServiceName("org.wildfly.management.model-controller-client-factory", null),
+                        ModelControllerClientFactory.class, service.clientFactoryValue);
+        sb.requires(org.jboss.as.server.deployment.Services.JBOSS_DEPLOYMENT_CHAINS);
+        sb.addDependency(ControlledProcessStateService.SERVICE_NAME, ControlledProcessStateService.class, service.controlledProcessStateServiceValue);
+        return sb.install();
     }
 
     private DeploymentScannerService(PathAddress resourceAddress, final String relativeTo, final String path, final int interval, final TimeUnit unit, final boolean autoDeployZipped,

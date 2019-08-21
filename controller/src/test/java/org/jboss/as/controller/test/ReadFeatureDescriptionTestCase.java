@@ -30,9 +30,9 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FEA
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.INCLUDE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NAME;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OPTIONAL;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_PARAMS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_PARAMS_MAPPING;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OPTIONAL;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.PACKAGE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.PACKAGES;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.PARAMS;
@@ -64,9 +64,11 @@ import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.capability.RuntimeCapability;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.PASSIVE;
 import org.jboss.as.controller.descriptions.NonResolvingResourceDescriptionResolver;
 import org.jboss.as.controller.descriptions.ResourceDescriptionResolver;
 import org.jboss.as.controller.operations.global.ReadFeatureDescriptionHandler;
+import org.jboss.as.controller.registry.RuntimePackageDependency;
 import org.jboss.as.controller.registry.AliasEntry;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
@@ -89,8 +91,13 @@ public class ReadFeatureDescriptionTestCase extends AbstractControllerTestBase {
     private static final String TEST = "test";
     private static final String MAIN_RESOURCE_CAPABILITY_NAME = "main-resource-capability";
     private static final String MAIN_RESOURCE_PACKAGE_NAME = "main-resource-package";
+    private static final String MAIN_RESOURCE_OPT_PACKAGE_NAME = "optional-main-resource-package";
+    private static final String MAIN_RESOURCE_PASSIVE_PACKAGE_NAME = "passive-main-resource-package";
+    private static final String MAIN_RESOURCE_REQUIRED_PACKAGE_NAME = "required-main-resource-package";
     private static final String ROOT_CAPABILITY_NAME = "root-capability";
     private static final String DYNAMIC_CAPABILITY_NAME = "dynamic-capability";
+    private static final String CLIENT_FACTORY_CAPABILITY_NAME = "org.wildfly.management.model-controller-client-factory";
+    private static final String NOTIFICATION_REGISTRY_CAPABILITY_NAME = "org.wildfly.management.notification-handler-registry";
 
     private static final OperationStepHandler WRITE_HANDLER = new ModelOnlyWriteAttributeHandler();
 
@@ -262,8 +269,33 @@ public class ReadFeatureDescriptionTestCase extends AbstractControllerTestBase {
 
         // packages
         ModelNode packages = feature.require(PACKAGES);
-        Assert.assertEquals(1, packages.asList().size());
-        Assert.assertEquals(MAIN_RESOURCE_PACKAGE_NAME, packages.asList().get(0).get(PACKAGE).asString());
+        Assert.assertEquals(4, packages.asList().size());
+        int expected = packages.asList().size();
+        for (ModelNode mn : packages.asList()) {
+            String name = mn.get(PACKAGE).asString();
+            switch (name) {
+                case MAIN_RESOURCE_REQUIRED_PACKAGE_NAME:
+                case MAIN_RESOURCE_PACKAGE_NAME: {
+                    expected -= 1;
+                    Assert.assertFalse(mn.hasDefined(OPTIONAL));
+                    Assert.assertFalse(mn.hasDefined(PASSIVE));
+                    break;
+                }
+                case MAIN_RESOURCE_OPT_PACKAGE_NAME: {
+                    Assert.assertTrue(mn.hasDefined(OPTIONAL));
+                    Assert.assertFalse(mn.hasDefined(PASSIVE));
+                    expected -= 1;
+                    break;
+                }
+                case MAIN_RESOURCE_PASSIVE_PACKAGE_NAME: {
+                    Assert.assertTrue(mn.hasDefined(OPTIONAL));
+                    Assert.assertTrue(mn.hasDefined(PASSIVE));
+                    expected -= 1;
+                    break;
+                }
+            }
+        }
+        Assert.assertEquals(0, expected);
     }
 
     /**
@@ -378,13 +410,15 @@ public class ReadFeatureDescriptionTestCase extends AbstractControllerTestBase {
 
         // capabilities
         ModelNode provides = feature.require(PROVIDES);
-        Assert.assertEquals(2, provides.asList().size());
-        Set<String> providedCaps = new HashSet<>(2);
+        Assert.assertEquals(4, provides.asList().size());
+        Set<String> providedCaps = new HashSet<>(4);
         for(ModelNode providedCap : provides.asList()) {
             providedCaps.add(providedCap.asString());
         }
         Assert.assertTrue(providedCaps.contains(ROOT_CAPABILITY_NAME));
         Assert.assertTrue(providedCaps.contains(DYNAMIC_CAPABILITY_NAME));
+        Assert.assertTrue(providedCaps.contains(CLIENT_FACTORY_CAPABILITY_NAME));
+        Assert.assertTrue(providedCaps.contains(NOTIFICATION_REGISTRY_CAPABILITY_NAME));
     }
 
     /**
@@ -610,7 +644,9 @@ public class ReadFeatureDescriptionTestCase extends AbstractControllerTestBase {
                         .build();
 
         MainResourceDefinition(PathElement pathElement, ResourceDescriptionResolver descriptionResolver) {
-            super(pathElement, descriptionResolver, new AddHandler(), null);
+            super(new SimpleResourceDefinition.Parameters(pathElement, descriptionResolver)
+                    .setAddHandler(new AddHandler())
+                    .addCapabilities(MAIN_RESOURCE_CAPABILITY));
         }
 
         @Override
@@ -625,9 +661,10 @@ public class ReadFeatureDescriptionTestCase extends AbstractControllerTestBase {
         }
 
         @Override
-        public void registerCapabilities(ManagementResourceRegistration resourceRegistration) {
-            super.registerCapabilities(resourceRegistration);
-            resourceRegistration.registerCapability(MAIN_RESOURCE_CAPABILITY);
+        public void registerAdditionalRuntimePackages(ManagementResourceRegistration resourceRegistration) {
+            resourceRegistration.registerAdditionalRuntimePackages(RuntimePackageDependency.optional(MAIN_RESOURCE_OPT_PACKAGE_NAME),
+                    RuntimePackageDependency.passive(MAIN_RESOURCE_PASSIVE_PACKAGE_NAME),
+                    RuntimePackageDependency.required(MAIN_RESOURCE_REQUIRED_PACKAGE_NAME));
         }
     }
 
@@ -641,11 +678,12 @@ public class ReadFeatureDescriptionTestCase extends AbstractControllerTestBase {
         private static final AttributeDefinition MAIN_RESOURCE_ATTR =
                 new SimpleAttributeDefinitionBuilder(MAIN_RESOURCE, ModelType.STRING)
                         .setCapabilityReference(MAIN_RESOURCE_CAPABILITY_NAME, REFERENCING_RESOURCE_CAPABILITY)
-                        .addArbitraryDescriptor(FEATURE_REFERENCE, new ModelNode(true))
+                        .addArbitraryDescriptor(FEATURE_REFERENCE, ModelNode.TRUE)
                         .build();
 
         ReferencingResourceDefinition(PathElement pathElement, ResourceDescriptionResolver descriptionResolver) {
             super(new Parameters(pathElement, descriptionResolver)
+                    .addCapabilities(REFERENCING_RESOURCE_CAPABILITY)
                     .addRequirement(REFERENCING_RESOURCE_CAPABILITY_NAME, null, ROOT_CAPABILITY_NAME, null)
             );
         }
@@ -654,12 +692,6 @@ public class ReadFeatureDescriptionTestCase extends AbstractControllerTestBase {
         public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
             super.registerAttributes(resourceRegistration);
             resourceRegistration.registerReadWriteAttribute(MAIN_RESOURCE_ATTR, null, WRITE_HANDLER);
-        }
-
-        @Override
-        public void registerCapabilities(ManagementResourceRegistration resourceRegistration) {
-            super.registerCapabilities(resourceRegistration);
-            resourceRegistration.registerCapability(REFERENCING_RESOURCE_CAPABILITY);
         }
     }
 

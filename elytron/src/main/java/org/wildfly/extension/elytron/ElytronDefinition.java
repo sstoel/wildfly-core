@@ -18,8 +18,10 @@
 
 package org.wildfly.extension.elytron;
 
+
 import static org.wildfly.extension.elytron.Capabilities.AUTHENTICATION_CONTEXT_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.ELYTRON_RUNTIME_CAPABILITY;
+import static org.wildfly.extension.elytron.Capabilities.EVIDENCE_DECODER_RUNTIME_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.MODIFIABLE_SECURITY_REALM_RUNTIME_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.PERMISSION_MAPPER_RUNTIME_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.PRINCIPAL_DECODER_RUNTIME_CAPABILITY;
@@ -31,6 +33,7 @@ import static org.wildfly.extension.elytron.Capabilities.ROLE_MAPPER_RUNTIME_CAP
 import static org.wildfly.extension.elytron.Capabilities.SECURITY_EVENT_LISTENER_RUNTIME_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.SECURITY_FACTORY_CREDENTIAL_RUNTIME_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.SECURITY_REALM_RUNTIME_CAPABILITY;
+import static org.wildfly.extension.elytron.Capabilities.SSL_CONTEXT_CAPABILITY;
 import static org.wildfly.extension.elytron.ElytronExtension.isServerOrHostController;
 import static org.wildfly.extension.elytron.SecurityActions.doPrivileged;
 import static org.wildfly.extension.elytron._private.ElytronSubsystemMessages.ROOT_LOGGER;
@@ -43,6 +46,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import javax.net.ssl.SSLContext;
 import javax.security.auth.message.config.AuthConfigFactory;
 
 import org.jboss.as.controller.AbstractBoottimeAddStepHandler;
@@ -67,6 +71,7 @@ import org.jboss.as.controller.access.management.SensitiveTargetAccessConstraint
 import org.jboss.as.controller.operations.validation.StringLengthValidator;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
+import org.jboss.as.controller.registry.RuntimePackageDependency;
 import org.jboss.as.server.AbstractDeploymentChainStep;
 import org.jboss.as.server.DeploymentProcessorTarget;
 import org.jboss.as.server.deployment.Phase;
@@ -84,8 +89,10 @@ import org.wildfly.extension.elytron.capabilities.CredentialSecurityFactory;
 import org.wildfly.extension.elytron.capabilities.PrincipalTransformer;
 import org.wildfly.extension.elytron.capabilities._private.SecurityEventListener;
 import org.wildfly.security.Version;
+import org.wildfly.security.auth.client.AuthenticationContext;
 import org.wildfly.security.auth.jaspi.DelegatingAuthConfigFactory;
 import org.wildfly.security.auth.jaspi.ElytronAuthConfigFactory;
+import org.wildfly.security.auth.server.EvidenceDecoder;
 import org.wildfly.security.auth.server.ModifiableSecurityRealm;
 import org.wildfly.security.auth.server.PrincipalDecoder;
 import org.wildfly.security.auth.server.RealmMapper;
@@ -104,12 +111,24 @@ import org.wildfly.security.manager.action.ReadPropertyAction;
  */
 class ElytronDefinition extends SimpleResourceDefinition {
 
+    /**
+     * System property which if set to {@code true} will cause the JVM wide default {@link SSLContext} to be restored when the subsystem shuts down.
+     *
+     * This property is only for use by test cases.
+     */
+    static final String RESTORE_DEFAULT_SSL_CONTEXT = ElytronDefinition.class.getPackage().getName() + ".restore-default-ssl-context";
+
     private static final AttachmentKey<SecurityPropertyService> SECURITY_PROPERTY_SERVICE_KEY = AttachmentKey.create(SecurityPropertyService.class);
 
     private static final AuthenticationContextDependencyProcessor AUTHENITCATION_CONTEXT_PROCESSOR = new AuthenticationContextDependencyProcessor();
 
     static final SimpleAttributeDefinition DEFAULT_AUTHENTICATION_CONTEXT = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.DEFAULT_AUTHENTICATION_CONTEXT, ModelType.STRING, true)
             .setCapabilityReference(AUTHENTICATION_CONTEXT_CAPABILITY, ELYTRON_RUNTIME_CAPABILITY)
+            .setRestartAllServices()
+            .build();
+
+    static final SimpleAttributeDefinition DEFAULT_SSL_CONTEXT = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.DEFAULT_SSL_CONTEXT, ModelType.STRING, true)
+            .setCapabilityReference(SSL_CONTEXT_CAPABILITY, ELYTRON_RUNTIME_CAPABILITY)
             .setRestartAllServices()
             .build();
 
@@ -133,7 +152,7 @@ class ElytronDefinition extends SimpleResourceDefinition {
             .build();
 
     static final SimpleAttributeDefinition REGISTER_JASPI_FACTORY = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.REGISTER_JASPI_FACTORY, ModelType.BOOLEAN, true)
-            .setDefaultValue(new ModelNode(true))
+            .setDefaultValue(ModelNode.TRUE)
             .setAllowExpression(true)
             .setRestartAllServices()
             .build();
@@ -238,6 +257,12 @@ class ElytronDefinition extends SimpleResourceDefinition {
         resourceRegistration.registerSubModel(RoleMapperDefinitions.getLogicalRoleMapperDefinition());
         resourceRegistration.registerSubModel(RoleMapperDefinitions.getMappedRoleMapperDefinition());
 
+        // Evidence Decoders
+        resourceRegistration.registerSubModel(EvidenceDecoderDefinitions.getX500SubjectEvidenceDecoderDefinition());
+        resourceRegistration.registerSubModel(EvidenceDecoderDefinitions.getX509SubjectAltNameEvidenceDecoderDefinition());
+        resourceRegistration.registerSubModel(new CustomComponentDefinition<>(EvidenceDecoder.class, Function.identity(), ElytronDescriptionConstants.CUSTOM_EVIDENCE_DECODER, EVIDENCE_DECODER_RUNTIME_CAPABILITY));
+        resourceRegistration.registerSubModel(EvidenceDecoderDefinitions.getAggregateEvidenceDecoderDefinition());
+
         // HTTP Mechanisms
         resourceRegistration.registerSubModel(HttpServerDefinitions.getAggregateHttpServerFactoryDefinition());
         resourceRegistration.registerSubModel(HttpServerDefinitions.getConfigurableHttpServerMechanismFactoryDefinition());
@@ -262,6 +287,8 @@ class ElytronDefinition extends SimpleResourceDefinition {
         resourceRegistration.registerSubModel(SSLDefinitions.getTrustManagerDefinition());
         resourceRegistration.registerSubModel(SSLDefinitions.getServerSSLContextDefinition(serverOrHostController));
         resourceRegistration.registerSubModel(SSLDefinitions.getClientSSLContextDefinition(serverOrHostController));
+        resourceRegistration.registerSubModel(SSLDefinitions.getServerSNISSLContextDefinition());
+        resourceRegistration.registerSubModel(new CertificateAuthorityDefinition());
         resourceRegistration.registerSubModel(new CertificateAuthorityAccountDefinition());
 
         // Credential Store Block
@@ -305,6 +332,32 @@ class ElytronDefinition extends SimpleResourceDefinition {
         });
         resourceRegistration.registerReadWriteAttribute(SECURITY_PROPERTIES, null, new SecurityPropertiesWriteHandler(SECURITY_PROPERTIES));
         resourceRegistration.registerReadWriteAttribute(REGISTER_JASPI_FACTORY, null, writeHandler);
+        resourceRegistration.registerReadWriteAttribute(DEFAULT_SSL_CONTEXT, null, new ElytronWriteAttributeHandler<Void>(DEFAULT_SSL_CONTEXT) {
+
+            @Override
+            protected boolean applyUpdateToRuntime(OperationContext context, ModelNode operation, String attributeName,
+                    ModelNode resolvedValue, ModelNode currentValue, HandbackHolder<Void> handbackHolder)
+                    throws OperationFailedException {
+                        if (!resolvedValue.isDefined() && currentValue.isDefined()) {
+                            // We can not capture the existing default as by doing so we would trigger it's initialisation which
+                            // could fail in a variety of ways as well as the wasted initialisation, if the attribute is being
+                            // changed from defined to undefined the only option is to completely restart the process.
+                            context.restartRequired();
+                            return false;
+                        }
+
+                return true;
+            }
+
+            @Override
+            protected void revertUpdateToRuntime(OperationContext context, ModelNode operation, String attributeName,
+                    ModelNode valueToRestore, ModelNode valueToRevert, Void handback) throws OperationFailedException {}
+        });
+    }
+
+    @Override
+    public void registerAdditionalRuntimePackages(ManagementResourceRegistration resourceRegistration) {
+        resourceRegistration.registerAdditionalRuntimePackages(RuntimePackageDependency.required("org.wildfly.security.elytron"));
     }
 
     @Deprecated
@@ -314,8 +367,8 @@ class ElytronDefinition extends SimpleResourceDefinition {
 
     @Deprecated
     static <T> ServiceBuilder<T>  commonDependencies(ServiceBuilder<T> serviceBuilder, boolean dependOnProperties, boolean dependOnProviderRegistration) {
-        if (dependOnProperties) serviceBuilder.addDependencies(SecurityPropertyService.SERVICE_NAME);
-        if (dependOnProviderRegistration) serviceBuilder.addDependencies(ProviderRegistrationService.SERVICE_NAME);
+        if (dependOnProperties) serviceBuilder.requires(SecurityPropertyService.SERVICE_NAME);
+        if (dependOnProviderRegistration) serviceBuilder.requires(ProviderRegistrationService.SERVICE_NAME);
         return serviceBuilder;
     }
 
@@ -373,7 +426,7 @@ class ElytronDefinition extends SimpleResourceDefinition {
     private static class ElytronAdd extends AbstractBoottimeAddStepHandler implements ElytronOperationStepHandler {
 
         private ElytronAdd() {
-            super(ELYTRON_RUNTIME_CAPABILITY, DEFAULT_AUTHENTICATION_CONTEXT, INITIAL_PROVIDERS, FINAL_PROVIDERS, DISALLOWED_PROVIDERS, SECURITY_PROPERTIES, REGISTER_JASPI_FACTORY);
+            super(ELYTRON_RUNTIME_CAPABILITY, DEFAULT_AUTHENTICATION_CONTEXT, INITIAL_PROVIDERS, FINAL_PROVIDERS, DISALLOWED_PROVIDERS, SECURITY_PROPERTIES, REGISTER_JASPI_FACTORY, DEFAULT_SSL_CONTEXT);
         }
 
         @Override
@@ -384,10 +437,19 @@ class ElytronDefinition extends SimpleResourceDefinition {
 
         @Override
         protected void performBoottime(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {
+            //the normal default context manager will attempt to look up wildfly-config.xml on the class path
+            //parse it and store the result in a static. The means that the default can essentially be
+            //random of there are multiple deployments with different configurations
+            //to make sure there is no random behaviour we set the global default to an empty context
+            AuthenticationContext.getContextManager().setGlobalDefault(AuthenticationContext.empty());
+
+
             ModelNode model = resource.getModel();
-            ModelNode defaultAuthenticationContext = DEFAULT_AUTHENTICATION_CONTEXT.resolveModelAttribute(context, model);
-            AUTHENITCATION_CONTEXT_PROCESSOR.setDefaultAuthenticationContext(defaultAuthenticationContext.isDefined() ? defaultAuthenticationContext.asString() : null);
+            final String defaultAuthenticationContext = DEFAULT_AUTHENTICATION_CONTEXT.resolveModelAttribute(context, model).asStringOrNull();
+            AUTHENITCATION_CONTEXT_PROCESSOR.setDefaultAuthenticationContext(defaultAuthenticationContext);
             Map<String,String> securityProperties = SECURITY_PROPERTIES.unwrap(context, model);
+            final String defaultSSLContext = DEFAULT_SSL_CONTEXT.resolveModelAttribute(context, model).asStringOrNull();
+
             ServiceTarget target = context.getServiceTarget();
             installService(SecurityPropertyService.SERVICE_NAME, new SecurityPropertyService(securityProperties), target);
 
@@ -412,6 +474,30 @@ class ElytronDefinition extends SimpleResourceDefinition {
             }
             builder.install();
 
+            if (defaultAuthenticationContext != null) {
+                ServiceBuilder<?> serviceBuilder = target
+                        .addService(DefaultAuthenticationContextService.SERVICE_NAME)
+                        .setInitialMode(Mode.ACTIVE);
+                Supplier<AuthenticationContext> defaultAuthenticationContextSupplier = serviceBuilder.requires(context.getCapabilityServiceName(AUTHENTICATION_CONTEXT_CAPABILITY, defaultAuthenticationContext, AuthenticationContext.class));
+                Consumer<AuthenticationContext> valueConsumer = serviceBuilder.provides(DefaultAuthenticationContextService.SERVICE_NAME);
+
+                DefaultAuthenticationContextService defaultAuthenticationContextService = new DefaultAuthenticationContextService(defaultAuthenticationContextSupplier, valueConsumer);
+                serviceBuilder.setInstance(defaultAuthenticationContextService)
+                        .install();
+            }
+
+            if (defaultSSLContext != null) {
+                ServiceBuilder<?> serviceBuilder = target
+                        .addService(DefaultSSLContextService.SERVICE_NAME)
+                        .setInitialMode(Mode.ACTIVE);
+                Supplier<SSLContext> defaultSSLContextSupplier = serviceBuilder.requires(context.getCapabilityServiceName(SSL_CONTEXT_CAPABILITY, defaultSSLContext, SSLContext.class));
+                Consumer<SSLContext> valueConsumer = serviceBuilder.provides(DefaultSSLContextService.SERVICE_NAME);
+
+                DefaultSSLContextService defaultSSLContextService = new DefaultSSLContextService(defaultSSLContextSupplier, valueConsumer);
+                serviceBuilder.setInstance(defaultSSLContextService)
+                        .install();
+            }
+
             if (registerJaspiFactory(context, model)) {
                 final AuthConfigFactory authConfigFactory = doPrivileged((PrivilegedAction<AuthConfigFactory>) ElytronDefinition::getAuthConfigFactory);
                 if (authConfigFactory != null) {
@@ -429,6 +515,9 @@ class ElytronDefinition extends SimpleResourceDefinition {
                     protected void execute(DeploymentProcessorTarget processorTarget) {
                         processorTarget.addDeploymentProcessor(ElytronExtension.SUBSYSTEM_NAME, Phase.DEPENDENCIES, Phase.DEPENDENCIES_ELYTRON, new DependencyProcessor());
                         processorTarget.addDeploymentProcessor(ElytronExtension.SUBSYSTEM_NAME, Phase.CONFIGURE_MODULE, Phase.CONFIGURE_AUTHENTICATION_CONTEXT, AUTHENITCATION_CONTEXT_PROCESSOR);
+                        if (defaultSSLContext != null) {
+                            processorTarget.addDeploymentProcessor(ElytronExtension.SUBSYSTEM_NAME, Phase.CONFIGURE_MODULE, Phase.CONFIGURE_DEFAULT_SSL_CONTEXT, new SSLContextDependencyProcessor());
+                        }
                         processorTarget.addDeploymentProcessor(ElytronExtension.SUBSYSTEM_NAME, Phase.FIRST_MODULE_USE, Phase.FIRST_MODULE_USE_AUTHENTICATION_CONTEXT, new AuthenticationContextAssociationProcessor());
                     }
                 }, Stage.RUNTIME);

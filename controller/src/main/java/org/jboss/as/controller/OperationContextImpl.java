@@ -55,11 +55,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.jboss.as.controller._private.OperationFailedRuntimeException;
@@ -1498,7 +1500,7 @@ final class OperationContextImpl extends AbstractOperationContext {
         registerCapability(capability, activeStep, null);
     }
 
-    void registerCapability(RuntimeCapability capability, Step step, String attribute) {
+    void registerCapability(RuntimeCapability<?> capability, Step step, String attribute) {
         assert isControllingThread();
         assertStageModel(currentStage);
         ensureLocalCapabilityRegistry();
@@ -1584,14 +1586,19 @@ final class OperationContextImpl extends AbstractOperationContext {
 
     @Override
     public void deregisterCapabilityRequirement(String required, String dependent) {
-        removeCapabilityRequirement(required, dependent, activeStep);
+        deregisterCapabilityRequirement(required, dependent, null);
     }
 
-    void removeCapabilityRequirement(String required, String dependent, Step step) {
+    @Override
+    public void deregisterCapabilityRequirement(String required, String dependent, String attribute) {
+        removeCapabilityRequirement(required, dependent, activeStep, attribute);
+    }
+
+    void removeCapabilityRequirement(String required, String dependent, Step step, String attributeName) {
         assert isControllingThread();
         assertStageModel(currentStage);
         ensureLocalCapabilityRegistry();
-        RuntimeRequirementRegistration registration = createRequirementRegistration(required, dependent, false, step, null);
+        RuntimeRequirementRegistration registration = createRequirementRegistration(required, dependent, false, step, attributeName);
         managementModel.getCapabilityRegistry().removeCapabilityRequirement(registration);
         removeRequirement(required, registration.getDependentContext(), step);
     }
@@ -1608,7 +1615,7 @@ final class OperationContextImpl extends AbstractOperationContext {
         CapabilityScope context = createCapabilityContext(step.address);
         RuntimeCapabilityRegistration capReg = managementModel.getCapabilityRegistry().removeCapability(capabilityName, context, step.address);
         if (capReg != null) {
-            RuntimeCapability capability = capReg.getCapability();
+            RuntimeCapability<?> capability = capReg.getCapability();
             for (String required : capability.getRequirements()) {
                 removeRequirement(required, context, step);
             }
@@ -1988,7 +1995,7 @@ final class OperationContextImpl extends AbstractOperationContext {
         return new RuntimeRequirementRegistration(required, dependent, context, rp, runtimeOnly);
     }
 
-    private RuntimeCapabilityRegistration createCapabilityRegistration(RuntimeCapability capability, Step step, String attribute) {
+    private RuntimeCapabilityRegistration createCapabilityRegistration(RuntimeCapability<?> capability, Step step, String attribute) {
         CapabilityScope context = createCapabilityContext(step.address);
         RegistrationPoint rp = new RegistrationPoint(step.address, attribute);
         return new RuntimeCapabilityRegistration(capability, context, rp);
@@ -2116,6 +2123,16 @@ final class OperationContextImpl extends AbstractOperationContext {
                 return addService(capability.getCapabilityServiceName(targetAddress), service);
             }else{
                 return addService(capability.getCapabilityServiceName(), service);
+            }
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public CapabilityServiceBuilder<?> addCapability(final RuntimeCapability<?> capability) throws IllegalArgumentException {
+            if (capability.isDynamicallyNamed()) {
+                return new CapabilityServiceBuilderImpl(addService(capability.getCapabilityServiceName(targetAddress)), targetAddress);
+            } else {
+                return new CapabilityServiceBuilderImpl(addService(capability.getCapabilityServiceName()), targetAddress);
             }
         }
 
@@ -2547,6 +2564,24 @@ final class OperationContextImpl extends AbstractOperationContext {
         }
 
         @Override
+        public <T> Optional<T> getOptionalCapabilityRuntimeAPI(String capabilityName, Class<T> apiType) {
+            try {
+                return Optional.of(getCapabilityRuntimeAPI(capabilityName, apiType));
+            } catch (NoSuchCapabilityException e) {
+                return Optional.empty();
+            }
+        }
+
+        @Override
+        public <T> Optional<T> getOptionalCapabilityRuntimeAPI(String capabilityBaseName, String dynamicPart, Class<T> apiType) {
+            try {
+                return Optional.of(getCapabilityRuntimeAPI(capabilityBaseName, dynamicPart, apiType));
+            } catch (NoSuchCapabilityException e) {
+                return Optional.empty();
+            }
+        }
+
+        @Override
         public ServiceName getCapabilityServiceName(String capabilityName) {
             try {
                 return managementModel.getCapabilityRegistry().getCapabilityServiceName(capabilityName, CapabilityScope.GLOBAL, null);
@@ -2566,6 +2601,7 @@ final class OperationContextImpl extends AbstractOperationContext {
 
     private static class CapabilityServiceBuilderImpl<T> extends DelegatingServiceBuilder<T> implements CapabilityServiceBuilder<T> {
         private final PathAddress targetAddress;
+
         CapabilityServiceBuilderImpl(ServiceBuilder<T> delegate, PathAddress targetAddress) {
             super(delegate);
             this.targetAddress = targetAddress;
@@ -2589,7 +2625,13 @@ final class OperationContextImpl extends AbstractOperationContext {
         @Override
         public <I> CapabilityServiceBuilder<T> addCapabilityRequirement(String capabilityName, Class<I> type) {
             final ServiceName serviceName = getCapabilityServiceName(capabilityName, type);
-            addDependency(serviceName);
+            requires(serviceName);
+            return this;
+        }
+
+        @Override
+        public <I> CapabilityServiceBuilder<T> addDependency(ServiceName dependency, Class<I> type, Injector<I> target){
+            super.addDependency(dependency, type, target);
             return this;
         }
 
@@ -2600,9 +2642,35 @@ final class OperationContextImpl extends AbstractOperationContext {
         }
 
         @Override
-        public <I> CapabilityServiceBuilder<T> addDependency(ServiceName dependency, Class<I> type, Injector<I> target){
-            super.addDependency(dependency, type, target);
+        public CapabilityServiceBuilder<T> setInstance(org.jboss.msc.Service service) {
+            super.setInstance(service);
             return this;
+        }
+
+        @Override
+        public <V> Consumer<V> provides(final RuntimeCapability<?>... capabilities) {
+            if (capabilities == null || capabilities.length == 0) return null;
+            final ServiceName[] serviceNames = new ServiceName[capabilities.length];
+            for (int i = 0; i < capabilities.length; i++) {
+                if (capabilities[i].isDynamicallyNamed()) {
+                    serviceNames[i] = capabilities[i].getCapabilityServiceName(targetAddress);
+                } else {
+                    serviceNames[i] = capabilities[i].getCapabilityServiceName();
+                }
+            }
+            return super.provides(serviceNames);
+        }
+
+        @Override
+        public <V> Supplier<V> requiresCapability(String capabilityBaseName, Class<V> dependencyType, String... referenceNames) {
+            String capabilityName;
+            if (referenceNames != null && referenceNames.length > 0) {
+                capabilityName = RuntimeCapability.buildDynamicCapabilityName(capabilityBaseName, referenceNames);
+            } else {
+                capabilityName = capabilityBaseName;
+            }
+            final ServiceName serviceName = getCapabilityServiceName(capabilityName, dependencyType);
+            return requires(serviceName);
         }
 
         @Override

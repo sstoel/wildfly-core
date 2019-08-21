@@ -73,7 +73,7 @@ public class JMXSubsystemRootResource extends SimpleResourceDefinition {
             .setAllowExpression(true)
             .addAccessConstraint(SensitiveTargetAccessConstraintDefinition.ACCESS_CONTROL)
             .setXmlName(CommonAttributes.NON_CORE_MBEANS)
-            .setDefaultValue(new ModelNode(false)).build();
+            .setDefaultValue(ModelNode.FALSE).build();
 
     static final String JMX_CAPABILITY_NAME = "org.wildfly.management.jmx";
     static final RuntimeCapability<Void> JMX_CAPABILITY =
@@ -88,6 +88,7 @@ public class JMXSubsystemRootResource extends SimpleResourceDefinition {
         super(new Parameters(PATH_ELEMENT, JMXExtension.getResourceDescriptionResolver(JMXExtension.SUBSYSTEM_NAME))
                 .setAddHandler(new JMXSubsystemAdd(auditLogger, authorizer, securityIdentitySupplier, hostInfoAccessor))
                 .setRemoveHandler(new JMXSubsystemRemove(auditLogger, authorizer, securityIdentitySupplier, hostInfoAccessor))
+                .addCapabilities(JMX_CAPABILITY)
                 .setAccessConstraints(JMXExtension.JMX_SENSITIVITY_DEF));
         this.auditLogger = auditLogger;
         this.authorizer = authorizer;
@@ -117,11 +118,6 @@ public class JMXSubsystemRootResource extends SimpleResourceDefinition {
         resourceRegistration.registerSubModel(new ExposeModelResourceExpression(auditLogger, authorizer, securityIdentitySupplier, hostInfoAccessor));
         resourceRegistration.registerSubModel(RemotingConnectorResource.INSTANCE);
         resourceRegistration.registerSubModel(new JmxAuditLoggerResourceDefinition(auditLogger));
-    }
-
-    @Override
-    public void registerCapabilities(ManagementResourceRegistration resourceRegistration) {
-        resourceRegistration.registerCapability(JMX_CAPABILITY);
     }
 
     private static class ShowModelAliasWriteHandler implements OperationStepHandler {

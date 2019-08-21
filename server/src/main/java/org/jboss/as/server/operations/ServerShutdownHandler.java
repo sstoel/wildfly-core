@@ -25,9 +25,15 @@ package org.jboss.as.server.operations;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RUNNING_SERVER;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SHUTDOWN;
+import static org.jboss.as.server.Services.JBOSS_SUSPEND_CONTROLLER;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.SUSPEND_TIMEOUT;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.TIMEOUT;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.renameTimeoutToSuspendTimeout;
 
 import java.util.EnumSet;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jboss.as.controller.ControlledProcessState;
 import org.jboss.as.controller.OperationContext;
@@ -53,9 +59,6 @@ import org.jboss.dmr.ModelType;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceRegistry;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-import org.jboss.as.controller.client.helpers.MeasurementUnit;
-
 /**
  * Handler that shuts down the standalone server.
  *
@@ -64,17 +67,12 @@ import org.jboss.as.controller.client.helpers.MeasurementUnit;
 public class ServerShutdownHandler implements OperationStepHandler {
 
     protected static final SimpleAttributeDefinition RESTART = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.RESTART, ModelType.BOOLEAN)
-            .setDefaultValue(new ModelNode(false))
+            .setDefaultValue(ModelNode.FALSE)
             .setRequired(false)
-            .build();
-    protected static final SimpleAttributeDefinition TIMEOUT = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.TIMEOUT, ModelType.INT)
-            .setDefaultValue(new ModelNode(0))
-            .setRequired(false)
-            .setMeasurementUnit(MeasurementUnit.SECONDS)
             .build();
 
-    public static final SimpleOperationDefinition DEFINITION = new SimpleOperationDefinitionBuilder(ModelDescriptionConstants.SHUTDOWN, ServerDescriptions.getResourceDescriptionResolver())
-            .setParameters(RESTART, TIMEOUT)
+    public static final SimpleOperationDefinition DEFINITION = new SimpleOperationDefinitionBuilder(ModelDescriptionConstants.SHUTDOWN, ServerDescriptions.getResourceDescriptionResolver(RUNNING_SERVER))
+            .setParameters(RESTART, TIMEOUT, SUSPEND_TIMEOUT)
             .setRuntimeOnly()
             .build();
 
@@ -90,8 +88,9 @@ public class ServerShutdownHandler implements OperationStepHandler {
      */
     @Override
     public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
+        renameTimeoutToSuspendTimeout(operation);
         final boolean restart = RESTART.resolveModelAttribute(context, operation).asBoolean();
-        final int timeout = TIMEOUT.resolveModelAttribute(context, operation).asInt(); //in seconds, need to convert to ms
+        final int timeout = SUSPEND_TIMEOUT.resolveModelAttribute(context, operation).asInt(); //in seconds, need to convert to ms
         // Acquire the controller lock to prevent new write ops and wait until current ones are done
         context.acquireControllerLock();
         context.addStep(new OperationStepHandler() {
@@ -118,7 +117,7 @@ public class ServerShutdownHandler implements OperationStepHandler {
                             //to stop new requests being accepted as it is shutting down
                             final ShutdownAction shutdown = new ShutdownAction(getOperationName(operation), restart);
                             final ServiceRegistry registry = context.getServiceRegistry(false);
-                            final ServiceController<SuspendController> suspendControllerServiceController = (ServiceController<SuspendController>) registry.getRequiredService(SuspendController.SERVICE_NAME);
+                            final ServiceController<SuspendController> suspendControllerServiceController = (ServiceController<SuspendController>) registry.getRequiredService(JBOSS_SUSPEND_CONTROLLER);
                             final SuspendController suspendController = suspendControllerServiceController.getValue();
                             OperationListener listener = new OperationListener() {
                                 @Override

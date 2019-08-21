@@ -87,6 +87,8 @@ final class ConcreteResourceRegistration extends AbstractResourceRegistration {
     private final Lock readLock;
     private final Lock writeLock;
 
+    private Set<RuntimePackageDependency> additionalPackages;
+
     /** Constructor for a root MRR */
     ConcreteResourceRegistration(final ResourceDefinition definition,
                                  final AccessConstraintUtilizationRegistry constraintUtilizationRegistry,
@@ -700,6 +702,18 @@ final class ConcreteResourceRegistration extends AbstractResourceRegistration {
             if (capabilityRegistry != null) {
                 capabilityRegistry.registerPossibleCapability(capability, getPathAddress());
             }
+
+            // Move packages associated to the capability in additionalPackages set
+            // additionalPackages becomes the only package provider
+            Set<String> packages = capability.getAdditionalRequiredPackages();
+            if (!packages.isEmpty()) {
+                if (additionalPackages == null) {
+                    additionalPackages = new HashSet<>();
+                }
+                for (String pkg : packages) {
+                    additionalPackages.add(RuntimePackageDependency.required(pkg));
+                }
+            }
         } finally {
             writeLock.unlock();
         }
@@ -806,8 +820,11 @@ final class ConcreteResourceRegistration extends AbstractResourceRegistration {
             return subregistry.getAttributeNames(iterator, next.getValue());
         } else {
             checkPermission();
-            synchronized (this) {
+            readLock.lock();
+            try {
                 return new HashSet<>(attributes.keySet());
+            } finally {
+                readLock.unlock();
             }
         }
     }
@@ -844,8 +861,11 @@ final class ConcreteResourceRegistration extends AbstractResourceRegistration {
             return subregistry.getAttributes(iterator, next.getValue());
         } else {
             checkPermission();
-            synchronized (this) {
+            readLock.lock();
+            try {
                 return new HashMap<>(attributes);
+            } finally {
+                readLock.unlock();
             }
         }
     }
@@ -993,5 +1013,32 @@ final class ConcreteResourceRegistration extends AbstractResourceRegistration {
             writeLock.unlock();
         }
     }
+
+    @Override
+    public void registerAdditionalRuntimePackages(RuntimePackageDependency... pkgs) {
+        writeLock.lock();
+        try {
+            if (additionalPackages == null) {
+                additionalPackages = new HashSet<>();
+            }
+            for (RuntimePackageDependency pkg : pkgs) {
+                additionalPackages.add(pkg);
+            }
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    @Override
+    public Set<RuntimePackageDependency> getAdditionalRuntimePackages() {
+        checkPermission();
+        readLock.lock();
+        try {
+            return additionalPackages == null ? Collections.emptySet() : Collections.unmodifiableSet(additionalPackages);
+        } finally {
+            readLock.unlock();
+        }
+    }
+
 }
 

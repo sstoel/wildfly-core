@@ -36,6 +36,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REM
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.VALUE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.WRITE_ATTRIBUTE_OPERATION;
+import static org.jboss.as.remoting.Capabilities.IO_WORKER_CAPABILITY_NAME;
 import static org.jboss.as.remoting.RemotingSubsystemTestUtil.DEFAULT_ADDITIONAL_INITIALIZATION;
 import static org.jboss.as.remoting.RemotingSubsystemTestUtil.HC_ADDITIONAL_INITIALIZATION;
 import static org.junit.Assert.assertEquals;
@@ -50,6 +51,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.capability.registry.RuntimeCapabilityRegistry;
@@ -63,6 +66,7 @@ import org.jboss.as.subsystem.test.AdditionalInitialization;
 import org.jboss.as.subsystem.test.ControllerInitializer;
 import org.jboss.as.subsystem.test.KernelServices;
 import org.jboss.dmr.ModelNode;
+import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceNotFoundException;
@@ -316,9 +320,10 @@ public class RemotingLegacySubsystemTestCase extends AbstractSubsystemBaseTest {
                 //Needed for initialization of the RealmAuthenticationProviderService
                 AbsolutePathService.addService(ServerEnvironment.CONTROLLER_TEMP_DIR, new File("target/temp" + System.currentTimeMillis()).getAbsolutePath(), target);
                 if (!legacyParser) {
-                    target.addService(IOServices.WORKER.append("default"), new WorkerService(Xnio.getInstance().createWorkerBuilder().setWorkerIoThreads(2)))
-                            .setInitialMode(ServiceController.Mode.ACTIVE)
-                            .install();
+                    ServiceBuilder<?> builder = target.addService(IOServices.WORKER.append("default"));
+                    Consumer<XnioWorker> workerConsumer = builder.provides(IOServices.WORKER.append("default"));
+                    builder.setInstance(new WorkerService(workerConsumer, () -> Executors.newFixedThreadPool(1), Xnio.getInstance().createWorkerBuilder().setWorkerIoThreads(2)));
+                    builder.install();
                 }
             }
 
@@ -327,14 +332,14 @@ public class RemotingLegacySubsystemTestCase extends AbstractSubsystemBaseTest {
                 super.initializeExtraSubystemsAndModel(extensionRegistry, rootResource, rootRegistration, capabilityRegistry);
 
                 Map<String, Class> capabilities = new HashMap<>();
-                capabilities.put(buildDynamicCapabilityName(RemotingSubsystemRootResource.IO_WORKER_CAPABILITY,
+                capabilities.put(buildDynamicCapabilityName(IO_WORKER_CAPABILITY_NAME,
                         "default-remoting"), XnioWorker.class);
 
                 if (legacyParser) {
                     // Deal with the fact that legacy parsers will add the io extension/subsystem
                     RemotingSubsystemTestUtil.registerIOExtension(extensionRegistry, rootRegistration);
                 } else {
-                    capabilities.put(buildDynamicCapabilityName(RemotingSubsystemRootResource.IO_WORKER_CAPABILITY,
+                    capabilities.put(buildDynamicCapabilityName(IO_WORKER_CAPABILITY_NAME,
                             RemotingSubsystemRootResource.WORKER.getDefaultValue().asString()), XnioWorker.class);
                 }
 

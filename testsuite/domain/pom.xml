@@ -31,7 +31,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-testsuite</artifactId>
-        <version>7.0.0.Alpha2-SNAPSHOT</version>
+        <version>10.0.0.Beta4-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -52,7 +52,7 @@
         <enforcer.skip>true</enforcer.skip>
         <jbossas.ts.dir>${basedir}/..</jbossas.ts.dir>
 
-        <ts.elytron.cli>../shared/enable-elytron.cli</ts.elytron.cli>
+        <ts.elytron.cli>enable-elytron.cli</ts.elytron.cli>
     </properties>
 
     <!--
@@ -82,10 +82,27 @@
             <artifactId>wildfly-jmx</artifactId>
             <scope>provided</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.jboss.byteman</groupId>
+            <artifactId>byteman</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.jboss.galleon</groupId>
                 <artifactId>galleon-maven-plugin</artifactId>
@@ -98,14 +115,23 @@
                         <phase>compile</phase>
                         <configuration>
                             <install-dir>${project.build.directory}/${server.output.dir.prefix}</install-dir>
+                            <record-state>false</record-state>
+                            <log-time>${galleon.log.time}</log-time>
+                            <offline>true</offline>
                             <plugin-options>
-                                <jboss-fork-embedded/>
+                                <jboss-maven-dist/>
+                                <jboss-fork-embedded>${galleon.fork.embedded}</jboss-fork-embedded>
                             </plugin-options>
                             <feature-packs>
                                 <feature-pack>
                                     <groupId>org.wildfly.core</groupId>
                                     <artifactId>wildfly-core-galleon-pack</artifactId>
                                     <version>${project.version}</version>
+                                    <excluded-configs>
+                                        <config>
+                                            <model>standalone</model>
+                                        </config>
+                                    </excluded-configs>
                                     <excluded-packages>
                                         <name>product.conf</name>
                                     </excluded-packages>
@@ -151,14 +177,13 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <failIfNoTests>false</failIfNoTests>
-                    
+
                     <!-- System properties to forked surefire JVM which runs clients. -->
-                    <argLine>${jvm.args.ip.client} ${jvm.args.timeouts} ${surefire.system.args}</argLine>
+                    <argLine>${jvm.args.ip.client} ${jvm.args.timeouts} ${surefire.system.args} -Djava.util.logging.manager=org.jboss.logmanager.LogManager</argLine>
 
                     <systemPropertyVariables>
                         <jboss.options>-ea</jboss.options>
                         <cli.jvm.args>${modular.jdk.args}</cli.jvm.args>
-                        <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                         <jboss.home>${project.basedir}/target/wildfly-core</jboss.home>
                         <module.path>${jboss.dist}/modules</module.path>
                         <jboss.test.host.master.address>${management.address}</jboss.test.host.master.address>
@@ -167,6 +192,7 @@
                         <settings.localRepository>${settings.localRepository}</settings.localRepository>
                         <cli.args>-Dmaven.repo.local=${settings.localRepository}</cli.args>
                         <server.jvm.args>-Dmaven.repo.local=${settings.localRepository} ${surefire.system.args} ${jvm.args.ip.server} ${jvm.args.security} ${jvm.args.other} ${jvm.args.timeouts} -Djbossas.ts.dir=${jbossas.ts.dir}</server.jvm.args>
+                        <jboss.test.host.server.byteman.javaagent>${org.jboss.byteman:byteman:jar}=port:${byteman.port},address:${byteman.host},boot:${org.jboss.byteman:byteman:jar},sys:${org.wildfly.core:wildfly-core-testsuite-shared:jar},script:${project.build.directory}/test-classes/byteman-scripts/</jboss.test.host.server.byteman.javaagent>
                     </systemPropertyVariables>
                     <includes>
                         <include>org/jboss/as/test/integration/domain/autoignore/*TestCase.java</include>
@@ -221,12 +247,11 @@
                             <redirectTestOutputToFile>${testLogToFile}</redirectTestOutputToFile>
 
                             <!-- System properties to forked surefire JVM which runs clients. -->
-                            <argLine>${jvm.args.ip.client} ${jvm.args.timeouts} ${surefire.system.args}</argLine>
+                            <argLine>${jvm.args.ip.client} ${jvm.args.timeouts} ${surefire.system.args} -Djava.util.logging.manager=org.jboss.logmanager.LogManager</argLine>
 
                             <systemPropertyVariables>
                                 <jboss.options>-ea</jboss.options>
                                 <cli.jvm.args>${modular.jdk.args}</cli.jvm.args>
-                                <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
                                 <jboss.home>${project.basedir}/target/wildfly-core</jboss.home>
                                 <module.path>${jboss.dist}/modules</module.path>
                                 <jboss.test.host.master.address>${management.address}</jboss.test.host.master.address>

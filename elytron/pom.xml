@@ -23,7 +23,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>7.0.0.Alpha2-SNAPSHOT</version>
+        <version>10.0.0.Beta4-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-elytron-integration</artifactId>
@@ -201,7 +201,7 @@
                                 <exclude>jacc-with-providers.xml</exclude>
                                 <exclude>legacy*.xml</exclude>
                             </excludes>
-                            <systemId>src/main/resources/schema/wildfly-elytron_5_0.xsd</systemId>
+                            <systemId>src/main/resources/schema/wildfly-elytron_8_0.xsd</systemId>
                         </validationSet>
                         <validationSet>
                             <dir>src/main/resources/subsystem-templates</dir>
@@ -238,7 +238,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>-javaagent:${org.jmockit:jmockit:jar} ${surefire.jacoco.args}</argLine>
+                    <argLine>-javaagent:${org.jmockit:jmockit:jar} ${surefire.jacoco.args} -Dorg.wildfly.extension.elytron.restore-default-ssl-context=true</argLine>
                 </configuration>
             </plugin>
         </plugins>

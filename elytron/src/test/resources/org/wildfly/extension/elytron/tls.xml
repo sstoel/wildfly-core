@@ -1,4 +1,4 @@
-<subsystem xmlns="urn:wildfly:elytron:5.0">
+<subsystem xmlns="urn:wildfly:elytron:8.0" default-ssl-context="client">
     <providers>
         <provider-loader name="custom-loader" />
     </providers>
@@ -43,6 +43,13 @@
             </trust-manager>
             <trust-manager name="trust-with-crl-dp" algorithm="SunX509" key-store="jks_store">
                 <certificate-revocation-list />
+            </trust-manager>
+            <trust-manager name="trust-with-ocsp-crl" algorithm="PKIX" key-store="jks_store" soft-fail="true" only-leaf-cert="true">
+                <certificate-revocation-list />
+                <ocsp responder="http://localhost/ocsp"/>
+            </trust-manager>
+            <trust-manager name="trust-with-ocsp-simple" algorithm="PKIX" key-store="jks_store">
+                <ocsp/>
             </trust-manager>
         </trust-managers>
         <server-ssl-contexts>

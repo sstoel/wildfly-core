@@ -300,6 +300,46 @@ public class RuntimeCapability<T> extends AbstractCapability  {
         return additionalPackages;
     }
 
+    @Override
+    public String getName() {
+        return super.getName();
+    }
+
+    @Override
+    public Set<String> getRequirements() {
+        return super.getRequirements();
+    }
+
+    @Override
+    public boolean isDynamicallyNamed() {
+        return super.isDynamicallyNamed();
+    }
+
+    @Override
+    public String getDynamicName(String dynamicNameElement) {
+        return super.getDynamicName(dynamicNameElement);
+    }
+
+    @Override
+    public String getDynamicName(PathAddress address) {
+        return super.getDynamicName(address);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return super.equals(o);
+    }
+
+    @Override
+    public int hashCode() {
+        return super.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return super.toString();
+    }
+
     /**
      * Builder for a {@link RuntimeCapability}.
      *
@@ -452,6 +492,9 @@ public class RuntimeCapability<T> extends AbstractCapability  {
          *
          * @param packages the package names
          * @return the builder
+         *
+         * @deprecated Use {@link org.jboss.as.controller.ResourceDefinition#registerAdditionalRuntimePackages(
+         * org.jboss.as.controller.registry.ManagementResourceRegistration)}
          */
         public Builder<T> addAdditionalRequiredPackages(String... packages) {
             assert packages != null;

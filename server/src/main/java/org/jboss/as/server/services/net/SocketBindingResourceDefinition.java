@@ -50,22 +50,17 @@ public class SocketBindingResourceDefinition extends AbstractSocketBindingResour
     public static final SocketBindingResourceDefinition INSTANCE = new SocketBindingResourceDefinition();
 
     private SocketBindingResourceDefinition() {
-        super(BindingAddHandler.INSTANCE, BindingRemoveHandler.INSTANCE);
+        super(BindingAddHandler.INSTANCE, BindingRemoveHandler.INSTANCE, SocketBindingResourceDefinition.SOCKET_BINDING_CAPABILITY);
     }
 
     @Override
     public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
         super.registerAttributes(resourceRegistration);
 
-        // Metrics
-        resourceRegistration.registerMetric(BindingMetricHandlers.BoundHandler.ATTRIBUTE_DEFINITION, BindingMetricHandlers.BoundHandler.INSTANCE);
-        resourceRegistration.registerMetric(BindingMetricHandlers.BoundAddressHandler.ATTRIBUTE_DEFINITION, BindingMetricHandlers.BoundAddressHandler.INSTANCE);
-        resourceRegistration.registerMetric(BindingMetricHandlers.BoundPortHandler.ATTRIBUTE_DEFINITION, BindingMetricHandlers.BoundPortHandler.INSTANCE);
-    }
-
-    @Override
-    public void registerCapabilities(ManagementResourceRegistration resourceRegistration) {
-        resourceRegistration.registerCapability(SOCKET_BINDING_CAPABILITY);
+        // Runtime read only attributes
+        resourceRegistration.registerReadOnlyAttribute(BindingRuntimeHandlers.BoundHandler.ATTRIBUTE_DEFINITION, BindingRuntimeHandlers.BoundHandler.INSTANCE);
+        resourceRegistration.registerReadOnlyAttribute(BindingRuntimeHandlers.BoundAddressHandler.ATTRIBUTE_DEFINITION, BindingRuntimeHandlers.BoundAddressHandler.INSTANCE);
+        resourceRegistration.registerReadOnlyAttribute(BindingRuntimeHandlers.BoundPortHandler.ATTRIBUTE_DEFINITION, BindingRuntimeHandlers.BoundPortHandler.INSTANCE);
     }
 
     @Override

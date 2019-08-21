@@ -22,6 +22,7 @@
 
 package org.jboss.as.domain.controller.resources;
 
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FEATURE_REFERENCE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SERVER_GROUP;
 
 import org.jboss.as.controller.AttributeDefinition;
@@ -36,7 +37,6 @@ import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.access.management.SensitiveTargetAccessConstraintDefinition;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FEATURE_REFERENCE;
 import org.jboss.as.controller.operations.validation.IntRangeValidator;
 import org.jboss.as.controller.operations.validation.StringLengthValidator;
 import org.jboss.as.controller.parsing.Attribute;
@@ -73,14 +73,14 @@ public class ServerGroupResourceDefinition extends SimpleResourceDefinition {
     public static final SimpleAttributeDefinition PROFILE = SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.PROFILE, ModelType.STRING)
             .setValidator(new StringLengthValidator(1))
             .setCapabilityReference(ProfileResourceDefinition.PROFILE_CAPABILITY_NAME, SERVER_GROUP_CAPABILITY_NAME)
-            .addArbitraryDescriptor(FEATURE_REFERENCE, new ModelNode(true))
+            .addArbitraryDescriptor(FEATURE_REFERENCE, ModelNode.TRUE)
             .build();
 
     public static final SimpleAttributeDefinition SOCKET_BINDING_GROUP = SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.SOCKET_BINDING_GROUP, ModelType.STRING, false)
             .setXmlName(Attribute.REF.getLocalName())
             .addAccessConstraint(SensitiveTargetAccessConstraintDefinition.SOCKET_BINDING_REF)
             .setCapabilityReference(SocketBindingGroupResourceDefinition.SOCKET_BINDING_GROUP_CAPABILITY_NAME, SERVER_GROUP_CAPABILITY_NAME)
-            .addArbitraryDescriptor(FEATURE_REFERENCE, new ModelNode(true))
+            .addArbitraryDescriptor(FEATURE_REFERENCE, ModelNode.TRUE)
             .build();
 
     public static final SimpleAttributeDefinition SOCKET_BINDING_DEFAULT_INTERFACE = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.SOCKET_BINDING_DEFAULT_INTERFACE, ModelType.STRING, true)
@@ -90,7 +90,7 @@ public class ServerGroupResourceDefinition extends SimpleResourceDefinition {
             .addAccessConstraint(SensitiveTargetAccessConstraintDefinition.SOCKET_CONFIG).build();
 
     public static final SimpleAttributeDefinition SOCKET_BINDING_PORT_OFFSET = SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.SOCKET_BINDING_PORT_OFFSET, ModelType.INT, true)
-            .setDefaultValue(new ModelNode(0))
+            .setDefaultValue(ModelNode.ZERO)
             .setXmlName(Attribute.PORT_OFFSET.getLocalName())
             .setAllowExpression(true)
             .setValidator(new IntRangeValidator(-65535, 65535, true, true))
@@ -99,7 +99,7 @@ public class ServerGroupResourceDefinition extends SimpleResourceDefinition {
 
     public static final SimpleAttributeDefinition MANAGEMENT_SUBSYSTEM_ENDPOINT = SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.MANAGEMENT_SUBSYSTEM_ENDPOINT, ModelType.BOOLEAN, true)
             .setAllowExpression(true)
-            .setDefaultValue(new ModelNode(false))
+            .setDefaultValue(ModelNode.FALSE)
             .addAccessConstraint(SensitiveTargetAccessConstraintDefinition.MANAGEMENT_INTERFACES)
             .build();
 
@@ -115,7 +115,11 @@ public class ServerGroupResourceDefinition extends SimpleResourceDefinition {
 
     public ServerGroupResourceDefinition(final boolean master, final LocalHostControllerInfo hostInfo,
                                          final HostFileRepository fileRepository, final ContentRepository contentRepository) {
-        super(PATH, DomainResolver.getResolver(SERVER_GROUP, false), ServerGroupAddHandler.INSTANCE, new ServerGroupRemoveHandler(hostInfo));
+        super(new SimpleResourceDefinition.Parameters(PATH, DomainResolver.getResolver(SERVER_GROUP, false))
+                .setAddHandler(ServerGroupAddHandler.INSTANCE)
+                .setRemoveHandler(new ServerGroupRemoveHandler(hostInfo))
+                .addCapabilities(SERVER_GROUP_CAPABILITY));
+
         this.contentRepository = contentRepository;
         this.fileRepository = fileRepository;
     }
@@ -147,11 +151,6 @@ public class ServerGroupResourceDefinition extends SimpleResourceDefinition {
         resourceRegistration.registerSubModel(DomainDeploymentResourceDefinition.createForServerGroup(fileRepository, contentRepository));
         resourceRegistration.registerSubModel(SystemPropertyResourceDefinition.createForDomainOrHost(Location.SERVER_GROUP));
         resourceRegistration.registerSubModel(new DomainDeploymentOverlayDefinition(false, null, null));
-    }
-
-    @Override
-    public void registerCapabilities(ManagementResourceRegistration resourceRegistration) {
-        resourceRegistration.registerCapability(SERVER_GROUP_CAPABILITY);
     }
 
     public static OperationStepHandler createRestartRequiredHandler() {

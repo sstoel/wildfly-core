@@ -22,7 +22,6 @@
 
 package org.jboss.as.server.operations;
 
-
 import static org.jboss.as.remoting.RemotingHttpUpgradeService.HTTP_UPGRADE_REGISTRY;
 import static org.jboss.as.server.mgmt.HttpManagementResourceDefinition.SECURE_SOCKET_BINDING;
 import static org.jboss.as.server.mgmt.HttpManagementResourceDefinition.SOCKET_BINDING;
@@ -33,10 +32,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import javax.net.ssl.SSLContext;
 
-import io.undertow.server.ListenerRegistry;
 import org.jboss.as.controller.CapabilityServiceBuilder;
 import org.jboss.as.controller.CapabilityServiceTarget;
 import org.jboss.as.controller.ControlledProcessStateService;
@@ -53,8 +53,8 @@ import org.jboss.as.domain.http.server.ManagementHttpRequestProcessor;
 import org.jboss.as.domain.management.SecurityRealm;
 import org.jboss.as.network.SocketBinding;
 import org.jboss.as.network.SocketBindingManager;
-import org.jboss.as.remoting.HttpListenerRegistryService;
 import org.jboss.as.remoting.RemotingHttpUpgradeService;
+import org.jboss.as.remoting.RemotingServices;
 import org.jboss.as.remoting.management.ManagementChannelRegistryService;
 import org.jboss.as.remoting.management.ManagementRemotingServices;
 import org.jboss.as.server.ExternalManagementRequestExecutor;
@@ -69,11 +69,13 @@ import org.jboss.as.server.mgmt.ManagementWorkerService;
 import org.jboss.as.server.mgmt.UndertowHttpManagementService;
 import org.jboss.as.server.mgmt.domain.HttpManagement;
 import org.jboss.dmr.ModelNode;
-import org.jboss.msc.service.ServiceController;
+import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceName;
 import org.wildfly.security.auth.server.HttpAuthenticationFactory;
 import org.wildfly.security.manager.WildFlySecurityManager;
 import org.xnio.XnioWorker;
+
+import io.undertow.server.ListenerRegistry;
 
 
 /**
@@ -81,6 +83,7 @@ import org.xnio.XnioWorker;
  *
  * @author Jason T. Greene
  * @author <a href="mailto:darran.lofthouse@jboss.com">Darran Lofthouse</a>
+ * @author <a href="mailto:ropalka@redhat.com">Richard Opalka</a>
  */
 public class HttpManagementAddHandler extends BaseHttpInterfaceAddStepHandler {
 
@@ -133,53 +136,41 @@ public class HttpManagementAddHandler extends BaseHttpInterfaceAddStepHandler {
 
         NativeManagementServices.installManagementWorkerService(serviceTarget, context.getServiceRegistry(false));
 
-        ServerEnvironment environment = (ServerEnvironment) context.getServiceRegistry(false).getRequiredService(ServerEnvironmentService.SERVICE_NAME).getValue();
-        final UndertowHttpManagementService undertowService = new UndertowHttpManagementService(consoleMode, environment.getProductConfig().getConsoleSlot());
-        CapabilityServiceBuilder<HttpManagement> undertowBuilder = serviceTarget.addCapability(EXTENSIBLE_HTTP_MANAGEMENT_CAPABILITY, undertowService).addDependency(Services.JBOSS_SERVER_CONTROLLER, ModelController.class, undertowService.getModelControllerInjector())
-                .addCapabilityRequirement("org.wildfly.management.socket-binding-manager", SocketBindingManager.class, undertowService.getSocketBindingManagerInjector())
-                .addDependency(ControlledProcessStateService.SERVICE_NAME, ControlledProcessStateService.class, undertowService.getControlledProcessStateServiceInjector())
-                .addDependency(HttpListenerRegistryService.SERVICE_NAME, ListenerRegistry.class, undertowService.getListenerRegistry())
-                .addDependency(requestProcessorName, ManagementHttpRequestProcessor.class, undertowService.getRequestProcessorValue())
-                .addDependency(ManagementWorkerService.SERVICE_NAME, XnioWorker.class, undertowService.getWorker())
-                .addDependency(ExternalManagementRequestExecutor.SERVICE_NAME, Executor.class, undertowService.getManagementExecutor())
-                .addInjection(undertowService.getAllowedOriginsInjector(), commonPolicy.getAllowedOrigins());
-
-        if (socketBindingName != null) {
-            undertowBuilder.addCapabilityRequirement(SOCKET_BINDING_CAPABILITY_NAME, SocketBinding.class, undertowService.getSocketBindingInjector(), socketBindingName);
-        }
-        if (secureSocketBindingName != null) {
-            undertowBuilder.addCapabilityRequirement(SOCKET_BINDING_CAPABILITY_NAME, SocketBinding.class, undertowService.getSecureSocketBindingInjector(), secureSocketBindingName);
-        }
-
-        String httpAuthenticationFactory = commonPolicy.getHttpAuthenticationFactory();
-        String securityRealm = commonPolicy.getSecurityRealm();
-        if (httpAuthenticationFactory != null) {
-            undertowBuilder.addCapabilityRequirement(HTTP_AUTHENTICATION_FACTORY_CAPABILITY,
-                    HttpAuthenticationFactory.class, undertowService.getHttpAuthenticationFactoryInjector(), httpAuthenticationFactory);
-        }
-        if (securityRealm != null) {
-            SecurityRealm.ServiceUtil.addDependency(undertowBuilder, undertowService.getSecurityRealmInjector(), securityRealm);
-        }
-        if(httpAuthenticationFactory == null && securityRealm == null) {
+        final String httpAuthenticationFactory = commonPolicy.getHttpAuthenticationFactory();
+        final String securityRealm = commonPolicy.getSecurityRealm();
+        final String sslContext = commonPolicy.getSSLContext();
+        if (httpAuthenticationFactory == null && securityRealm == null) {
             ServerLogger.ROOT_LOGGER.httpManagementInterfaceIsUnsecured();
         }
-        String sslContext = commonPolicy.getSSLContext();
-        if (sslContext != null) {
-            undertowBuilder.addCapabilityRequirement(SSL_CONTEXT_CAPABILITY, SSLContext.class, undertowService.getSSLContextInjector(), sslContext);
-        }
 
-        undertowBuilder.install();
+        ServerEnvironment environment = (ServerEnvironment) context.getServiceRegistry(false).getRequiredService(ServerEnvironmentService.SERVICE_NAME).getValue();
+        final CapabilityServiceBuilder<?> builder = serviceTarget.addCapability(EXTENSIBLE_HTTP_MANAGEMENT_CAPABILITY);
+        final Consumer<HttpManagement> hmConsumer = builder.provides(EXTENSIBLE_HTTP_MANAGEMENT_CAPABILITY);
+        final Supplier<ListenerRegistry> lrSupplier = builder.requires(RemotingServices.HTTP_LISTENER_REGISTRY);
+        final Supplier<ModelController> mcSupplier = builder.requires(Services.JBOSS_SERVER_CONTROLLER);
+        final Supplier<SocketBinding> sbSupplier = socketBindingName != null ? builder.requiresCapability(SOCKET_BINDING_CAPABILITY_NAME, SocketBinding.class, socketBindingName) : null;
+        final Supplier<SocketBinding> ssbSupplier = secureSocketBindingName != null ? builder.requiresCapability(SOCKET_BINDING_CAPABILITY_NAME, SocketBinding.class, secureSocketBindingName) : null;
+        final Supplier<SocketBindingManager> sbmSupplier = builder.requiresCapability("org.wildfly.management.socket-binding-manager", SocketBindingManager.class);
+        final Supplier<ControlledProcessStateService> cpssSupplier = builder.requires(ControlledProcessStateService.SERVICE_NAME);
+        final Supplier<ManagementHttpRequestProcessor> rpSupplier = builder.requires(requestProcessorName);
+        final Supplier<XnioWorker> xwSupplier = builder.requires(ManagementWorkerService.SERVICE_NAME);
+        final Supplier<Executor> eSupplier = builder.requires(ExternalManagementRequestExecutor.SERVICE_NAME);
+        final Supplier<HttpAuthenticationFactory> hafSupplier = httpAuthenticationFactory != null ? builder.requiresCapability(HTTP_AUTHENTICATION_FACTORY_CAPABILITY, HttpAuthenticationFactory.class, httpAuthenticationFactory) : null;
+        final Supplier<SecurityRealm> srSupplier = securityRealm != null ? SecurityRealm.ServiceUtil.requires(builder, securityRealm) : null;
+        final Supplier<SSLContext> scSupplier = sslContext != null ? builder.requiresCapability(SSL_CONTEXT_CAPABILITY, SSLContext.class, sslContext) : null;
+        final UndertowHttpManagementService undertowService = new UndertowHttpManagementService(hmConsumer, lrSupplier, mcSupplier, sbSupplier, ssbSupplier, sbmSupplier, null, null, cpssSupplier, rpSupplier, xwSupplier, eSupplier, hafSupplier, srSupplier, scSupplier, null, null, commonPolicy.getAllowedOrigins(), consoleMode, environment.getProductConfig().getConsoleSlot());
+        builder.setInstance(undertowService);
+        builder.install();
 
         // Add service preventing the server from shutting down
-        final HttpShutdownService shutdownService = new HttpShutdownService();
         final ServiceName shutdownName = UndertowHttpManagementService.SERVICE_NAME.append("shutdown");
-        serviceTarget.addService(shutdownName, shutdownService)
-                .addDependency(requestProcessorName, ManagementHttpRequestProcessor.class, shutdownService.getProcessorValue())
-                .addDependency(Services.JBOSS_SERVER_EXECUTOR, Executor.class, shutdownService.getExecutorValue())
-                .addDependency(ManagementChannelRegistryService.SERVICE_NAME, ManagementChannelRegistryService.class, shutdownService.getMgmtChannelRegistry())
-                .addDependency(UndertowHttpManagementService.SERVICE_NAME)
-                .setInitialMode(ServiceController.Mode.ACTIVE)
-                .install();
+        final ServiceBuilder<?> sb = serviceTarget.addService(shutdownName);
+        final Supplier<Executor> executorSupplier = sb.requires(Services.JBOSS_SERVER_EXECUTOR);
+        final Supplier<ManagementHttpRequestProcessor> processorSupplier = sb.requires(requestProcessorName);
+        final Supplier<ManagementChannelRegistryService> registrySupplier = sb.requires(ManagementChannelRegistryService.SERVICE_NAME);
+        sb.requires(UndertowHttpManagementService.SERVICE_NAME);
+        sb.setInstance(new HttpShutdownService(executorSupplier, processorSupplier, registrySupplier));
+        sb.install();
 
         if(commonPolicy.isHttpUpgradeEnabled()) {
             final String hostName = WildFlySecurityManager.getPropertyPrivileged(ServerEnvironment.NODE_NAME, null);

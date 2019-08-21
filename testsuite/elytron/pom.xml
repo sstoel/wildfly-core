@@ -8,7 +8,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-testsuite</artifactId>
-        <version>7.0.0.Alpha2-SNAPSHOT</version>
+        <version>10.0.0.Beta4-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -115,8 +115,12 @@
                             <phase>process-test-resources</phase>
                             <configuration>
                                 <install-dir>${project.build.directory}/${server.output.dir.prefix}</install-dir>
+                                <record-state>false</record-state>
+                                <log-time>${galleon.log.time}</log-time>
+                                <offline>true</offline>
                                 <plugin-options>
-                                    <jboss-fork-embedded/>
+                                    <jboss-maven-dist/>
+                                    <jboss-fork-embedded>${galleon.fork.embedded}</jboss-fork-embedded>
                                 </plugin-options>
                                 <resolve-locals>
                                     <resolve-local>

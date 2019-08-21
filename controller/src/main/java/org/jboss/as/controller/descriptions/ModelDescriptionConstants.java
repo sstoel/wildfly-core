@@ -143,6 +143,7 @@ public class ModelDescriptionConstants {
     public static final String DEPRECATED = "deprecated";
     public static final String DESCRIBE = "describe";
     public static final String DESCRIPTION = "description";
+    public static final String DESTROY = "destroy";
     public static final String DETAILS = "details";
     public static final String DESTINATION_ADDRESS = "destination-address";
     public static final String DESTROY_SERVERS = "destroy-servers";
@@ -170,6 +171,7 @@ public class ModelDescriptionConstants {
     public static final String EMPTY = "empty";
     public static final String ENABLE = "enable";
     public static final String ENABLED = "enabled";
+    public static final String ENABLE_AUTO_START = "enabled-auto-start";
     public static final String ENABLED_CIPHER_SUITES = "enabled-cipher-suites";
     public static final String ENABLED_PROTOCOLS = "enabled-protocols";
     public static final String ENABLED_TIME = "enabled-time";
@@ -254,6 +256,7 @@ public class ModelDescriptionConstants {
     public static final String INCLUDE_ALIASES = "include-aliases";
     public static final String INCLUDE_DATE = "include-date";
     public static final String INCLUDE_DEFAULTS = "include-defaults";
+    public static final String INCLUDE_UNDEFINED_METRIC_VALUES = "include-undefined-metric-values";
     public static final String INCLUDE_RUNTIME = "include-runtime";
     public static final String INCLUDE_SINGLETONS = "include-singletons";
     public static final String INET_ADDRESS = "inet-address";
@@ -272,11 +275,13 @@ public class ModelDescriptionConstants {
     public static final String KEYSTORE_PROVIDER = "keystore-provider";
     public static final String KEYSTORE_RELATIVE_TO = "keystore-relative-to";
     public static final String KEYTAB = "keytab";
+    public static final String KILL = "kill";
     public static final String KILL_SERVERS = "kill-servers";
     public static final String LEVEL = "level";
     public static final String LDAP = "ldap";
     public static final String LDAP_CONNECTION = "ldap-connection";
     public static final String LIST_SNAPSHOTS_OPERATION = "list-snapshots";
+    public static final String LIST_MODULES = "list-modules";
     public static final String LOCAL = "local";
     public static final String LOCAL_DESTINATION_OUTBOUND_SOCKET_BINDING = "local-destination-outbound-socket-binding";
     public static final String LOCAL_HOST_NAME = "local-host-name";
@@ -328,12 +333,13 @@ public class ModelDescriptionConstants {
     public static final String NETWORK = "network";
     public static final String NILLABLE = "nillable";
     public static final String NIL_SIGNIFICANT = "nil-significant";
-    public static final String NO_SERVICES = "no-services";
+    public static final String NORMAL = "normal";
     public static final String NOT = "not";
     public static final String NOTIFICATION = "notification";
     public static final String NOTIFICATION_DATA_TYPE = "data-type";
     public static final String NOTIFICATION_TYPE = "notification-type";
     public static final String NOTIFICATIONS = "notifications";
+    public static final String NO_SERVICES = "no-services";
     /** Use this as the standard operation name field in the operation *request* ModelNode */
     public static final String OP = "operation";
     /** Use this standard operation address field in the operation *request* ModelNode */
@@ -358,6 +364,7 @@ public class ModelDescriptionConstants {
     public static final String PACKAGES = "packages";
     public static final String PARAMS = "params";
     public static final String PARSE_ROLES_FROM_DN = "parse-group-name-from-dn";
+    public static final String PASSIVE = "passive";
     public static final String PASSWORD = "password";
     public static final String PATH = "path";
     public static final String PATHS = "paths";
@@ -497,6 +504,7 @@ public class ModelDescriptionConstants {
     public static final String SOURCE_FILE = "source-file";
     public static final String SOURCE_NETWORK = "source-network";
     public static final String SSL_PROTOCOL = "ssl-protocol";
+    public static final String SUSPEND_TIMEOUT = "suspend-timeout";
     public static final String OPERATION_REQUIRES_RELOAD = "operation-requires-reload";
     public static final String OPERATION_REQUIRES_RESTART = "operation-requires-restart";
     public static final String RELOAD_SERVERS = "reload-servers";
@@ -599,7 +607,8 @@ public class ModelDescriptionConstants {
     public static final String VAULT_EXPRESSION = "vault-expression";
     public static final String VAULT_OPTION = "vault-option";
     public static final String VAULT_OPTIONS = "vault-options";
-      public static final String WARNING = "warning";
+    public static final String VERBOSE = "verbose";
+    public static final String WARNING = "warning";
     public static final String WARNINGS = "warnings";
     public static final String WARNING_LEVEL = "warning-level";
     public static final String WEB_URL = "web-url";

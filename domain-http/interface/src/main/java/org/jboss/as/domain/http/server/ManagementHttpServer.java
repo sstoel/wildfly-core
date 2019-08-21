@@ -182,7 +182,7 @@ public class ManagementHttpServer {
         IoUtils.safeClose(secureServer);
     }
 
-    public void addStaticContext(String contextName, ResourceManager resourceManager) {
+    public synchronized void addStaticContext(String contextName, ResourceManager resourceManager) {
         Assert.checkNotNullParam("contextName", contextName);
         Assert.checkNotNullParam("resourceManager", resourceManager);
         String context = fixPath(contextName);
@@ -196,7 +196,7 @@ public class ManagementHttpServer {
         extensionHandlers.extensionPathHandler.addPrefixPath(context, readinessHandler);
     }
 
-    public void addManagementHandler(String contextName, boolean requireSecurity, HttpHandler managementHandler) {
+    public synchronized void addManagementHandler(String contextName, boolean requireSecurity, HttpHandler managementHandler) {
         Assert.checkNotNullParam("contextName", contextName);
         Assert.checkNotNullParam("managementHandler", managementHandler);
         String context = fixPath(contextName);
@@ -215,7 +215,7 @@ public class ManagementHttpServer {
         extensionHandlers.extensionPathHandler.addPrefixPath(context, readinessHandler);
     }
 
-    public void addManagementGetRemapContext(String contextName, PathRemapper remapper) {
+    public synchronized void addManagementGetRemapContext(String contextName, PathRemapper remapper) {
         Assert.checkNotNullParam("contextName", contextName);
         String context = fixPath(contextName);
         // Reject reserved contexts or duplicate extensions
@@ -226,7 +226,7 @@ public class ManagementHttpServer {
         extensionHandlers.extensionPathHandler.addPrefixPath(context, remapHandler);
     }
 
-    public void removeContext(String contextName) {
+    public synchronized void removeContext(String contextName) {
         Assert.checkNotNullParam("contextName", contextName);
         String context = fixPath(contextName);
         // Reject reserved contexts or non-existent extensions
@@ -252,6 +252,8 @@ public class ManagementHttpServer {
         }
     }
 
+    private static final ByteBufferSlicePool bufferPool = new ByteBufferSlicePool(BufferAllocator.DIRECT_BYTE_BUFFER_ALLOCATOR, 4096, 10 * 4096);
+
     private static ManagementHttpServer create(Builder builder) {
         SSLContext sslContext = null;
         SslClientAuthMode sslClientAuthMode = builder.sslClientAuthMode;
@@ -262,7 +264,7 @@ public class ManagementHttpServer {
             }
         }
 
-        HttpOpenListener openListener = new HttpOpenListener(new ByteBufferSlicePool(BufferAllocator.DIRECT_BYTE_BUFFER_ALLOCATOR, 4096, 10 * 4096));
+        HttpOpenListener openListener = new HttpOpenListener(bufferPool);
 
         int secureRedirectPort = builder.secureBindAddress != null ? builder.secureBindAddress.getPort() : -1;
         // WFLY-2870 -- redirect not supported if bindAddress and secureBindAddress are using different InetAddress
@@ -379,10 +381,12 @@ public class ManagementHttpServer {
             ROOT_LOGGER.consoleModuleNotFound(builder.consoleSlot == null ? "main" : builder.consoleSlot);
         }
 
-        try {
-            addErrorContextHandler(pathHandler, builder);
-        } catch (ModuleLoadException e) {
-            ROOT_LOGGER.errorContextModuleNotFound(builder.consoleSlot == null ? "main" : builder.consoleSlot);
+        if (builder.consoleMode != ConsoleMode.NO_CONSOLE) {
+            try {
+                addErrorContextHandler(pathHandler, builder);
+            } catch (ModuleLoadException e) {
+                ROOT_LOGGER.errorContextModuleNotFound(builder.consoleSlot == null ? "main" : builder.consoleSlot);
+            }
         }
 
         ManagementRootConsoleRedirectHandler rootConsoleRedirectHandler = new ManagementRootConsoleRedirectHandler(consoleHandler);

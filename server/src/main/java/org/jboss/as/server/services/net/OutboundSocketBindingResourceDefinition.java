@@ -67,7 +67,7 @@ public abstract class OutboundSocketBindingResourceDefinition extends SimpleReso
             .build();
 
     public static final SimpleAttributeDefinition FIXED_SOURCE_PORT = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.FIXED_SOURCE_PORT, ModelType.BOOLEAN, true)
-            .setAllowExpression(true).setDefaultValue(new ModelNode().set(false))
+            .setAllowExpression(true).setDefaultValue(ModelNode.FALSE)
             .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
             .build();
 
@@ -75,7 +75,10 @@ public abstract class OutboundSocketBindingResourceDefinition extends SimpleReso
 
     protected OutboundSocketBindingResourceDefinition(final PathElement pathElement, final ResourceDescriptionResolver descriptionResolver,
                                                       final OperationStepHandler addHandler, final OperationStepHandler removeHandler) {
-        super(pathElement, descriptionResolver, addHandler, removeHandler);
+        super(new SimpleResourceDefinition.Parameters(pathElement, descriptionResolver)
+                .setAddHandler(addHandler)
+                .setRemoveHandler(removeHandler)
+                .addCapabilities(OUTBOUND_SOCKET_BINDING_CAPABILITY));
     }
 
     @Override
@@ -84,10 +87,5 @@ public abstract class OutboundSocketBindingResourceDefinition extends SimpleReso
         for (SimpleAttributeDefinition ad:ATTRIBUTES){
             resourceRegistration.registerReadWriteAttribute(ad, null, new OutboundSocketBindingWriteHandler(ad, false));
         }
-    }
-
-    @Override
-    public void registerCapabilities(ManagementResourceRegistration resourceRegistration) {
-        resourceRegistration.registerCapability(OUTBOUND_SOCKET_BINDING_CAPABILITY);
     }
 }

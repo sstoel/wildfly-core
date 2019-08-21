@@ -18,9 +18,17 @@ package org.wildfly.extension.elytron;
 
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.ALGORITHM;
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.AUTOFLUSH;
+import static org.wildfly.extension.elytron.ElytronDescriptionConstants.BCRYPT_MAPPER;
+import static org.wildfly.extension.elytron.ElytronDescriptionConstants.CERTIFICATE_AUTHORITY;
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.FILE_AUDIT_LOG;
+import static org.wildfly.extension.elytron.ElytronDescriptionConstants.HASH_ENCODING;
+import static org.wildfly.extension.elytron.ElytronDescriptionConstants.JDBC_REALM;
+import static org.wildfly.extension.elytron.ElytronDescriptionConstants.MODULAR_CRYPT_MAPPER;
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.PERIODIC_ROTATING_FILE_AUDIT_LOG;
+import static org.wildfly.extension.elytron.ElytronDescriptionConstants.SALTED_SIMPLE_DIGEST_MAPPER;
+import static org.wildfly.extension.elytron.ElytronDescriptionConstants.SALT_ENCODING;
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.SCRAM_MAPPER;
+import static org.wildfly.extension.elytron.ElytronDescriptionConstants.SIMPLE_DIGEST_MAPPER;
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.SIZE_ROTATING_FILE_AUDIT_LOG;
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.SYNCHRONIZED;
 import static org.wildfly.extension.elytron.ElytronExtension.ELYTRON_1_2_0;
@@ -28,10 +36,15 @@ import static org.wildfly.extension.elytron.ElytronExtension.ELYTRON_2_0_0;
 import static org.wildfly.extension.elytron.ElytronExtension.ELYTRON_3_0_0;
 import static org.wildfly.extension.elytron.ElytronExtension.ELYTRON_4_0_0;
 import static org.wildfly.extension.elytron.ElytronExtension.ELYTRON_5_0_0;
+import static org.wildfly.extension.elytron.ElytronExtension.ELYTRON_6_0_0;
+import static org.wildfly.extension.elytron.ElytronExtension.ELYTRON_7_0_0;
+import static org.wildfly.extension.elytron.ElytronExtension.ELYTRON_8_0_0;
 import static org.wildfly.extension.elytron.JdbcRealmDefinition.PrincipalQueryAttributes.PRINCIPAL_QUERIES;
+import static org.wildfly.extension.elytron.JdbcRealmDefinition.PrincipalQueryAttributes.PRINCIPAL_QUERY;
 import static org.wildfly.extension.elytron._private.ElytronSubsystemMessages.ROOT_LOGGER;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.jboss.as.controller.ModelVersion;
@@ -48,6 +61,7 @@ import org.jboss.as.controller.transform.description.ResourceTransformationDescr
 import org.jboss.as.controller.transform.description.TransformationDescriptionBuilder;
 import org.jboss.dmr.ModelNode;
 import org.wildfly.security.password.interfaces.ScramDigestPassword;
+import org.wildfly.security.x500.cert.acme.CertificateAuthority;
 
 /**
  * Registers transformers for the elytron subsystem.
@@ -65,6 +79,12 @@ public final class ElytronSubsystemTransformers implements ExtensionTransformerR
     public void registerTransformers(SubsystemTransformerRegistration registration) {
         ChainedTransformationDescriptionBuilder chainedBuilder = TransformationDescriptionBuilder.Factory.createChainedSubystemInstance(registration.getCurrentSubsystemVersion());
 
+        // 8.0.0 (WildFly 18) to 7.0.0 (WildFly 17)
+        from8(chainedBuilder);
+        // 7.0.0 (WildFly 17) to 6.0.0 (WildFly 16)
+        from7(chainedBuilder);
+        // 6.0.0 (WildFly 16) to 5.0.0 (WildFly 15)
+        from6(chainedBuilder);
         // 5.0.0 (WildFly 15) to 4.0.0 (WildFly 14)
         from5(chainedBuilder);
         // 4.0.0 (WildFly 14) to 3.0.0 (WildFly 13)
@@ -74,19 +94,96 @@ public final class ElytronSubsystemTransformers implements ExtensionTransformerR
         // 2.0.0 (WildFly 12) to 1.2.0, (WildFly 11 and EAP 7.1.0)
         from2(chainedBuilder);
 
-        chainedBuilder.buildAndRegister(registration, new ModelVersion[] { ELYTRON_4_0_0, ELYTRON_3_0_0, ELYTRON_2_0_0, ELYTRON_1_2_0 });
+        chainedBuilder.buildAndRegister(registration, new ModelVersion[] { ELYTRON_7_0_0, ELYTRON_6_0_0, ELYTRON_5_0_0, ELYTRON_4_0_0, ELYTRON_3_0_0, ELYTRON_2_0_0, ELYTRON_1_2_0 });
 
+    }
+
+    private static void from8(ChainedTransformationDescriptionBuilder chainedBuilder) {
+        ResourceTransformationDescriptionBuilder builder = chainedBuilder.createBuilder(ELYTRON_8_0_0, ELYTRON_7_0_0);
+        builder.addChildResource(PathElement.pathElement(ElytronDescriptionConstants.SECURITY_DOMAIN))
+                .getAttributeBuilder()
+                .addRejectCheck(RejectAttributeChecker.DEFINED, ElytronDescriptionConstants.EVIDENCE_DECODER)
+                .setDiscard(DiscardAttributeChecker.UNDEFINED, DomainDefinition.EVIDENCE_DECODER)
+                .end();
+        builder.rejectChildResource(PathElement.pathElement(ElytronDescriptionConstants.X500_SUBJECT_EVIDENCE_DECODER));
+        builder.rejectChildResource(PathElement.pathElement(ElytronDescriptionConstants.X509_SUBJECT_ALT_NAME_EVIDENCE_DECODER));
+        builder.rejectChildResource(PathElement.pathElement(ElytronDescriptionConstants.CUSTOM_EVIDENCE_DECODER));
+        builder.rejectChildResource(PathElement.pathElement(ElytronDescriptionConstants.AGGREGATE_EVIDENCE_DECODER));
+        builder.rejectChildResource(PathElement.pathElement(ElytronDescriptionConstants.CERTIFICATE_AUTHORITY));
+        builder.addChildResource(PathElement.pathElement(ElytronDescriptionConstants.CERTIFICATE_AUTHORITY_ACCOUNT))
+                .getAttributeBuilder()
+                .addRejectCheck(new RejectAttributeChecker.DefaultRejectAttributeChecker() {
+
+                    @Override
+                    protected boolean rejectAttribute(PathAddress address, String attributeName, ModelNode value, TransformationContext context) {
+                        // only 'LetsEncrypt' was allowed in older versions
+                        return value.isDefined() && !value.asString().equalsIgnoreCase(CertificateAuthority.LETS_ENCRYPT.getName());
+                    }
+
+                    @Override
+                    public String getRejectionLogMessage(Map<String, ModelNode> attributes) {
+                        return ROOT_LOGGER.invalidAttributeValue(CERTIFICATE_AUTHORITY).getMessage();
+                    }
+                }, ElytronDescriptionConstants.CERTIFICATE_AUTHORITY);
+        builder.addChildResource(PathElement.pathElement(ElytronDescriptionConstants.TRUST_MANAGER))
+                .getAttributeBuilder()
+                .addRejectCheck(RejectAttributeChecker.DEFINED, ElytronDescriptionConstants.OCSP)
+                .setValueConverter(MAXIMUM_CERT_PATH_CONVERTER, ElytronDescriptionConstants.CERTIFICATE_REVOCATION_LIST)
+                .setDiscard(DiscardAttributeChecker.ALWAYS, ElytronDescriptionConstants.MAXIMUM_CERT_PATH)
+                .addRejectCheck(new RejectAttributeChecker.SimpleRejectAttributeChecker(ModelNode.TRUE), ElytronDescriptionConstants.ONLY_LEAF_CERT)
+                .addRejectCheck(new RejectAttributeChecker.SimpleRejectAttributeChecker(ModelNode.TRUE), ElytronDescriptionConstants.SOFT_FAIL)
+                .setDiscard(DiscardAttributeChecker.ALWAYS, ElytronDescriptionConstants.ONLY_LEAF_CERT)
+                .setDiscard(DiscardAttributeChecker.ALWAYS, ElytronDescriptionConstants.SOFT_FAIL)
+                .end();
+    }
+
+    private static void from7(ChainedTransformationDescriptionBuilder chainedBuilder) {
+        ResourceTransformationDescriptionBuilder builder = chainedBuilder.createBuilder(ELYTRON_7_0_0, ELYTRON_6_0_0);
+        Map<String, RejectAttributeChecker> keyMapperChecker = new HashMap<>();
+        keyMapperChecker.put(HASH_ENCODING, RejectAttributeChecker.DEFINED);
+        keyMapperChecker.put(SALT_ENCODING, RejectAttributeChecker.DEFINED);
+        Map<String, RejectAttributeChecker> principalQueryCheckers = new HashMap<>();
+        principalQueryCheckers.put(BCRYPT_MAPPER, new RejectAttributeChecker.ObjectFieldsRejectAttributeChecker(keyMapperChecker));
+        principalQueryCheckers.put(SALTED_SIMPLE_DIGEST_MAPPER, new RejectAttributeChecker.ObjectFieldsRejectAttributeChecker(keyMapperChecker));
+        principalQueryCheckers.put(SIMPLE_DIGEST_MAPPER, new RejectAttributeChecker.ObjectFieldsRejectAttributeChecker(keyMapperChecker));
+        principalQueryCheckers.put(SCRAM_MAPPER, new RejectAttributeChecker.ObjectFieldsRejectAttributeChecker(keyMapperChecker));
+        principalQueryCheckers.put(MODULAR_CRYPT_MAPPER, RejectAttributeChecker.DEFINED);
+        builder.addChildResource(PathElement.pathElement(JDBC_REALM))
+                .getAttributeBuilder()
+                .addRejectCheck(new RejectAttributeChecker.ListRejectAttributeChecker(
+                        new RejectAttributeChecker.ObjectFieldsRejectAttributeChecker(principalQueryCheckers)
+                ), PRINCIPAL_QUERY);
+    }
+
+    private static void from6(ChainedTransformationDescriptionBuilder chainedBuilder) {
+        ResourceTransformationDescriptionBuilder builder = chainedBuilder.createBuilder(ELYTRON_6_0_0, ELYTRON_5_0_0);
+        builder.addChildResource(PathElement.pathElement(ElytronDescriptionConstants.KEY_STORE))
+            .getAttributeBuilder()
+            .addRejectCheck(RejectAttributeChecker.UNDEFINED, ElytronDescriptionConstants.TYPE)
+            .end();
     }
 
     private static void from5(ChainedTransformationDescriptionBuilder chainedBuilder) {
         ResourceTransformationDescriptionBuilder builder = chainedBuilder.createBuilder(ELYTRON_5_0_0, ELYTRON_4_0_0);
         builder.getAttributeBuilder()
             .setDiscard(DiscardAttributeChecker.ALWAYS, ElytronDefinition.REGISTER_JASPI_FACTORY)
+            .addRejectCheck(RejectAttributeChecker.DEFINED, ElytronDescriptionConstants.DEFAULT_SSL_CONTEXT)
+            .setDiscard(DiscardAttributeChecker.UNDEFINED, ElytronDefinition.DEFAULT_SSL_CONTEXT)
             .end();
         builder.rejectChildResource(PathElement.pathElement(ElytronDescriptionConstants.JASPI_CONFIGURATION));
         transformAutoFlush(builder, FILE_AUDIT_LOG);
         transformAutoFlush(builder, PERIODIC_ROTATING_FILE_AUDIT_LOG);
         transformAutoFlush(builder, SIZE_ROTATING_FILE_AUDIT_LOG);
+        builder.rejectChildResource(PathElement.pathElement(ElytronDescriptionConstants.SERVER_SSL_SNI_CONTEXT));
+        builder.addChildResource(PathElement.pathElement(ElytronDescriptionConstants.TOKEN_REALM))
+            .getAttributeBuilder()
+            .addRejectCheck(new RejectAttributeChecker.ObjectFieldsRejectAttributeChecker(Collections.singletonMap(ElytronDescriptionConstants.HOST_NAME_VERIFICATION_POLICY,
+                RejectAttributeChecker.DEFINED)), ElytronDescriptionConstants.JWT)
+            .addRejectCheck(new RejectAttributeChecker.ObjectFieldsRejectAttributeChecker(Collections.singletonMap(ElytronDescriptionConstants.SSL_CONTEXT,
+                RejectAttributeChecker.DEFINED)), ElytronDescriptionConstants.JWT)
+            .addRejectCheck(new RejectAttributeChecker.ObjectFieldsRejectAttributeChecker(Collections.singletonMap(ElytronDescriptionConstants.KEY_MAP,
+                RejectAttributeChecker.DEFINED)), ElytronDescriptionConstants.JWT)
+            .end();
     }
 
     private static void transformAutoFlush(ResourceTransformationDescriptionBuilder builder, final String resourceName) {
@@ -145,7 +242,7 @@ public final class ElytronSubsystemTransformers implements ExtensionTransformerR
         // Discard new "fail-cache" if it's undefined or has a value same as old unconfigurable behavior; reject otherwise
         builder.addChildResource(PathElement.pathElement(ElytronDescriptionConstants.KERBEROS_SECURITY_FACTORY))
             .getAttributeBuilder()
-            .setDiscard(new DiscardAttributeChecker.DiscardAttributeValueChecker(new ModelNode(0)), KerberosSecurityFactoryDefinition.FAIL_CACHE)
+            .setDiscard(new DiscardAttributeChecker.DiscardAttributeValueChecker(ModelNode.ZERO), KerberosSecurityFactoryDefinition.FAIL_CACHE)
             .addRejectCheck(RejectAttributeChecker.DEFINED, KerberosSecurityFactoryDefinition.FAIL_CACHE);
     }
 
@@ -187,6 +284,23 @@ public final class ElytronSubsystemTransformers implements ExtensionTransformerR
                     }
                 }
                 attributeValue.set(allPermissions);
+            }
+        }
+    };
+
+    // Moves maximum-cert-path from trust-manager back to certificate-revocation-list
+    private static final AttributeConverter MAXIMUM_CERT_PATH_CONVERTER = new AttributeConverter.DefaultAttributeConverter() {
+        @Override
+        protected void convertAttribute(PathAddress address, String attributeName, ModelNode attributeValue, TransformationContext context) {
+            if (attributeValue.isDefined()) {
+                ModelNode trustManager = context.readResourceFromRoot(address).getModel();
+                Integer maxCertPath = trustManager.get(ElytronDescriptionConstants.MAXIMUM_CERT_PATH).asIntOrNull();
+
+                if (maxCertPath != null) {
+                    attributeValue.set(ElytronDescriptionConstants.MAXIMUM_CERT_PATH, new ModelNode(maxCertPath));
+                } else {
+                    attributeValue.set(ElytronDescriptionConstants.MAXIMUM_CERT_PATH, new ModelNode(5));
+                }
             }
         }
     };

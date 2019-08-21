@@ -20,6 +20,8 @@ package org.wildfly.extension.elytron;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
 
+import javax.net.ssl.SSLContext;
+
 import org.jboss.as.controller.Extension;
 import org.jboss.as.controller.ExtensionContext;
 import org.jboss.as.controller.ModelVersion;
@@ -55,6 +57,9 @@ public class ElytronExtension implements Extension {
     static final String NAMESPACE_3_0 = "urn:wildfly:elytron:3.0";
     static final String NAMESPACE_4_0 = "urn:wildfly:elytron:4.0";
     static final String NAMESPACE_5_0 = "urn:wildfly:elytron:5.0";
+    static final String NAMESPACE_6_0 = "urn:wildfly:elytron:6.0";
+    static final String NAMESPACE_7_0 = "urn:wildfly:elytron:7.0";
+    static final String NAMESPACE_8_0 = "urn:wildfly:elytron:8.0";
 
     /**
      * The name of our subsystem within the model.
@@ -65,14 +70,18 @@ public class ElytronExtension implements Extension {
      * The attachment key that is used for associating the authentication context with a deployment context.
      */
     public static final AttachmentKey<AuthenticationContext> AUTHENTICATION_CONTEXT_KEY = AttachmentKey.create(AuthenticationContext.class);
+    public static final AttachmentKey<SSLContext> SSL_CONTEXT_KEY = AttachmentKey.create(SSLContext.class);
 
     static final ModelVersion ELYTRON_1_2_0 = ModelVersion.create(1, 2);
     static final ModelVersion ELYTRON_2_0_0 = ModelVersion.create(2);
     static final ModelVersion ELYTRON_3_0_0 = ModelVersion.create(3);
     static final ModelVersion ELYTRON_4_0_0 = ModelVersion.create(4);
     static final ModelVersion ELYTRON_5_0_0 = ModelVersion.create(5);
+    static final ModelVersion ELYTRON_6_0_0 = ModelVersion.create(6);
+    static final ModelVersion ELYTRON_7_0_0 = ModelVersion.create(7);
+    static final ModelVersion ELYTRON_8_0_0 = ModelVersion.create(8);
 
-    private static final ModelVersion ELYTRON_CURRENT = ELYTRON_5_0_0;
+    private static final ModelVersion ELYTRON_CURRENT = ELYTRON_8_0_0;
 
     static final String ISO_8601_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSSZ";
 
@@ -109,6 +118,9 @@ public class ElytronExtension implements Extension {
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_3_0, () -> new ElytronSubsystemParser3_0());
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_4_0, () -> new ElytronSubsystemParser4_0());
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_5_0, () -> new ElytronSubsystemParser5_0());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_6_0, () -> new ElytronSubsystemParser6_0());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_7_0, () -> new ElytronSubsystemParser7_0());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_8_0, () -> new ElytronSubsystemParser8_0());
     }
 
     @Override
@@ -121,7 +133,7 @@ public class ElytronExtension implements Extension {
         final ManagementResourceRegistration registration = subsystemRegistration.registerSubsystemModel(ElytronDefinition.INSTANCE);
         registration.registerOperationHandler(GenericSubsystemDescribeHandler.DEFINITION, GenericSubsystemDescribeHandler.INSTANCE);
 
-        subsystemRegistration.registerXMLElementWriter(() -> new ElytronSubsystemParser5_0());
+        subsystemRegistration.registerXMLElementWriter(() -> new ElytronSubsystemParser8_0());
     }
 
     @SuppressWarnings("unchecked")

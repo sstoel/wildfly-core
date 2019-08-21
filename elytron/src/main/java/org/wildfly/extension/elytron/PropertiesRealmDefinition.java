@@ -86,7 +86,7 @@ class PropertiesRealmDefinition {
             .build();
 
     private static final SimpleAttributeDefinition PLAIN_TEXT = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.PLAIN_TEXT, ModelType.BOOLEAN, true)
-            .setDefaultValue(new ModelNode(false))
+            .setDefaultValue(ModelNode.FALSE)
             .setAllowExpression(true)
             .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
             .build();
@@ -162,10 +162,10 @@ class PropertiesRealmDefinition {
             if (usersRelativeTo != null || groupsRelativeTo != null) {
                 serviceBuilder.addDependency(PathManagerService.SERVICE_NAME, PathManager.class, pathManagerInjector);
                 if (usersRelativeTo != null) {
-                    serviceBuilder.addDependency(pathName(usersRelativeTo));
+                    serviceBuilder.requires(pathName(usersRelativeTo));
                 }
                 if (groupsRelativeTo != null) {
-                    serviceBuilder.addDependency(pathName(groupsRelativeTo));
+                    serviceBuilder.requires(pathName(groupsRelativeTo));
                 }
             }
 

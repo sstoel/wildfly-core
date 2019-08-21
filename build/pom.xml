@@ -30,7 +30,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>7.0.0.Alpha2-SNAPSHOT</version>
+        <version>10.0.0.Beta4-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-core-build</artifactId>
@@ -60,9 +60,12 @@
                         </goals>
                         <configuration>
                             <install-dir>${project.build.directory}/${project.build.finalName}</install-dir>
+                            <record-state>false</record-state>
+                            <log-time>${galleon.log.time}</log-time>
+                            <offline>true</offline>
                             <plugin-options>
                                 <jboss-maven-dist/>
-                                <jboss-fork-embedded/>
+                                <jboss-fork-embedded>${galleon.fork.embedded}</jboss-fork-embedded>
                             </plugin-options>
                             <feature-packs>
                                 <feature-pack>

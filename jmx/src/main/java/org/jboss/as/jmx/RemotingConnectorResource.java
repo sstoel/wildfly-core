@@ -35,6 +35,7 @@ import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
+import org.jboss.as.controller.registry.RuntimePackageDependency;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 
@@ -47,7 +48,7 @@ public class RemotingConnectorResource extends SimpleResourceDefinition {
     static final PathElement REMOTE_CONNECTOR_CONFIG_PATH = PathElement.pathElement(REMOTING_CONNECTOR, JMX);
     static final SimpleAttributeDefinition USE_MANAGEMENT_ENDPOINT
             = new SimpleAttributeDefinitionBuilder(CommonAttributes.USE_MANAGEMENT_ENDPOINT, ModelType.BOOLEAN, true)
-            .setDefaultValue(new ModelNode(true))
+            .setDefaultValue(ModelNode.TRUE)
             .setAllowExpression(true)
             .build();
 
@@ -59,10 +60,10 @@ public class RemotingConnectorResource extends SimpleResourceDefinition {
     static final RemotingConnectorResource INSTANCE = new RemotingConnectorResource();
 
     private RemotingConnectorResource() {
-        super(REMOTE_CONNECTOR_CONFIG_PATH,
-                JMXExtension.getResourceDescriptionResolver(CommonAttributes.REMOTING_CONNECTOR),
-                RemotingConnectorAdd.INSTANCE,
-                RemotingConnectorRemove.INSTANCE);
+        super(new SimpleResourceDefinition.Parameters(REMOTE_CONNECTOR_CONFIG_PATH, JMXExtension.getResourceDescriptionResolver(CommonAttributes.REMOTING_CONNECTOR))
+                .setAddHandler(RemotingConnectorAdd.INSTANCE)
+                .setRemoveHandler(RemotingConnectorRemove.INSTANCE)
+                .setCapabilities(REMOTE_JMX_CAPABILITY));
     }
 
     @Override
@@ -79,7 +80,9 @@ public class RemotingConnectorResource extends SimpleResourceDefinition {
                                 REMOTE_JMX_CAPABILITY.getName(),
                                 USE_MANAGEMENT_ENDPOINT.getName());
                     } else {
-                        context.deregisterCapabilityRequirement(REMOTING_CAPABILITY, REMOTE_JMX_CAPABILITY.getName());
+                        context.deregisterCapabilityRequirement(REMOTING_CAPABILITY,
+                                REMOTE_JMX_CAPABILITY.getName(),
+                                USE_MANAGEMENT_ENDPOINT.getName());
                     }
                 }
             }
@@ -104,7 +107,7 @@ public class RemotingConnectorResource extends SimpleResourceDefinition {
     }
 
     @Override
-    public void registerCapabilities(ManagementResourceRegistration resourceRegistration) {
-        resourceRegistration.registerCapability(REMOTE_JMX_CAPABILITY);
+    public void registerAdditionalRuntimePackages(ManagementResourceRegistration resourceRegistration) {
+        resourceRegistration.registerAdditionalRuntimePackages(RuntimePackageDependency.required("org.jboss.remoting-jmx"));
     }
 }

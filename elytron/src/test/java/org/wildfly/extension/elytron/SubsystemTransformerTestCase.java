@@ -16,9 +16,11 @@ limitations under the License.
 
 package org.wildfly.extension.elytron;
 
+import static org.jboss.as.model.test.FailedOperationTransformationConfig.REJECTED_RESOURCE;
 import static org.jboss.as.model.test.ModelTestControllerVersion.EAP_7_1_0;
-import static org.jboss.as.model.test.ModelTestControllerVersion.EAP_7_2_0_TEMP;
+import static org.jboss.as.model.test.ModelTestControllerVersion.EAP_7_2_0;
 import static org.junit.Assert.assertTrue;
+import static org.wildfly.extension.elytron.ElytronDescriptionConstants.JDBC_REALM;
 
 import java.io.IOException;
 import java.util.List;
@@ -87,11 +89,22 @@ public class SubsystemTransformerTestCase extends AbstractSubsystemBaseTest {
 
     @Test
     public void testRejectingTransformersEAP720() throws Exception {
-        testRejectingTransformers(EAP_7_2_0_TEMP, "elytron-transformers-4.0-reject.xml", new FailedOperationTransformationConfig()
+        testRejectingTransformers(EAP_7_2_0, "elytron-transformers-4.0-reject.xml", new FailedOperationTransformationConfig()
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.X500_SUBJECT_EVIDENCE_DECODER, "subjectDecoder")),
+                        FailedOperationTransformationConfig.REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.X509_SUBJECT_ALT_NAME_EVIDENCE_DECODER, "rfc822Decoder")),
+                        FailedOperationTransformationConfig.REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.CUSTOM_EVIDENCE_DECODER, "customEvidenceDecoder")),
+                        FailedOperationTransformationConfig.REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.AGGREGATE_EVIDENCE_DECODER, "aggregateEvidenceDecoder")),
+                        FailedOperationTransformationConfig.REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.SECURITY_DOMAIN)),
+                        new FailedOperationTransformationConfig.NewAttributesConfig(DomainDefinition.EVIDENCE_DECODER))
+                .addFailedAttribute(SUBSYSTEM_ADDRESS, new FailedOperationTransformationConfig.NewAttributesConfig(ElytronDefinition.DEFAULT_SSL_CONTEXT))
                 .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.JASPI_CONFIGURATION, "minimal")),
                         FailedOperationTransformationConfig.REJECTED_RESOURCE)
                 .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.FILE_AUDIT_LOG, "audit1")),
-                        new FailedOperationTransformationConfig.NewAttributesConfig(AuditResourceDefinitions.AUTOFLUSH)
+                       new FailedOperationTransformationConfig.NewAttributesConfig(AuditResourceDefinitions.AUTOFLUSH)
                 )
                 .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.FILE_AUDIT_LOG, "audit2")),
                         new FailedOperationTransformationConfig.NewAttributesConfig(AuditResourceDefinitions.AUTOFLUSH)
@@ -107,7 +120,32 @@ public class SubsystemTransformerTestCase extends AbstractSubsystemBaseTest {
                 )
                 .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.SIZE_ROTATING_FILE_AUDIT_LOG, "audit6")),
                         new FailedOperationTransformationConfig.NewAttributesConfig(AuditResourceDefinitions.AUTOFLUSH)
-                ));
+                )
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.SERVER_SSL_SNI_CONTEXT)),
+                        FailedOperationTransformationConfig.REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(JDBC_REALM, "JdbcBcryptHashHex")), REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(JDBC_REALM, "JdbcBcryptSaltHex")), REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(JDBC_REALM, "JdbcSaltedSimpleDigestHashHex")), REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(JDBC_REALM, "JdbcSaltedSimpleDigestSaltHex")), REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(JDBC_REALM, "JdbcSimpleDigestHashHex")), REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(JDBC_REALM, "JdbcScramHashHex")), REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(JDBC_REALM, "JdbcScramSaltHex")), REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(JDBC_REALM, "JdbcModularCrypt")), REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.TOKEN_REALM, "SslTokenRealm")),
+                        FailedOperationTransformationConfig.REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.TOKEN_REALM, "KeyMapTokenRealm")),
+                        FailedOperationTransformationConfig.REJECTED_RESOURCE
+                ).addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.KEY_STORE, "automatic.keystore")),
+                        FailedOperationTransformationConfig.REJECTED_RESOURCE
+                )
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.CERTIFICATE_AUTHORITY_ACCOUNT, "invalidCAA")),
+                        new FailedOperationTransformationConfig.NewAttributesConfig(ElytronDescriptionConstants.CERTIFICATE_AUTHORITY)
+                )
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.CERTIFICATE_AUTHORITY)),
+                        FailedOperationTransformationConfig.REJECTED_RESOURCE)
+                .addFailedAttribute(SUBSYSTEM_ADDRESS.append(PathElement.pathElement(ElytronDescriptionConstants.TRUST_MANAGER, "TestingTrustManager")),
+                        FailedOperationTransformationConfig.REJECTED_RESOURCE)
+                );
     }
 
     @Test
@@ -117,7 +155,7 @@ public class SubsystemTransformerTestCase extends AbstractSubsystemBaseTest {
 
     @Test
     public void testTransformerEAP720() throws Exception {
-        testTransformation(EAP_7_2_0_TEMP);
+        testTransformation(EAP_7_2_0);
     }
 
     private KernelServices buildKernelServices(String xml, ModelTestControllerVersion controllerVersion, ModelVersion version, String... mavenResourceURLs) throws Exception {

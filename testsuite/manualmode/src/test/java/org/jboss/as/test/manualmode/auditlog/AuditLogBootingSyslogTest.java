@@ -35,7 +35,9 @@ import org.jboss.as.test.syslogserver.BlockedSyslogServerEventHandler;
 import org.jboss.dmr.ModelNode;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.productivity.java.syslog4j.server.SyslogServerEventIF;
@@ -60,6 +62,12 @@ public class AuditLogBootingSyslogTest {
     private static final AuditLogToTLSElytronSyslogSetup SYSLOG_SETUP = new AuditLogToTLSElytronSyslogSetup();
 
 
+    @BeforeClass
+    public static void noJDK12Plus() {
+        Assume.assumeFalse("Avoiding JDK 12 due to https://bugs.openjdk.java.net/browse/JDK-8219658", "12".equals(System.getProperty("java.specification.version")));
+    }
+
+
     @Inject
     private ServerController container;
 
@@ -79,9 +87,9 @@ public class AuditLogBootingSyslogTest {
         compositeOp = Operations.CompositeOperationBuilder.create();
         configureAliases(compositeOp);
         compositeOp.addStep(Util.getWriteAttributeOperation(auditLogConfigAddress,
-                AuditLogLoggerResourceDefinition.LOG_BOOT.getName(), new ModelNode(true)));
+                AuditLogLoggerResourceDefinition.LOG_BOOT.getName(), ModelNode.TRUE));
         compositeOp.addStep(Util.getWriteAttributeOperation(auditLogConfigAddress, AuditLogLoggerResourceDefinition.ENABLED.getName(),
-                new ModelNode(true)));
+                ModelNode.TRUE));
         executeForSuccess(client, compositeOp.build());
         final BlockingQueue<SyslogServerEventIF> queue = BlockedSyslogServerEventHandler.getQueue();
         queue.clear();
@@ -95,7 +103,7 @@ public class AuditLogBootingSyslogTest {
         final Operations.CompositeOperationBuilder compositeOp = Operations.CompositeOperationBuilder.create();
 
         compositeOp.addStep(Util.getWriteAttributeOperation(auditLogConfigAddress,
-                AuditLogLoggerResourceDefinition.ENABLED.getName(), new ModelNode(false)));
+                AuditLogLoggerResourceDefinition.ENABLED.getName(), ModelNode.FALSE));
 
         resetElytron(compositeOp);
         resetServerName(compositeOp);
@@ -169,7 +177,7 @@ public class AuditLogBootingSyslogTest {
 
     private boolean makeOneLog() throws IOException {
         ModelNode op = Util.getWriteAttributeOperation(auditLogConfigAddress,
-                AuditLogLoggerResourceDefinition.LOG_BOOT.getName(), new ModelNode(false));
+                AuditLogLoggerResourceDefinition.LOG_BOOT.getName(), ModelNode.FALSE);
         ModelNode result = container.getClient().getControllerClient().execute(op);
         return Operations.isSuccessfulOutcome(result);
     }

@@ -1298,9 +1298,9 @@ public interface ServerLogger extends BasicLogger {
     @Message(id = 265, value = "Invalid value '%s' for system property '%s' -- value must be a non-negative integer")
     void invalidPoolCoreSize(String val, String configSysProp);
 
-    @LogMessage(level = WARN)
-    @Message(id = 266, value = "Server home is set to '%s', but server real home is '%s' - unpredictable results may occur.")
-    void serverHomeMismatch(Path passed, Path real);
+//    @LogMessage(level = WARN)
+//    @Message(id = 266, value = "Server home is set to '%s', but server real home is '%s' - unpredictable results may occur.")
+//    void serverHomeMismatch(Path passed, Path real);
 
     @Message(id = 267, value = "Cannot mount resource root '%s', is it really an archive?")
     XMLStreamException archiveMountFailed(String path, @Cause ZipException cause);
@@ -1323,6 +1323,18 @@ public interface ServerLogger extends BasicLogger {
     @LogMessage(level = ERROR)
     @Message(id = 271, value = "Git error: %s")
     void errorUsingGit(@Cause Throwable cause, String message);
+
+    @LogMessage(level = INFO)
+    @Message(id = 272, value = "Suspending server")
+    void suspendingServer();
+
+    @LogMessage(level = WARN)
+    @Message(id = 273, value = "Excluded subsystem %s via jboss-deployment-structure.xml does not exist.")
+    void excludedSubSystemsNotExist(String subSystem);
+
+    @LogMessage(level = WARN)
+    @Message(id = 274, value = "Excluded dependency %s via jboss-deployment-structure.xml does not exist.")
+    void excludedDependenciesNotExist(String dependency);
 
     ////////////////////////////////////////////////
     //Messages without IDs

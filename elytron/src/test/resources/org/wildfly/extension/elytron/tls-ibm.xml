@@ -1,5 +1,5 @@
 <!-- for needs of SaslTestCase and KeyStoresTestCase -->
-<subsystem xmlns="urn:wildfly:elytron:5.0">
+<subsystem xmlns="urn:wildfly:elytron:8.0" default-ssl-context="ClientSslContextNoAuth">
     <providers>
         <provider-loader name="ManagerProviderLoader" class-names="com.ibm.crypto.provider.IBMJCE com.ibm.jsse.IBMJSSEProvider com.ibm.jsse2.IBMJSSEProvider2 com.ibm.security.jgss.IBMJGSSProvider com.ibm.security.cert.IBMCertPath com.ibm.security.cmskeystore.CMSProvider com.ibm.security.jgss.mech.spnego.IBMSPNEGO" />
     </providers>
@@ -43,6 +43,11 @@
                 <implementation type="JKS" />
                 <file path="target/not-existing.keystore" required="false"/>
             </key-store>
+            <key-store name="AutomaticKeystore" >
+                <credential-reference clear-text="Elytron"/>
+                <implementation/>
+                <file path="firefly.keystore" relative-to="jboss.server.config.dir"/>
+            </key-store>
             <filtering-key-store name="FilteringKeyStore" key-store="FireflyKeystore" alias-filter="NONE:+firefly"/>
         </key-stores>
         <key-managers>
@@ -65,6 +70,13 @@
             </trust-manager>
             <trust-manager name="trust-with-crl-dp" algorithm="PKIX" key-store="ElytronCaTruststore">
                 <certificate-revocation-list />
+            </trust-manager>
+            <trust-manager name="trust-with-ocsp-crl" algorithm="PKIX" key-store="ElytronCaTruststore" soft-fail="true" only-leaf-cert="true">
+                <certificate-revocation-list />
+                <ocsp responder="http://localhost/ocsp"/>
+            </trust-manager>
+            <trust-manager name="trust-with-ocsp-simple" algorithm="PKIX" key-store="ElytronCaTruststore">
+                <ocsp/>
             </trust-manager>
         </trust-managers>
         <server-ssl-contexts>

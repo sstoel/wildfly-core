@@ -22,10 +22,16 @@
 
 package org.jboss.as.controller.operations;
 
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ADD;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.CALLER_TYPE;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.EXTENSION;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OPERATION_HEADERS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.PROFILE;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REMOVE;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.USER;
 
 import java.util.ArrayList;
@@ -38,6 +44,8 @@ import org.jboss.as.controller.OperationDefinition;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathAddress;
+import org.jboss.as.controller.SimpleOperationDefinitionBuilder;
+import org.jboss.as.controller.descriptions.NonResolvingResourceDescriptionResolver;
 import org.jboss.as.controller.logging.ControllerLogger;
 import org.jboss.as.controller.registry.ImmutableManagementResourceRegistration;
 import org.jboss.as.controller.registry.OperationEntry;
@@ -65,7 +73,10 @@ public final class MultistepUtil {
      *         in the {@code operations} list. Cannot be {@code null} but may be empty in which case this method will
      *                   create the response nodes and add them to this list.
      * @throws OperationFailedException if there is a problem registering a step for any of the operations
+     *
+     * @deprecated Do not use. Will be removed.
      */
+    @Deprecated
     public static void recordOperationSteps(final OperationContext context, final List<ModelNode> operations,
                                                        final List<ModelNode> responses) throws OperationFailedException {
         assert responses.isEmpty() || operations.size() == responses.size();
@@ -84,12 +95,10 @@ public final class MultistepUtil {
             }
             i++;
         }
-        recordOperationSteps(context, operationMap, responseMap, OperationHandlerResolver.DEFAULT, false);
+        recordOperationSteps(context, operationMap, responseMap, OperationHandlerResolver.DEFAULT, false, true);
 
         if (!responsesProvided) {
-            for (ModelNode response : responseMap.values()) {
-                responses.add(response);
-            }
+            responses.addAll(responseMap.values());
         }
     }
 
@@ -110,8 +119,9 @@ public final class MultistepUtil {
      * @param <T> the type of the keys in the maps
      * @throws OperationFailedException  if there is a problem registering a step for any of the operations
      */
+    @SuppressWarnings("unused")
     public static <T> void recordOperationSteps(final OperationContext context, final Map<T, ModelNode> operations,
-                                                                       final Map<T, ModelNode> responses) throws OperationFailedException {
+                                                final Map<T, ModelNode> responses) throws OperationFailedException {
         recordOperationSteps(context, operations, responses, OperationHandlerResolver.DEFAULT, false, true);
     }
 
@@ -132,7 +142,9 @@ public final class MultistepUtil {
      *
      * @throws OperationFailedException  if there is a problem registering a step for any of the operations
      *
+     * @deprecated Do not use. Will be removed.
      */
+    @Deprecated
     public static <T> void recordOperationSteps(final OperationContext context,
                                                 final Map<T, ModelNode> operations,
                                                 final Map<T, ModelNode> responses,
@@ -155,7 +167,9 @@ public final class MultistepUtil {
      * @param handlerResolver an object that can provide the {@code OperationStepHandler} to use for the operation
      * @param adjustAddresses {@code true} if the address of each operation should be adjusted to become a child of the context's
      *                                {@link OperationContext#getCurrentAddress() current address}
-     * @param rejectPrivateOperations
+     * @param rejectPrivateOperations {@code true} if an {@link OperationFailedException} should be thrown if the
+     *                                            {@link OperationEntry} for any of the {@code operations} is
+     *                                            {@link OperationEntry.EntryType#PRIVATE}
      *
      * @throws OperationFailedException  if there is a problem registering a step for any of the operations
      *
@@ -175,6 +189,7 @@ public final class MultistepUtil {
         PathAddress currentAddress = adjustAddresses ? context.getCurrentAddress() : null;
 
         List<OpData> opdatas = new ArrayList<>();
+        OpData previousOpData = null;
         for (Map.Entry<T, ModelNode> entry : operations.entrySet()) {
             ModelNode response = responsesProvided ? responses.get(entry.getKey()) : new ModelNode();
             assert  response != null : "No response provided for " + entry.getValue();
@@ -188,9 +203,16 @@ public final class MultistepUtil {
                 op.get(OP_ADDR).set(stepAddress.toModelNode());
             }
 
-            OpData opData = getOpData(context, op, response, stepAddress, handlerResolver, rejectPrivateOperations);
+            // If a previous op turned on deferred resolution (i.e. an extension add) or
+            // turned on requiring re-resolution (i.e. an extension remove) then pass that on
+            boolean allowDeferredResolution = previousOpData != null && previousOpData.allowDeferredResolution;
+            boolean requireReResolution = previousOpData != null && previousOpData.requireReResolution;
+
+            OpData opData = getOpData(context, op, response, stepAddress, handlerResolver, rejectPrivateOperations,
+                    allowDeferredResolution, requireReResolution);
             // Reverse the order for addition to the context
             opdatas.add(0, opData);
+            previousOpData = opData;
 
             if (!responsesProvided) {
                 responses.put(entry.getKey(), response);
@@ -203,27 +225,77 @@ public final class MultistepUtil {
     }
 
     private static OpData getOpData(OperationContext context, ModelNode subOperation, ModelNode response, PathAddress stepAddress,
-                                    OperationHandlerResolver handlerResolver, boolean rejectPrivateOperations) throws OperationFailedException {
+                                    OperationHandlerResolver handlerResolver, boolean rejectPrivateOperations,
+                                    boolean allowDeferredResolution,
+                                    boolean requireReResolution) throws OperationFailedException {
         ImmutableManagementResourceRegistration registry = context.getRootResourceRegistration();
         String stepOpName = subOperation.require(OP).asString();
+        OperationDefinition operationDefinition;
+        OperationStepHandler osh;
         OperationEntry operationEntry = registry.getOperationEntry(stepAddress, stepOpName);
+        ControllerLogger.MGMT_OP_LOGGER.tracef("Getting OpDate for op %s at %s with deferred resolution %s", stepOpName, stepAddress, allowDeferredResolution);
         if (operationEntry == null) {
             ImmutableManagementResourceRegistration child = registry.getSubModel(stepAddress);
             if (child == null) {
-                throw new OperationFailedException(ControllerLogger.ROOT_LOGGER.noSuchResourceType(stepAddress));
+                if (allowDeferredResolution && isSubsystem(stepAddress)) {
+                    // No MRR now but perhaps there will be later when this op actually executes.
+                    // So set things up to try then.
+                    ControllerLogger.MGMT_OP_LOGGER.tracef("Deferred resolution for op %s at %s", stepOpName, stepAddress);
+                    osh = new DeferredResolutionHandler(subOperation, response, stepAddress, handlerResolver, rejectPrivateOperations);
+                    // Supply a dummy definition. For no well thought out reason I'm using the original op name
+                    // and thus a dynamic op definition. Probably could be an OD constant with a fixed arbitary name
+                    // like "deferred-op-resolution"
+                    operationDefinition = SimpleOperationDefinitionBuilder.of(stepOpName, NonResolvingResourceDescriptionResolver.INSTANCE).build();
+                } else {
+                    ControllerLogger.MGMT_OP_LOGGER.tracef("No resource registration for op %s at %s", stepOpName, stepAddress);
+                    throw new OperationFailedException(ControllerLogger.ROOT_LOGGER.noSuchResourceType(stepAddress));
+                }
             } else {
                 throw new OperationFailedException(ControllerLogger.ROOT_LOGGER.noHandlerForOperation(stepOpName, stepAddress));
             }
-        } else if (operationEntry.getType() == OperationEntry.EntryType.PRIVATE) {
-            if (rejectPrivateOperations
-                    || (subOperation.hasDefined(OPERATION_HEADERS, CALLER_TYPE)
-                    && USER.equals(subOperation.get(OPERATION_HEADERS, CALLER_TYPE).asString()))) {
+        } else {
+            if (operationEntry.getType() == OperationEntry.EntryType.PRIVATE
+                    && (rejectPrivateOperations
+                        || (subOperation.hasDefined(OPERATION_HEADERS, CALLER_TYPE)
+                        && USER.equals(subOperation.get(OPERATION_HEADERS, CALLER_TYPE).asString())))) {
                 // Not allowed; respond as if there is no such operation
                 throw new OperationFailedException(ControllerLogger.ROOT_LOGGER.noHandlerForOperation(stepOpName, stepAddress));
             }
+            operationDefinition = operationEntry.getOperationDefinition();
+            if (requireReResolution && isSubsystem(stepAddress)) {
+                // A previous step will remove an extension before this subsystem step runs.
+                // Get the currently registered handler before executing for real
+
+                ControllerLogger.MGMT_OP_LOGGER.tracef("Re-resolution for op %s at %s", stepOpName, stepAddress);
+                osh = new DeferredResolutionHandler(subOperation, response, stepAddress, handlerResolver, rejectPrivateOperations);
+            } else {
+                osh = handlerResolver.getOperationStepHandler(stepOpName, stepAddress, subOperation, operationEntry);
+            }
         }
-        OperationStepHandler osh = handlerResolver.getOperationStepHandler(stepOpName, stepAddress, subOperation, operationEntry);
-        return new OpData(subOperation, operationEntry.getOperationDefinition(), osh, response);
+
+        // If this step is adding or removing an extension, subsequent steps need to deal with the possibility
+        // that MRRs are coming/going. So track that. If we're already tracking, keep doing it.
+        boolean allowDeferred = allowDeferredResolution || (ADD.equals(stepOpName) && isExtensionAddress(stepAddress));
+        boolean requireReRes = requireReResolution || (REMOVE.equals(stepOpName) && isExtensionAddress(stepAddress));
+
+        return new OpData(subOperation, operationDefinition, osh, response, allowDeferred, requireReRes);
+    }
+
+    private static boolean isSubsystem(PathAddress stepAddress) {
+        int size = stepAddress.size();
+        if (size == 1) {
+            return SUBSYSTEM.equals(stepAddress.getElement(0).getKey());
+        } else if (size > 1) {
+            String firstKey = stepAddress.getElement(0).getKey();
+            return SUBSYSTEM.equals(stepAddress.getElement(1).getKey())
+                    && (PROFILE.equals(firstKey) || HOST.equals(firstKey));
+        }
+        return false;
+    }
+
+    private static boolean isExtensionAddress(PathAddress address) {
+        return (address.size() == 1 && EXTENSION.equals(address.getElement(0).getKey())
+                    || (address.size() == 2 && EXTENSION.equals(address.getElement(1).getKey()) && HOST.equals(address.getElement(0).getKey())));
     }
 
     private static class OpData {
@@ -231,12 +303,51 @@ public final class MultistepUtil {
         private final OperationDefinition definition;
         private final OperationStepHandler handler;
         private final ModelNode response;
+        private final boolean allowDeferredResolution;
+        private final boolean requireReResolution;
 
-        private OpData(ModelNode operation, OperationDefinition definition, OperationStepHandler handler, ModelNode response) {
+        private OpData(ModelNode operation, OperationDefinition definition, OperationStepHandler handler, ModelNode response,
+                       boolean allowDeferredResolution, boolean requireReResolution) {
             this.definition = definition;
             this.operation = operation;
             this.handler = handler;
             this.response = response;
+            this.allowDeferredResolution = allowDeferredResolution;
+            this.requireReResolution = requireReResolution;
+        }
+    }
+
+    /**
+     * Store the params from a call to {@code getOpData} in an OSH that, when it
+     * executes, tries again to getOpData and if successful adds the desired step.
+     */
+    private static class DeferredResolutionHandler implements OperationStepHandler {
+
+        private final ModelNode deferredOperation;
+        private final ModelNode deferredResponse;
+        private final PathAddress deferredAddress;
+        private final OperationHandlerResolver handlerResolver;
+        private final boolean rejectPrivateOperations;
+
+        private DeferredResolutionHandler(ModelNode deferredOperation,
+                                          ModelNode deferredResponse,
+                                          PathAddress deferredAddress,
+                                          OperationHandlerResolver handlerResolver,
+                                          boolean rejectPrivateOperations) {
+            this.deferredOperation = deferredOperation;
+            this.deferredResponse = deferredResponse;
+            this.deferredAddress = deferredAddress;
+            this.handlerResolver = handlerResolver;
+            this.rejectPrivateOperations = rejectPrivateOperations;
+        }
+
+        @Override
+        public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
+            // Try again to get the OpData but this time allowDeferredResolution == false so it will
+            // fail if the MRR is still not available
+            OpData opData = getOpData(context, deferredOperation, deferredResponse, deferredAddress, handlerResolver,
+                    rejectPrivateOperations, false, false);
+            context.addModelStep(opData.response, opData.operation, opData.definition, opData.handler, true);
         }
     }
 

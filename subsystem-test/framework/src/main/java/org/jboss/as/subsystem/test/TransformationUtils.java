@@ -118,27 +118,18 @@ class TransformationUtils {
         }
         res.writeModel(value);
 
-        Set<PathElement> childAddresses = reg.getChildAddresses(PathAddress.EMPTY_ADDRESS);
-        for (PathElement path : childAddresses) {
-
-            ImmutableManagementResourceRegistration sub = reg.getSubModel(PathAddress.pathAddress(path));
-            if (path.isWildcard()) {
-                ModelNode subModel = model.get(path.getKey());
-                if (subModel.isDefined()) {
-                    for (Property p : subModel.asPropertyList()) {
-                        if (p.getValue().isDefined()) {
-                            res.registerChild(PathElement.pathElement(path.getKey(), p.getName()), modelToResource(startAddress,sub, p.getValue(), includeUndefined, fullPath.append(path)));
-                        }
-                    }
-                }
-            } else if (!childAddresses.contains(PathElement.pathElement(path.getKey()))) {
-                ModelNode subModel = model.get(path.getKeyValuePair());
-                if (subModel.isDefined()) {
-                    res.registerChild(path, modelToResource(startAddress,sub, subModel, includeUndefined, fullPath.append(path)));
+        for (String childType : reg.getChildNames(PathAddress.EMPTY_ADDRESS)) {
+            if (model.hasDefined(childType)) {
+                for (Property property : model.get(childType).asPropertyList()) {
+                    PathElement childPath = PathElement.pathElement(childType, property.getName());
+                    ImmutableManagementResourceRegistration subRegistration = reg.getSubModel(PathAddress.pathAddress(childPath));
+                    Resource child = modelToResource(startAddress, subRegistration, property.getValue(), includeUndefined, fullPath.append(childPath));
+                    res.registerChild(childPath, child);
                 }
             }
-            allFields.remove(path.getKey());
+            allFields.remove(childType);
         }
+
         if (!allFields.isEmpty()){
             throw ControllerLogger.ROOT_LOGGER.modelFieldsNotKnown(allFields, startAddress.append(fullPath));
         }

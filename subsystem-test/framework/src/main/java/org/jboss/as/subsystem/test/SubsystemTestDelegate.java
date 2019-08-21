@@ -87,6 +87,7 @@ import org.jboss.as.controller.registry.NotificationEntry;
 import org.jboss.as.controller.registry.OperationEntry;
 import org.jboss.as.controller.registry.OperationEntry.Flag;
 import org.jboss.as.controller.registry.Resource;
+import org.jboss.as.controller.registry.RuntimePackageDependency;
 import org.jboss.as.controller.transform.ExtensionTransformerRegistration;
 import org.jboss.as.controller.transform.OperationTransformer.TransformedOperation;
 import org.jboss.as.model.test.ChildFirstClassLoaderBuilder;
@@ -649,7 +650,7 @@ final class SubsystemTestDelegate {
         private ModelTestOperationValidatorFilter.Builder operationValidationExcludeBuilder;
         private boolean persistXml = true;
         private boolean skipReverseCheck;
-        private AdditionalInitialization reverseCheckConfig;
+        private AdditionalInitialization reverseCheckConfig = AdditionalInitialization.MANAGEMENT;
         private ModelFixer reverseCheckModelFixer;
         private OperationFixer reverseCheckOperationFixer = operation -> operation;
 
@@ -733,6 +734,12 @@ final class SubsystemTestDelegate {
         @Override
         public LegacyKernelServicesInitializer excludeFromParent(ClassFilter exclusionFilter) {
             classLoaderBuilder.excludeFromParent(exclusionFilter);
+            return this;
+        }
+
+        @Override
+        public LegacyKernelServicesInitializer excludeResourceFromParent(String exclusionFilter) {
+            classLoaderBuilder.excludeResourceFromParent(exclusionFilter);
             return this;
         }
 
@@ -1106,6 +1113,16 @@ final class SubsystemTestDelegate {
         @Override
         public boolean isAlias() {
             return false;
+        }
+
+        @Override
+        public void registerAdditionalRuntimePackages(RuntimePackageDependency... pkgs) {
+            // no-op
+        }
+
+        @Override
+        public Set<RuntimePackageDependency> getAdditionalRuntimePackages() {
+            return Collections.emptySet();
         }
     };
 

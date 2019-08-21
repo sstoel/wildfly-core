@@ -70,6 +70,7 @@ import org.jboss.dmr.ModelNode;
 import org.jboss.msc.service.ServiceName;
 import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -281,7 +282,17 @@ public class TlsTestCase extends AbstractSubsystemTest {
 
 
     @BeforeClass
+    public static void noJDK14Plus() {
+        Assume.assumeFalse("Avoiding JDK 14 due to https://issues.jboss.org/browse/WFCORE-4532", "14".equals(System.getProperty("java.specification.version")));
+    }
+
+    private static boolean isJDK14Plus() {
+        return "14".equals(System.getProperty("java.specification.version"));
+    }
+
+    @BeforeClass
     public static void initTests() throws Exception {
+        if (isJDK14Plus()) return; // TODO: remove this line once WFCORE-4532 is fixed
         setUpKeyStores();
         AccessController.doPrivileged((PrivilegedAction<Integer>) () -> Security.insertProviderAt(wildFlyElytronProvider, 1));
         csUtil = new CredentialStoreUtility("target/tlstest.keystore");
@@ -291,6 +302,7 @@ public class TlsTestCase extends AbstractSubsystemTest {
 
     @AfterClass
     public static void cleanUpTests() {
+        if (isJDK14Plus()) return; // TODO: remove this line once WFCORE-4532 is fixed
         deleteKeyStoreFiles();
         csUtil.cleanUp();
         AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
@@ -302,7 +314,12 @@ public class TlsTestCase extends AbstractSubsystemTest {
     @Before
     public void prepare() throws Throwable {
         if (services != null) return;
-        String subsystemXml = System.getProperty("java.vendor").startsWith("IBM") ? "tls-ibm.xml" : "tls-sun.xml";
+        String subsystemXml;
+        if (JdkUtils.isIbmJdk()) {
+            subsystemXml = "tls-ibm.xml";
+        } else {
+            subsystemXml = JdkUtils.getJavaSpecVersion() <= 12 ? "tls-sun.xml" : "tls-oracle13plus.xml";
+        }
         services = super.createKernelServicesBuilder(new TestEnvironment()).setSubsystemXmlResource(subsystemXml).build();
         if (!services.isSuccessfulBoot()) {
             Assert.fail(services.getBootError().toString());
@@ -312,17 +329,22 @@ public class TlsTestCase extends AbstractSubsystemTest {
 
     @Test
     public void testSslServiceNoAuth() throws Throwable {
-        testCommunication("ServerSslContextNoAuth", "ClientSslContextNoAuth", "OU=Elytron,O=Elytron,C=CZ,ST=Elytron,CN=localhost", null);
+        testCommunication("ServerSslContextNoAuth", "ClientSslContextNoAuth", false, "OU=Elytron,O=Elytron,C=CZ,ST=Elytron,CN=localhost", null);
+    }
+
+    @Test
+    public void testSslServiceNoAuth_Default() throws Throwable {
+        testCommunication("ServerSslContextNoAuth", "ClientSslContextNoAuth", true, "OU=Elytron,O=Elytron,C=CZ,ST=Elytron,CN=localhost", null);
     }
 
     @Test
     public void testSslServiceAuth() throws Throwable {
-        testCommunication("ServerSslContextAuth", "ClientSslContextAuth", "OU=Elytron,O=Elytron,C=CZ,ST=Elytron,CN=localhost", "OU=Elytron,O=Elytron,C=UK,ST=Elytron,CN=Firefly");
+        testCommunication("ServerSslContextAuth", "ClientSslContextAuth", false, "OU=Elytron,O=Elytron,C=CZ,ST=Elytron,CN=localhost", "OU=Elytron,O=Elytron,C=UK,ST=Elytron,CN=Firefly");
     }
 
     @Test(expected = SSLHandshakeException.class)
     public void testSslServiceAuthRequiredButNotProvided() throws Throwable {
-        testCommunication("ServerSslContextAuth", "ClientSslContextNoAuth", "OU=Elytron,O=Elytron,C=UK,ST=Elytron,CN=Firefly", "");
+        testCommunication("ServerSslContextAuth", "ClientSslContextNoAuth", false, "OU=Elytron,O=Elytron,C=UK,ST=Elytron,CN=Firefly", "");
     }
 
     @Test
@@ -412,6 +434,20 @@ public class TlsTestCase extends AbstractSubsystemTest {
         Files.delete(Paths.get(WORKING_DIRECTORY_LOCATION + INIT_TEST_FILE));
     }
 
+    @Test
+    public void testOcspCrl() {
+        ServiceName serviceName = Capabilities.TRUST_MANAGER_RUNTIME_CAPABILITY.getCapabilityServiceName("trust-with-ocsp-crl");
+        TrustManager trustManager = (TrustManager) services.getContainer().getService(serviceName).getValue();
+        Assert.assertNotNull(trustManager);
+    }
+
+    @Test
+    public void testOcspSimple() {
+        ServiceName serviceName = Capabilities.TRUST_MANAGER_RUNTIME_CAPABILITY.getCapabilityServiceName("trust-with-ocsp-simple");
+        TrustManager trustManager = (TrustManager) services.getContainer().getService(serviceName).getValue();
+        Assert.assertNotNull(trustManager);
+    }
+
     private SSLContext getSslContext(String contextName) {
         ServiceName serviceName = Capabilities.SSL_CONTEXT_RUNTIME_CAPABILITY.getCapabilityServiceName(contextName);
         SSLContext sslContext = (SSLContext) services.getContainer().getService(serviceName).getValue();
@@ -419,9 +455,9 @@ public class TlsTestCase extends AbstractSubsystemTest {
         return sslContext;
     }
 
-    private void testCommunication(String serverContextName, String clientContextName, String expectedServerPrincipal, String expectedClientPrincipal) throws Throwable {
+    private void testCommunication(String serverContextName, String clientContextName, boolean defaultClient, String expectedServerPrincipal, String expectedClientPrincipal) throws Throwable {
         SSLContext serverContext = getSslContext(serverContextName);
-        SSLContext clientContext = getSslContext(clientContextName);
+        SSLContext clientContext = defaultClient ? SSLContext.getDefault() : getSslContext(clientContextName);
 
         ServerSocket listeningSocket = serverContext.getServerSocketFactory().createServerSocket();
         listeningSocket.bind(new InetSocketAddress("localhost", TESTING_PORT));

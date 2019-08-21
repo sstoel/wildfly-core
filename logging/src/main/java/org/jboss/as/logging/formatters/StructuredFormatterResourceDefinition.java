@@ -239,13 +239,13 @@ public abstract class StructuredFormatterResourceDefinition extends TransformerR
 
     public static final PropertyAttributeDefinition PRETTY_PRINT = PropertyAttributeDefinition.Builder.of("pretty-print", ModelType.BOOLEAN, true)
             .setAllowExpression(true)
-            .setDefaultValue(new ModelNode(false))
+            .setDefaultValue(ModelNode.FALSE)
             .setPropertyName("prettyPrint")
             .build();
 
     public static final PropertyAttributeDefinition PRINT_DETAILS = PropertyAttributeDefinition.Builder.of("print-details", ModelType.BOOLEAN, true)
             .setAllowExpression(true)
-            .setDefaultValue(new ModelNode(false))
+            .setDefaultValue(ModelNode.FALSE)
             .setPropertyName("printDetails")
             .build();
 
@@ -369,6 +369,9 @@ public abstract class StructuredFormatterResourceDefinition extends TransformerR
             }
 
             final String name = context.getCurrentAddressValue();
+            if (name.endsWith(PatternFormatterResourceDefinition.DEFAULT_FORMATTER_SUFFIX)) {
+                throw LoggingLogger.ROOT_LOGGER.illegalFormatterName();
+            }
             FormatterConfiguration configuration = logContextConfiguration.getFormatterConfiguration(name);
             final String className = type.getName();
 

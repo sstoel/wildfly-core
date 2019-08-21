@@ -411,6 +411,7 @@ public enum Phase {
     public static final int DEPENDENCIES_EJB_PERMISSIONS                = 0x0110;
     public static final int DEPENDENCIES_DISTRIBUTABLE_WEB              = 0x0120;
     public static final int DEPENDENCIES_EJB                            = 0x0200;
+    public static final int DEPENDENCIES_EJB_SERVER_INTERCEPTORS        = 0x0280;
     public static final int DEPENDENCIES_MODULE                         = 0x0300;
     public static final int DEPENDENCIES_RAR_CONFIG                     = 0x0400;
     public static final int DEPENDENCIES_MANAGED_BEAN                   = 0x0500;
@@ -439,6 +440,11 @@ public enum Phase {
     public static final int DEPENDENCIES_JAXR                           = 0x1600;
     public static final int DEPENDENCIES_DRIVERS                        = 0x1700;
     public static final int DEPENDENCIES_JSF                            = 0x1800;
+    public static final int DEPENDENCIES_MICROPROFILE_CONFIG            = 0x1850;
+    public static final int DEPENDENCIES_MICROPROFILE_METRICS           = 0x1860;
+    public static final int DEPENDENCIES_MICROPROFILE_HEALTH            = 0x1870;
+    public static final int DEPENDENCIES_MICROPROFILE_OPENTRACING       = 0x1880;
+
     /**
      * @deprecated there is no phase processing associated with this constant - it was used for OSGi integration
      */
@@ -474,6 +480,7 @@ public enum Phase {
     public static final int CONFIGURE_DEFERRED_PHASE                    = 0x0300;
     public static final int CONFIGURE_SINGLETON_DEPLOYMENT              = 0x0400;
     public static final int CONFIGURE_AUTHENTICATION_CONTEXT            = 0x0500;
+    public static final int CONFIGURE_DEFAULT_SSL_CONTEXT               = 0x0580;
     public static final int CONFIGURE_DISTRIBUTABLE_WEB                 = 0x0600;
 
     // FIRST_MODULE_USE
@@ -505,6 +512,7 @@ public enum Phase {
     public static final int POST_MODULE_EJB_MDB_POOL_NAME_MERGE         = 0x0508;
     public static final int POST_MODULE_EJB_ENTITY_POOL_NAME_MERGE      = 0x0509;
     public static final int POST_MODULE_EJB_USER_APP_SPECIFIC_CONTAINER_INTERCEPTORS = 0x050A;
+    public static final int POST_MODULE_EJB_SERVER_INTERCEPTORS         = 0x050B;
     public static final int POST_MODULE_EJB_DD_INTERCEPTORS             = 0x0600;
     public static final int POST_MODULE_EJB_TIMER_SERVICE               = 0x0601;
     public static final int POST_MODULE_EJB_TRANSACTION_MANAGEMENT      = 0x0602;
@@ -567,6 +575,7 @@ public enum Phase {
     public static final int POST_MODULE_JAXRS_SCANNING                  = 0x1A00;
     public static final int POST_MODULE_JAXRS_COMPONENT                 = 0x1B00;
     public static final int POST_MODULE_JAXRS_CDI_INTEGRATION           = 0x1C00;
+    public static final int POST_MODULE_JAXRS_METHOD_PARAMETER          = 0x1C20;
     public static final int POST_MODULE_RTS_PROVIDERS                   = 0x1D00;
     public static final int POST_MODULE_LOCAL_HOME                      = 0x1E00;
     public static final int POST_MODULE_APPLICATION_CLIENT_MANIFEST     = 0x1F00;
@@ -595,6 +604,11 @@ public enum Phase {
     public static final int POST_MODULE_TRANSACTIONS_EE_CONCURRENCY     = 0x3500;
     public static final int POST_MODULE_EE_COMPONENT_SUSPEND            = 0x3600;
     public static final int POST_MODULE_PERMISSIONS_VALIDATION          = 0x3700;
+    public static final int POST_MODULE_MICROPROFILE_CONFIG             = 0x3750;
+    public static final int POST_MODULE_MICROPROFILE_METRICS            = 0x3760;
+    public static final int POST_MODULE_MICROPROFILE_HEALTH             = 0x3770;
+    public static final int POST_MODULE_MICROPROFILE_OPENTRACING        = 0x3780;
+
 
     // INSTALL
     public static final int INSTALL_SHARED_SESSION_MANAGER              = 0x0100;
@@ -663,6 +677,8 @@ public enum Phase {
     public static final int INSTALL_BATCH_RESOURCES                     = 0x2070;
     public static final int INSTALL_LOGGING_DEPLOYMENT_RESOURCES        = 0x207a;
     public static final int INSTALL_DEPLOYMENT_COMPLETE_SERVICE         = 0x2100;
+
+    public static final int INSTALL_IIOP_CLEAR_CACHES                   = 0x3000;
 
     // CLEANUP
     public static final int CLEANUP_REFLECTION_INDEX                    = 0x0100;

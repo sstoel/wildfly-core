@@ -28,7 +28,11 @@ import org.jboss.as.cli.Util;
 import org.jboss.as.cli.impl.CommandContextConfiguration;
 import org.jboss.as.cli.operation.OperationFormatException;
 import org.jboss.as.cli.operation.impl.DefaultOperationRequestBuilder;
+import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.client.ModelControllerClient;
+import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
+import static org.jboss.as.test.integration.management.util.ModelUtil.createOpNode;
+import org.jboss.as.test.integration.security.common.CoreUtils;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
 import org.jboss.dmr.ModelNode;
 import org.junit.After;
@@ -392,6 +396,82 @@ public class SecurityCommandsTestCase {
     }
 
     @Test
+    public void testInteractiveFailure() throws Exception {
+        // Remove management-https
+        DefaultOperationRequestBuilder builder = new DefaultOperationRequestBuilder();
+        builder.setOperationName(Util.READ_RESOURCE);
+        builder.addNode(Util.SOCKET_BINDING_GROUP, Util.STANDARD_SOCKETS);
+        builder.addNode(Util.SOCKET_BINDING, Util.MANAGEMENT_HTTPS);
+        ModelNode response = ctx.getModelControllerClient().execute(builder.buildRequest());
+        ModelNode resource = null;
+        if (Util.isSuccess(response)) {
+            if (response.hasDefined(Util.RESULT)) {
+                resource = response.get(Util.RESULT);
+            }
+        }
+        if (resource == null) {
+            throw new Exception("can't retrieve management-https");
+        }
+        ctx.handle("/socket-binding-group=standard-sockets/socket-binding=management-https:remove");
+        try {
+            CliProcessWrapper cli = new CliProcessWrapper().
+                    addJavaOption("-Duser.home=" + temporaryUserHome.getRoot().toPath().toString()).
+                    addCliArgument("--controller=remote+http://"
+                            + TestSuiteEnvironment.getServerAddress() + ":"
+                            + TestSuiteEnvironment.getServerPort()).
+                    addCliArgument("--connect");
+            cli.executeInteractive();
+            cli.clearOutput();
+            Assert.assertTrue(cli.pushLineAndWaitForResults("security enable-ssl-management --interactive --no-reload", "Key-store file name"));
+            Assert.assertTrue(cli.pushLineAndWaitForResults(GENERATED_KEY_STORE_FILE_NAME, "Password"));
+            Assert.assertTrue(cli.pushLineAndWaitForResults(GENERATED_KEY_STORE_PASSWORD, "What is your first and last name? [Unknown]"));
+
+            Assert.assertTrue(cli.pushLineAndWaitForResults("", "What is the name of your organizational unit? [Unknown]"));
+            Assert.assertTrue(cli.pushLineAndWaitForResults("", "What is the name of your organization? [Unknown]"));
+            Assert.assertTrue(cli.pushLineAndWaitForResults("", "What is the name of your City or Locality? [Unknown]"));
+            Assert.assertTrue(cli.pushLineAndWaitForResults("", "What is the name of your State or Province? [Unknown]"));
+            Assert.assertTrue(cli.pushLineAndWaitForResults("", "What is the two-letter country code for this unit? [Unknown]"));
+            Assert.assertTrue(cli.pushLineAndWaitForResults("", "Is CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, ST=Unknown, C=Unknown correct y/n [y]"));
+
+            Assert.assertTrue(cli.pushLineAndWaitForResults("y", "Validity"));
+            Assert.assertTrue(cli.pushLineAndWaitForResults("", "Alias"));
+            Assert.assertTrue(cli.pushLineAndWaitForResults(GENERATED_KEY_STORE_ALIAS, "Enable SSL Mutual Authentication"));
+            Assert.assertTrue(cli.pushLineAndWaitForResults("n", "Do you confirm"));
+            Assert.assertTrue(cli.pushLineAndWaitForResults("y", null));
+            // Nothing was generated due to missing management-https
+            assertEmptyModel(null);
+            // check that the server is not in reload state
+            builder = new DefaultOperationRequestBuilder();
+            builder.setOperationName(Util.READ_RESOURCE);
+            response = ctx.getModelControllerClient().execute(builder.buildRequest());
+            if (response.has(Util.RESPONSE_HEADERS)) {
+                ModelNode mn = response.get(Util.RESPONSE_HEADERS);
+                if (mn.has("process-state")) {
+                    ModelNode ps = mn.get("process-state");
+                    if ("reload-required".equals(ps.asString())) {
+                        throw new Exception("Server is in reload state");
+                    }
+                }
+            }
+        } finally {
+            try {
+                builder = new DefaultOperationRequestBuilder();
+                builder.setOperationName(Util.ADD);
+                builder.addNode(Util.SOCKET_BINDING_GROUP, Util.STANDARD_SOCKETS);
+                builder.addNode(Util.SOCKET_BINDING, Util.MANAGEMENT_HTTPS);
+                builder.getModelNode().get("port").set(resource.get("port"));
+                builder.getModelNode().get("interface").set(resource.get("interface"));
+                response = ctx.getModelControllerClient().execute(builder.buildRequest());
+                if (!Util.isSuccess(response)) {
+                    throw new Exception("Failure adding back management-https");
+                }
+            } finally {
+                ctx.handle("reload");
+            }
+        }
+    }
+
+    @Test
     public void testEnableSSLNative() throws Exception {
         enableNative(ctx);
         try {
@@ -673,14 +753,27 @@ public class SecurityCommandsTestCase {
         ctx.handle("security disable-ssl-management --no-reload");
     }
 
-    public static void enableNative(CommandContext ctx) throws CommandLineException {
+    public static void enableNative(CommandContext ctx) throws Exception {
         ctx.handle("/socket-binding-group=standard-sockets/socket-binding=management-native:add(port=9999,interface=management)");
-        ctx.handle("/core-service=management/management-interface=native-interface:add(security-realm=ManagementRealm, socket-binding=management-native)");
+        ModelNode operation = org.jboss.as.controller.operations.common.Util.createEmptyOperation("composite", PathAddress.EMPTY_ADDRESS);
+        operation.get("steps").add(createOpNode("core-service=management/security-realm=native-realm", ModelDescriptionConstants.ADD));
+        ModelNode localAuth = createOpNode("core-service=management/security-realm=native-realm/authentication=local", ModelDescriptionConstants.ADD);
+        localAuth.get("default-user").set("$local");
+        operation.get("steps").add(localAuth);
+        CoreUtils.applyUpdate(operation, ctx.getModelControllerClient());
+        ctx.handle("/core-service=management/management-interface=native-interface:add(security-realm=native-realm, socket-binding=management-native)");
     }
 
     public static void disableNative(CommandContext ctx) throws CommandLineException {
-        ctx.handle("/core-service=management/management-interface=native-interface:remove()");
-        ctx.handle("/socket-binding-group=standard-sockets/socket-binding=management-native:remove()");
+        try {
+            ctx.handle("/core-service=management/management-interface=native-interface:remove()");
+        } finally {
+            try {
+                ctx.handle("/socket-binding-group=standard-sockets/socket-binding=management-native:remove()");
+            } finally {
+                ctx.handle("/core-service=management/security-realm=native-realm:remove");
+            }
+        }
     }
 
     private void testEnableSSL(String mgmtInterface) throws Exception {

@@ -23,24 +23,25 @@
 package org.jboss.as.server.operations;
 
 
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RUNNING_SERVER;
+import static org.jboss.as.server.Services.JBOSS_SUSPEND_CONTROLLER;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.SUSPEND_TIMEOUT;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.TIMEOUT;
+import static org.jboss.as.server.controller.resources.ServerRootResourceDefinition.renameTimeoutToSuspendTimeout;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
-import org.jboss.as.controller.SimpleAttributeDefinition;
-import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleOperationDefinition;
 import org.jboss.as.controller.SimpleOperationDefinitionBuilder;
-import org.jboss.as.controller.client.helpers.MeasurementUnit;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
-import org.jboss.as.controller.registry.OperationEntry;
 import org.jboss.as.server.controller.descriptions.ServerDescriptions;
 import org.jboss.as.server.suspend.OperationListener;
 import org.jboss.as.server.suspend.SuspendController;
 import org.jboss.dmr.ModelNode;
-import org.jboss.dmr.ModelType;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceRegistry;
 
@@ -51,47 +52,29 @@ import org.jboss.msc.service.ServiceRegistry;
  */
 public class ServerSuspendHandler implements OperationStepHandler {
 
-    protected static final String OPERATION_NAME = ModelDescriptionConstants.SUSPEND;
-
     public static final ServerSuspendHandler INSTANCE = new ServerSuspendHandler();
 
-    /**
-     * The timeout in seconds, the operation will block until either the timeout is reached or the server successfully suspends
-     *
-     * -1 : wait indefinitely
-     *  0 : return immediately (default)
-     * >0 : wait n seconds
-     */
-    protected static final SimpleAttributeDefinition TIMEOUT = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.TIMEOUT, ModelType.INT)
-            .setDefaultValue(new ModelNode(0))
-            .setRequired(false)
-            .setMeasurementUnit(MeasurementUnit.SECONDS)
-            .build();
-
-    public static final SimpleOperationDefinition DEFINITION = new SimpleOperationDefinitionBuilder(ModelDescriptionConstants.SUSPEND, ServerDescriptions.getResourceDescriptionResolver())
-            .setParameters(TIMEOUT)
+    public static final SimpleOperationDefinition DEFINITION = new SimpleOperationDefinitionBuilder(ModelDescriptionConstants.SUSPEND,
+                ServerDescriptions.getResourceDescriptionResolver(RUNNING_SERVER))
+            .setParameters(TIMEOUT, SUSPEND_TIMEOUT)
             .setRuntimeOnly()
             .build();
 
-    public static final SimpleOperationDefinition DOMAIN_DEFINITION = new SimpleOperationDefinitionBuilder(ModelDescriptionConstants.SUSPEND, ServerDescriptions.getResourceDescriptionResolver())
-            .setParameters(TIMEOUT)
-            .setPrivateEntry() // For now
-            .withFlags(OperationEntry.Flag.HOST_CONTROLLER_ONLY, OperationEntry.Flag.RUNTIME_ONLY)
-            .build();
     /**
      * {@inheritDoc}
      */
     @Override
     public void execute(final OperationContext context, ModelNode operation) throws OperationFailedException {
         // Acquire the controller lock to prevent new write ops and wait until current ones are done
-        final int timeout = TIMEOUT.resolveModelAttribute(context, operation).asInt(); //in seconds, need to convert to ms
         context.acquireControllerLock();
+        renameTimeoutToSuspendTimeout(operation);
+        final int timeout = SUSPEND_TIMEOUT.resolveModelAttribute(context, operation).asInt();
 
         context.addStep(new OperationStepHandler() {
             @Override
             public void execute(final OperationContext context, ModelNode operation) throws OperationFailedException {
                 final ServiceRegistry registry = context.getServiceRegistry(false);
-                ServiceController<SuspendController> suspendControllerServiceController = (ServiceController<SuspendController>) registry.getRequiredService(SuspendController.SERVICE_NAME);
+                ServiceController<SuspendController> suspendControllerServiceController = (ServiceController<SuspendController>) registry.getRequiredService(JBOSS_SUSPEND_CONTROLLER);
                 final SuspendController suspendController = suspendControllerServiceController.getValue();
 
                 final CountDownLatch latch = new CountDownLatch(1);

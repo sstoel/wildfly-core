@@ -30,7 +30,7 @@ import static org.wildfly.extension.elytron.ElytronDescriptionConstants.FILTERS;
 import static org.wildfly.extension.elytron.ElytronExtension.getRequiredService;
 import static org.wildfly.extension.elytron.SecurityActions.doPrivileged;
 import static org.wildfly.extension.elytron._private.ElytronSubsystemMessages.ROOT_LOGGER;
-import static org.wildfly.security.util.ProviderUtil.findProviderService;
+import static org.wildfly.security.provider.util.ProviderUtil.findProviderService;
 
 import java.security.PrivilegedExceptionAction;
 import java.security.Provider;
@@ -98,7 +98,7 @@ class HttpServerDefinitions {
     static final SimpleAttributeDefinition ENABLING = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.ENABLING, ModelType.BOOLEAN)
         .setRequired(false)
         .setAllowExpression(true)
-        .setDefaultValue(new ModelNode(true))
+        .setDefaultValue(ModelNode.TRUE)
         .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
         .build();
 
@@ -200,10 +200,11 @@ class HttpServerDefinitions {
                 Predicate<Provider.Service> serviceFilter = (Provider.Service s) -> HttpServerAuthenticationMechanismFactory.class.getSimpleName().equals(s.getType());
 
                 return () -> {
-                    if ( findProviderService(providerSupplier, serviceFilter) == null ) {
+                    final Provider[] actualProviders = providerSupplier.get();
+                    if ( findProviderService(actualProviders, serviceFilter) == null ) {
                         throw ROOT_LOGGER.noSuitableProvider(HttpServerAuthenticationMechanismFactory.class.getSimpleName());
                     }
-                    return new SetMechanismInformationMechanismFactory(new SecurityProviderServerMechanismFactory(providerSupplier));
+                    return new SetMechanismInformationMechanismFactory(new SecurityProviderServerMechanismFactory(actualProviders));
                 };
             }
 
@@ -215,7 +216,7 @@ class HttpServerDefinitions {
 
     static ResourceDefinition getServiceLoaderServerMechanismFactoryDefinition() {
         AttributeDefinition[] attributes = new AttributeDefinition[] { MODULE };
-        AbstractAddStepHandler add = new TrivialAddHandler<HttpServerAuthenticationMechanismFactory>(HttpServerAuthenticationMechanismFactory.class, attributes, HTTP_SERVER_MECHANISM_FACTORY_RUNTIME_CAPABILITY) {
+        AbstractAddStepHandler add = new TrivialAddHandler<HttpServerAuthenticationMechanismFactory>(HttpServerAuthenticationMechanismFactory.class, ServiceController.Mode.ACTIVE, ServiceController.Mode.LAZY, attributes, HTTP_SERVER_MECHANISM_FACTORY_RUNTIME_CAPABILITY) {
 
             @Override
             protected ValueSupplier<HttpServerAuthenticationMechanismFactory> getValueSupplier(

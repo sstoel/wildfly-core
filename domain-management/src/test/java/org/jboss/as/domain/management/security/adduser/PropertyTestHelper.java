@@ -77,7 +77,7 @@ public class PropertyTestHelper {
     }
 
     protected Properties loadProperties(String filePath) throws StartException, IOException {
-        PropertiesFileLoader propertiesLoad = new PropertiesFileLoader(filePath, null);
+        PropertiesFileLoader propertiesLoad = new PropertiesFileLoader(filePath);
         propertiesLoad.start(null);
         Properties properties = (Properties) propertiesLoad.getProperties().clone();
         propertiesLoad.stop(null);
@@ -276,5 +276,26 @@ public class PropertyTestHelper {
 
     private List<String> readContent(String filePath) throws IOException {
         return Files.readAllLines(Paths.get(filePath), StandardCharsets.UTF_8);
+    }
+
+    void cleanFiles(File file) {
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            if (children != null) {
+                for (File child : children) {
+                    cleanFiles(child);
+                }
+            }
+        }
+        file.delete();
+    }
+
+    void cleanProperties() {
+        System.clearProperty("jboss.server.config.dir");
+        System.clearProperty("jboss.domain.config.dir");
+        System.clearProperty("jboss.server.config.user.dir");
+        System.clearProperty("jboss.domain.config.user.dir");
+        System.clearProperty("jboss.server.config.group.dir");
+        System.clearProperty("jboss.domain.config.group.dir");
     }
 }

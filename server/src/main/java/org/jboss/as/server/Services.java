@@ -23,6 +23,7 @@
 package org.jboss.as.server;
 
 import java.util.concurrent.ExecutorService;
+import java.util.function.Supplier;
 
 import org.jboss.msc.inject.Injector;
 import org.jboss.msc.service.ServiceBuilder;
@@ -69,6 +70,8 @@ public final class Services {
 
     public static final ServiceName JBOSS_PRODUCT_CONFIG_SERVICE = JBOSS_AS.append("product-config");
 
+    public static final ServiceName JBOSS_SUSPEND_CONTROLLER = ServerService.SUSPEND_CONTROLLER_CAPABILITY.getCapabilityServiceName();
+
     /**
      * Creates dependency on management executor.
      *
@@ -76,9 +79,21 @@ public final class Services {
      * @param injector the injector
      * @param <T> the parameter type
      * @return service builder instance
+     * @deprecated Use {@link #requireServerExecutor(ServiceBuilder)} instead. This method will be removed in the future.
      */
+    @Deprecated
     public static <T> ServiceBuilder<T> addServerExecutorDependency(ServiceBuilder<T> builder, Injector<ExecutorService> injector) {
         return builder.addDependency(ServerService.MANAGEMENT_EXECUTOR, ExecutorService.class, injector);
+    }
+
+    /**
+     * Creates dependency on management executor and returns supplier providing it.
+     *
+     * @param builder the builder to use for requirement
+     * @return supplier providing server executor
+     */
+    public static Supplier<ExecutorService> requireServerExecutor(final ServiceBuilder<?> builder) {
+        return builder.requires(ServerService.MANAGEMENT_EXECUTOR);
     }
 
 }

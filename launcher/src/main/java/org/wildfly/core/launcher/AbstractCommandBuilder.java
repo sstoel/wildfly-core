@@ -60,6 +60,8 @@ abstract class AbstractCommandBuilder<T extends AbstractCommandBuilder<T>> imple
         modularJavaOpts.add("--add-exports=java.base/sun.nio.ch=ALL-UNNAMED");
         modularJavaOpts.add("--add-exports=jdk.unsupported/sun.reflect=ALL-UNNAMED");
         modularJavaOpts.add("--add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED");
+        // As of jboss-modules 1.9.1.Final the java.se module is no longer required to be added. However as this API is
+        // designed to work with older versions of the server we still need to add this argument of modular JVM's.
         modularJavaOpts.add("--add-modules=java.se");
         DEFAULT_MODULAR_VM_ARGUMENTS = Collections.unmodifiableList(modularJavaOpts);
     }
@@ -74,9 +76,8 @@ abstract class AbstractCommandBuilder<T extends AbstractCommandBuilder<T>> imple
         this(wildflyHome, null);
     }
 
-    protected AbstractCommandBuilder(final Path wildflyHome, final Path javaHome) {
-        environment = new Environment(wildflyHome);
-        environment.setJavaHome(javaHome);
+    protected AbstractCommandBuilder(final Path wildflyHome, final Jvm jvm) {
+        environment = new Environment(wildflyHome).setJvm(jvm);
         useSecMgr = false;
         serverArgs = new Arguments();
     }
@@ -510,28 +511,6 @@ abstract class AbstractCommandBuilder<T extends AbstractCommandBuilder<T>> imple
     public abstract Path getJavaHome();
 
     /**
-     * The java executable command found in the {@link #getJavaHome() Java home} directory.
-     *
-     * @return the java executable command
-     */
-    protected String getJavaCommand() {
-        return getJavaCommand(getJavaHome());
-    }
-
-    /**
-     * The java executable command found in the Java home directory.
-     * <p/>
-     * If the directory contains a space the command is returned with quotes surrounding it.
-     *
-     * @param javaHome the path to the Java home directory
-     *
-     * @return the java executable command
-     */
-    protected String getJavaCommand(final Path javaHome) {
-        return environment.getJavaCommand(javaHome);
-    }
-
-    /**
      * Returns the command line argument that specifies the logging configuration.
      *
      * @param fileName the name of the configuration file
@@ -644,38 +623,6 @@ abstract class AbstractCommandBuilder<T extends AbstractCommandBuilder<T>> imple
      * handled by the subclass
      */
     abstract boolean addServerArgument(final Argument argument);
-
-    @Deprecated
-    protected static Path resolveJavaHome(final Path javaHome) {
-        if (javaHome == null) {
-            return validateJavaHome(Environment.getDefaultJavaHome());
-        }
-        return validateJavaHome(javaHome);
-    }
-
-    protected static Path validateWildFlyDir(final String wildflyHome) {
-        return Environment.validateWildFlyDir(wildflyHome);
-    }
-
-    protected static Path validateWildFlyDir(final Path wildflyHome) {
-        return Environment.validateWildFlyDir(wildflyHome);
-    }
-
-    protected static Path validateJavaHome(final String javaHome) {
-        return Environment.validateJavaHome(javaHome);
-    }
-
-    protected static Path validateJavaHome(final Path javaHome) {
-        return Environment.validateJavaHome(javaHome);
-    }
-
-    protected static boolean isModularJavaHome(final String javaHome) {
-        return Environment.isModularJavaHome(javaHome);
-    }
-
-    protected static boolean isModularJavaHome(final Path javaHome) {
-        return Environment.isModularJavaHome(javaHome);
-    }
 
     protected static Path validateAndNormalizeDir(final String path, final boolean allowNull) {
         if (path == null) {

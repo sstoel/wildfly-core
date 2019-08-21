@@ -19,7 +19,7 @@ import org.aesh.command.Command;
 import org.aesh.command.impl.container.AeshCommandContainerBuilder;
 import org.aesh.command.impl.parser.CommandLineParser;
 import org.aesh.command.parser.CommandLineParserException;
-import org.aesh.utils.Config;
+import org.aesh.terminal.utils.Config;
 import org.jboss.as.cli.CommandContextFactory;
 import org.jboss.as.cli.impl.CommandContextImpl;
 import static org.jboss.as.cli.impl.aesh.AeshCommands.isAeshExtension;
@@ -66,7 +66,7 @@ public class HelpSupportTestCase {
             if (!(container.getWrappedContainer() instanceof LegacyCommandContainer)
                     && !isAeshExtension(container.getParser().getCommand())) {
                 HelpSupport.checkCommand(null, container.getParser());
-                for (CommandLineParser<Command<CLICommandInvocation>> child : container.getParser().getAllChildParsers()) {
+                for (CommandLineParser<CLICommandInvocation> child : container.getParser().getAllChildParsers()) {
                     HelpSupport.checkCommand(container.getParser(), child);
                 }
             }

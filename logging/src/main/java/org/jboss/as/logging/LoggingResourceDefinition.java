@@ -59,6 +59,7 @@ import org.jboss.as.controller.registry.AttributeAccess.Flag;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.OperationEntry;
 import org.jboss.as.controller.registry.Resource;
+import org.jboss.as.controller.registry.RuntimePackageDependency;
 import org.jboss.as.controller.services.path.PathManager;
 import org.jboss.as.controller.transform.description.DiscardAttributeChecker;
 import org.jboss.as.controller.transform.description.RejectAttributeChecker;
@@ -76,19 +77,29 @@ import org.jboss.dmr.Property;
  */
 public class LoggingResourceDefinition extends TransformerResourceDefinition {
 
+    private static String APACHE_COMMONS_LOGGING = "org.apache.commons.logging";
+    private static String SLF4J = "org.slf4j";
+    private static String SLF4J_STUB = "org.jboss.logging.jul-to-slf4j-stub";
+    public static final String[] DUP_INJECTED_LOGGING_MODULES = new String[]{
+        "org.jboss.logging",
+        APACHE_COMMONS_LOGGING,
+        "org.apache.log4j",
+        SLF4J,
+        SLF4J_STUB,};
+
     static final PathElement SUBSYSTEM_PATH = PathElement.pathElement(SUBSYSTEM, LoggingExtension.SUBSYSTEM_NAME);
 
     static final SimpleAttributeDefinition ADD_LOGGING_API_DEPENDENCIES = SimpleAttributeDefinitionBuilder.create("add-logging-api-dependencies", ModelType.BOOLEAN, true)
             .setAllowExpression(true)
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
-            .setDefaultValue(new ModelNode(true))
+            .setDefaultValue(ModelNode.TRUE)
             .setFlags(Flag.RESTART_ALL_SERVICES)
             .build();
 
     static final SimpleAttributeDefinition USE_DEPLOYMENT_LOGGING_CONFIG = SimpleAttributeDefinitionBuilder.create("use-deployment-logging-config", ModelType.BOOLEAN, true)
             .setAllowExpression(true)
             .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
-            .setDefaultValue(new ModelNode(true))
+            .setDefaultValue(ModelNode.TRUE)
             .setFlags(Flag.RESTART_ALL_SERVICES)
             .build();
 
@@ -105,13 +116,13 @@ public class LoggingResourceDefinition extends TransformerResourceDefinition {
 
     private static final SimpleAttributeDefinition SKIP = SimpleAttributeDefinitionBuilder.create("skip", ModelType.INT, true)
             .setAllowExpression(true)
-            .setDefaultValue(new ModelNode(0))
+            .setDefaultValue(ModelNode.ZERO)
             .setValidator(new IntRangeValidator(0, true))
             .build();
 
     private static final SimpleAttributeDefinition TAIL = SimpleAttributeDefinitionBuilder.create("tail", ModelType.BOOLEAN, true)
             .setAllowExpression(true)
-            .setDefaultValue(new ModelNode(true))
+            .setDefaultValue(ModelNode.TRUE)
             .build();
 
     private static final SimpleAttributeDefinition FILE_NAME = SimpleAttributeDefinitionBuilder.create("file-name", ModelType.STRING, false)
@@ -193,6 +204,16 @@ public class LoggingResourceDefinition extends TransformerResourceDefinition {
                 break;
             }
         }
+    }
+
+    @Override
+    public void registerAdditionalRuntimePackages(ManagementResourceRegistration resourceRegistration) {
+        resourceRegistration.registerAdditionalRuntimePackages(RuntimePackageDependency.optional(APACHE_COMMONS_LOGGING),
+                RuntimePackageDependency.optional(SLF4J),
+                RuntimePackageDependency.optional(SLF4J_STUB),
+                // The next ones are Loaded by LoggingExtension
+                RuntimePackageDependency.optional("org.slf4j.ext"),
+                RuntimePackageDependency.optional("org.slf4j.impl"));
     }
 
     private class ListLogFilesOperation implements OperationStepHandler {

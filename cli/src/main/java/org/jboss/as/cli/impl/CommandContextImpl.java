@@ -76,9 +76,10 @@ import javax.security.sasl.SaslException;
 import org.aesh.command.CommandNotFoundException;
 import org.aesh.command.impl.operator.OutputDelegate;
 import org.aesh.command.parser.CommandLineParserException;
+import org.aesh.command.validator.OptionValidatorException;
 import org.aesh.extensions.grep.Grep;
 import org.aesh.readline.Prompt;
-import org.aesh.utils.Config;
+import org.aesh.terminal.utils.Config;
 import org.aesh.readline.util.FileAccessPermission;
 import org.jboss.as.cli.Attachments;
 import org.jboss.as.cli.CliConfig;
@@ -489,6 +490,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
         settings.outputStream(cliPrintStream);
         settings.outputRedefined(redefinedOutput);
         settings.disableHistory(!config.isHistoryEnabled());
+        settings.outputPaging(config.isOutputPaging());
         settings.historyFile(new File(config.getHistoryFileDir(), config.getHistoryFileName()));
         settings.historySize(config.getHistoryMaxSize());
 
@@ -869,7 +871,12 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
             Thread.currentThread().interrupt();
             throw new CommandLineException("Interrupt exception for " + msg);
         } catch (ExecutionException ex) {
-            throw new CommandLineException(ex);
+            // Part of command parsing can occur at execution time.
+            if(ex.getCause() instanceof CommandFormatException) {
+                 throw new CommandFormatException(ex);
+            } else {
+                throw new CommandLineException(ex);
+            }
         } catch (CommandLineException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -1670,7 +1677,10 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
         AeshCommands.CLIExecution execution = null;
         try {
             execution = aeshCommands.newExecutions(parsedCmd).get(0);
-        } catch (IOException ex) {
+            // We are not going to execute the command, it must be populated explicitly
+            // to have options injected in Command instance.
+            execution.populateCommand();
+        } catch (CommandLineParserException | OptionValidatorException | IOException ex) {
             throw new CommandFormatException(ex);
         } catch (CommandNotFoundException ex) {
             throw new OperationFormatException("No command handler for '" + parsedCmd.getOperationName() + "'.");
@@ -1733,6 +1743,11 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
                         }
                     }
                 }
+                // Needed to have the command be fully parsed and retrieve the
+                // child command. This is caused by aesh 2.0 behavior.
+                if (isBatchMode()) {
+                    exec.populateCommand();
+                }
                 BatchCompliantCommand bc = exec.getBatchCompliant();
                 if (isBatchMode() && bc != null) {
                     try {
@@ -1775,6 +1790,8 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
             throw new CommandLineException("Unexpected command '" + line + "'. Type 'help --commands' for the list of supported commands.");
         } catch (IOException ex) {
             throw new CommandLineException(ex);
+        } catch (CommandLineParserException | OptionValidatorException ex) {
+            throw new CommandFormatException(ex);
         }
     }
 

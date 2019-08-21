@@ -83,7 +83,7 @@ class FileSystemRealmDefinition extends SimpleResourceDefinition {
 
     static final SimpleAttributeDefinition ENCODED =
             new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.ENCODED, ModelType.BOOLEAN, true)
-                    .setDefaultValue(new ModelNode(true))
+                    .setDefaultValue(ModelNode.TRUE)
                     .setAllowExpression(true)
                     .setRestartAllServices()
                     .build();
@@ -168,7 +168,7 @@ class FileSystemRealmDefinition extends SimpleResourceDefinition {
 
             if (relativeTo != null) {
                 serviceBuilder.addDependency(PathManagerService.SERVICE_NAME, PathManager.class, pathManagerInjector);
-                serviceBuilder.addDependency(pathName(relativeTo));
+                serviceBuilder.requires(pathName(relativeTo));
             }
             serviceBuilder.install();
         }

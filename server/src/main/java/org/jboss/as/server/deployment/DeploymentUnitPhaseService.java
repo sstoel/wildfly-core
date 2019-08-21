@@ -23,13 +23,17 @@
 package org.jboss.as.server.deployment;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
+import org.jboss.as.server.deployment.module.ModuleSpecification;
 import org.jboss.as.server.logging.ServerLogger;
+import org.jboss.modules.ModuleIdentifier;
 import org.jboss.msc.service.LifecycleEvent;
 import org.jboss.msc.service.LifecycleListener;
 import org.jboss.msc.service.DelegatingServiceRegistry;
@@ -137,6 +141,34 @@ final class DeploymentUnitPhaseService<T> implements Service<T> {
             }
         }
 
+        Set<String> subSystemNames = list.stream().map(e -> e.getSubsystemName()).collect(Collectors.toSet());
+        Set<String> registeredSubSystems = (phase == Phase.STRUCTURE) ? new HashSet<>() : deploymentUnit.getAttachment(Attachments.REGISTERED_SUBSYSTEMS);
+        registeredSubSystems.addAll(subSystemNames);
+        deploymentUnit.putAttachment(Attachments.REGISTERED_SUBSYSTEMS, registeredSubSystems);
+
+        if (phase == Phase.CLEANUP) {
+            // WFCORE-4233 check all excluded subsystems via jboss-deployment-structure.xml are valid in last Phase.CLEANUP
+            Set<String> excludedSubSystems = deploymentUnit.getAttachment(Attachments.EXCLUDED_SUBSYSTEMS);
+            if (excludedSubSystems == null && deploymentUnit.getParent() != null) {
+                excludedSubSystems = deploymentUnit.getParent().getAttachment(Attachments.EXCLUDED_SUBSYSTEMS);
+            }
+            if (excludedSubSystems != null) {
+                for (String sub : excludedSubSystems) {
+                    if (!registeredSubSystems.contains(sub)) {
+                        ServerLogger.DEPLOYMENT_LOGGER.excludedSubSystemsNotExist(sub);
+                    }
+                }
+            }
+
+            final ModuleSpecification moduleSpecification = deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION);
+            final Set<ModuleIdentifier> nonexsistentExcludedDependencies = moduleSpecification.getNonexistentExcludedDependencies();
+            if (!nonexsistentExcludedDependencies.isEmpty()) {
+                for (ModuleIdentifier module : nonexsistentExcludedDependencies) {
+                    ServerLogger.DEPLOYMENT_LOGGER.excludedDependenciesNotExist(module.getName());
+                }
+            }
+        }
+
         while (iterator.hasNext()) {
             final RegisteredDeploymentUnitProcessor processor = iterator.next();
             try {
@@ -163,17 +195,19 @@ final class DeploymentUnitPhaseService<T> implements Service<T> {
             }
 
             phaseServiceBuilder.addDependency(Services.JBOSS_DEPLOYMENT_CHAINS, DeployerChains.class, phaseService.getDeployerChainsInjector());
-            phaseServiceBuilder.addDependency(context.getController().getName());
+            phaseServiceBuilder.requires(context.getController().getName());
 
             final List<ServiceName> nextPhaseDeps = processorContext.getAttachment(Attachments.NEXT_PHASE_DEPS);
             if (nextPhaseDeps != null) {
-                phaseServiceBuilder.addDependencies(nextPhaseDeps);
+                for (final ServiceName nextPhaseDep : nextPhaseDeps) {
+                    phaseServiceBuilder.requires(nextPhaseDep);
+                }
             }
             final List<AttachableDependency> nextPhaseAttachableDeps = processorContext.getAttachment(Attachments.NEXT_PHASE_ATTACHABLE_DEPS);
             if (nextPhaseAttachableDeps != null) {
                 for (AttachableDependency attachableDep : nextPhaseAttachableDeps) {
                     AttachedDependency result = new AttachedDependency(attachableDep.getAttachmentKey(), attachableDep.isDeploymentUnit());
-                    phaseServiceBuilder.addDependency(attachableDep.getServiceName(), result.getValue());
+                    phaseServiceBuilder.addDependency(attachableDep.getServiceName(), Object.class, result.getValue());
                     phaseService.injectedAttachedDependencies.add(result);
 
                 }
@@ -181,13 +215,13 @@ final class DeploymentUnitPhaseService<T> implements Service<T> {
 
             // Add a dependency on the parent's next phase
             if (parent != null) {
-                phaseServiceBuilder.addDependencies(Services.deploymentUnitName(parent.getName(), nextPhase));
+                phaseServiceBuilder.requires(Services.deploymentUnitName(parent.getName(), nextPhase));
             }
 
             // Make sure all sub deployments have finished this phase before moving to the next one
             List<DeploymentUnit> subDeployments = deploymentUnit.getAttachmentList(Attachments.SUB_DEPLOYMENTS);
             for (DeploymentUnit du : subDeployments) {
-                phaseServiceBuilder.addDependencies(du.getServiceName().append(phase.name()));
+                phaseServiceBuilder.requires(du.getServiceName().append(phase.name()));
             }
 
             phaseServiceBuilder.install();

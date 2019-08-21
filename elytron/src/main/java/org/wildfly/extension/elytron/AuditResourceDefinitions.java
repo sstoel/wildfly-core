@@ -94,7 +94,7 @@ class AuditResourceDefinitions {
 
     static final SimpleAttributeDefinition SYNCHRONIZED = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.SYNCHRONIZED, ModelType.BOOLEAN, true)
             .setAllowExpression(true)
-            .setDefaultValue(new ModelNode(true))
+            .setDefaultValue(ModelNode.TRUE)
             .setRestartAllServices()
             .build();
 
@@ -136,7 +136,7 @@ class AuditResourceDefinitions {
 
     static final SimpleAttributeDefinition ROTATE_ON_BOOT = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.ROTATE_ON_BOOT, ModelType.BOOLEAN, true)
             .setAllowExpression(true)
-            .setDefaultValue(new ModelNode(false))
+            .setDefaultValue(ModelNode.FALSE)
             .setRestartAllServices()
             .build();
 
@@ -210,7 +210,7 @@ class AuditResourceDefinitions {
 
                 if (relativeTo != null) {
                     serviceBuilder.addDependency(PathManagerService.SERVICE_NAME, PathManager.class, pathManager);
-                    serviceBuilder.addDependency(pathName(relativeTo));
+                    serviceBuilder.requires(pathName(relativeTo));
                 }
 
                 return new EndpointClosingEventListenerSupplier() {
@@ -268,7 +268,7 @@ class AuditResourceDefinitions {
 
                 if (relativeTo != null) {
                     serviceBuilder.addDependency(PathManagerService.SERVICE_NAME, PathManager.class, pathManager);
-                    serviceBuilder.addDependency(pathName(relativeTo));
+                    serviceBuilder.requires(pathName(relativeTo));
                 }
 
                 return new EndpointClosingEventListenerSupplier() {
@@ -333,7 +333,7 @@ class AuditResourceDefinitions {
 
                 if (relativeTo != null) {
                     serviceBuilder.addDependency(PathManagerService.SERVICE_NAME, PathManager.class, pathManager);
-                    serviceBuilder.addDependency(pathName(relativeTo));
+                    serviceBuilder.requires(pathName(relativeTo));
                 }
 
                 return new EndpointClosingEventListenerSupplier() {

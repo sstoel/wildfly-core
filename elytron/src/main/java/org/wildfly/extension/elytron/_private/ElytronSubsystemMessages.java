@@ -548,4 +548,28 @@ public interface ElytronSubsystemMessages extends BasicLogger {
     @Message(id = 1057, value = "Failed to create ServerAuthModule [%s] using module '%s'")
     RuntimeException failedToCreateServerAuthModule(String className, String module, @Cause Exception cause);
 
+    @Message(id = 1058, value = "Failed to parse PEM public key with kid: %s")
+    OperationFailedException failedToParsePEMPublicKey(String kid);
+
+    @Message(id = 1059, value = "Unable to detect KeyStore '%s'")
+    StartException unableToDetectKeyStore(String path);
+
+    @Message(id = 1060, value = "Fileless KeyStore needs to have a defined type.")
+    OperationFailedException filelessKeyStoreMissingType();
+
+    @Message(id = 1061, value = "Invalid value of host context map: '%s' is not valid hostname pattern.")
+    OperationFailedException invalidHostContextMapValue(String hostname);
+
+    @Message(id = 1062, value = "Value for attribute '%s' is invalid.")
+    OperationFailedException invalidAttributeValue(String attributeName);
+
+    @Message(id = 1063, value = "LetsEncrypt certificate authority is configured by default.")
+    OperationFailedException letsEncryptNameNotAllowed();
+
+    @Message(id = 1064, value = "Failed to load OCSP responder certificate '%s'.")
+    StartException failedToLoadResponderCert(String alias, @Cause Exception exception);
+
+    @Message(id = 1065, value = "Multiple maximum-cert-path definitions found.")
+    OperationFailedException multipleMaximumCertPathDefinitions();
+
 }

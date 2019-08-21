@@ -30,6 +30,8 @@ import static org.wildfly.extension.elytron.ElytronDescriptionConstants.NAME;
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.REALM;
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.ROLES;
 
+import java.util.concurrent.ThreadLocalRandom;
+
 import org.jboss.as.controller.ObjectTypeAttributeDefinition;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
@@ -52,7 +54,6 @@ import org.wildfly.security.password.interfaces.OneTimePassword;
 import org.wildfly.security.password.interfaces.SaltedSimpleDigestPassword;
 import org.wildfly.security.password.interfaces.ScramDigestPassword;
 import org.wildfly.security.password.interfaces.SimpleDigestPassword;
-import org.wildfly.security.password.util.PasswordUtil;
 import org.wildfly.security.permission.PermissionVerifier;
 
 /**
@@ -109,6 +110,9 @@ public class IdentityOperationsTestCase extends AbstractSubsystemTest {
         KernelServices services = createKernelServicesBuilder(null)
                 .setSubsystemXmlResource("identity-management.xml")
                 .build();
+
+        TestEnvironment.activateService(services, Capabilities.SECURITY_DOMAIN_RUNTIME_CAPABILITY, "FileSystemDomain");
+
         PathAddress securityDomainAddress = getSecurityDomainAddress("FileSystemDomain");
         String principalName = "plainUser";
         ModelNode operation = createAddIdentityOperation(getSecurityRealmAddress("FileSystemRealm"), principalName);
@@ -200,6 +204,38 @@ public class IdentityOperationsTestCase extends AbstractSubsystemTest {
     }
 
     @Test
+    public void testAddEmptyAttributeValue() throws Exception {
+        KernelServices services = createKernelServicesBuilder(null)
+                .setSubsystemXmlResource("identity-management.xml")
+                .build();
+        String principalName = "plainUser";
+        PathAddress realmAddress = getSecurityRealmAddress("FileSystemRealm");
+        ModelNode operation = createAddIdentityOperation(realmAddress, principalName);
+        ModelNode result = services.executeOperation(operation);
+
+        assertSuccessful(result);
+
+        operation = createAddAttributeOperation(realmAddress, principalName, "name", "John Smith");
+        result = services.executeOperation(operation);
+        assertSuccessful(result);
+
+        operation = createAddAttributeOperation(realmAddress, principalName, "phoneNumber", "");
+        result = services.executeOperation(operation);
+        assertSuccessful(result);
+
+        operation = createReadIdentityOperation(realmAddress, principalName);
+        result = services.executeOperation(operation);
+        assertSuccessful(result);
+
+        ModelNode resultNode = result.get(RESULT);
+        ModelNode attributesNode = resultNode.get(ATTRIBUTES);
+
+        assertTrue(attributesNode.isDefined());
+        assertAttributeValue(attributesNode, "name", "John Smith");
+        assertAttributeValue(attributesNode, "phoneNumber", "");
+    }
+
+    @Test
     public void testRemoveAttribute() throws Exception {
         KernelServices services = createKernelServicesBuilder(null)
                 .setSubsystemXmlResource("identity-management.xml")
@@ -267,7 +303,7 @@ public class IdentityOperationsTestCase extends AbstractSubsystemTest {
         ModelNode result = services.executeOperation(operation);
         assertSuccessful(result);
 
-        byte[] salt = PasswordUtil.generateRandomSalt(BCryptPassword.BCRYPT_SALT_SIZE);
+        byte[] salt = generateRandomSalt(BCryptPassword.BCRYPT_SALT_SIZE);
 
         operation = createSetPasswordOperation("default", realmAddress, principalName,
                 ModifiableRealmDecorator.SetPasswordHandler.Bcrypt.OBJECT_DEFINITION, "bcryptPassword", salt, 10, null, null, null, null);
@@ -321,7 +357,7 @@ public class IdentityOperationsTestCase extends AbstractSubsystemTest {
         assertSuccessful(result);
 
         operation = createSetPasswordOperation("default", realmAddress, principalName,
-                ModifiableRealmDecorator.SetPasswordHandler.SaltedSimpleDigest.OBJECT_DEFINITION, "saltedSimpleDigest", PasswordUtil.generateRandomSalt(16), null, null, SaltedSimpleDigestPassword.ALGORITHM_PASSWORD_SALT_DIGEST_SHA_256, null, null);
+                ModifiableRealmDecorator.SetPasswordHandler.SaltedSimpleDigest.OBJECT_DEFINITION, "saltedSimpleDigest", generateRandomSalt(16), null, null, SaltedSimpleDigestPassword.ALGORITHM_PASSWORD_SALT_DIGEST_SHA_256, null, null);
         result = services.executeOperation(operation);
         assertSuccessful(result);
     }
@@ -337,7 +373,7 @@ public class IdentityOperationsTestCase extends AbstractSubsystemTest {
         ModelNode result = services.executeOperation(operation);
         assertSuccessful(result);
 
-        byte[] salt = PasswordUtil.generateRandomSalt(ScramDigestPassword.DEFAULT_SALT_SIZE);
+        byte[] salt = generateRandomSalt(ScramDigestPassword.DEFAULT_SALT_SIZE);
         int iterationCount = ScramDigestPassword.DEFAULT_ITERATION_COUNT;
 
         operation = createSetPasswordOperation("default", realmAddress, principalName,
@@ -549,5 +585,11 @@ public class IdentityOperationsTestCase extends AbstractSubsystemTest {
         public PermissionVerifier mapPermissions(PermissionMappable permissionMappable, Roles roles) {
             return PermissionVerifier.from(new LoginPermission());
         }
+    }
+
+    private static byte[] generateRandomSalt(int saltSize) {
+        byte[] randomSalt = new byte[saltSize];
+        ThreadLocalRandom.current().nextBytes(randomSalt);
+        return randomSalt;
     }
 }

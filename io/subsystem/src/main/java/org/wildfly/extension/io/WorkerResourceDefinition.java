@@ -44,6 +44,7 @@ import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.PersistentResourceDefinition;
 import org.jboss.as.controller.ReloadRequiredRemoveStepHandler;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
+import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.operations.validation.IntRangeValidator;
@@ -94,7 +95,7 @@ class WorkerResourceDefinition extends PersistentResourceDefinition {
             .build();
     static final OptionAttributeDefinition STACK_SIZE = new OptionAttributeDefinition.Builder(Constants.STACK_SIZE, Options.STACK_SIZE)
             .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
-            .setDefaultValue(new ModelNode(0L))
+            .setDefaultValue(ModelNode.ZERO_LONG)
             .setValidator(new LongRangeValidator(0L))
             .setAllowExpression(true)
             .build();
@@ -112,19 +113,12 @@ class WorkerResourceDefinition extends PersistentResourceDefinition {
             STACK_SIZE
     };
 
-    private static final AttributeDefinition SHUTDOWN_REQUESTED = new SimpleAttributeDefinitionBuilder("shutdown-requested", ModelType.BOOLEAN).setStorageRuntime()
-            .setUndefinedMetricValue(new ModelNode(false)).build();
-    private static final AttributeDefinition CORE_WORKER_POOL_SIZE = new SimpleAttributeDefinitionBuilder("core-pool-size", ModelType.INT).setStorageRuntime()
-            .setUndefinedMetricValue(new ModelNode(0)).build();
-    private static final AttributeDefinition MAX_WORKER_POOL_SIZE = new SimpleAttributeDefinitionBuilder("max-pool-size", ModelType.INT).setStorageRuntime()
-            .setUndefinedMetricValue(new ModelNode(0)).build();
-    private static final AttributeDefinition IO_THREAD_COUNT = new SimpleAttributeDefinitionBuilder("io-thread-count", ModelType.INT).setStorageRuntime()
-            .setUndefinedMetricValue(new ModelNode(0)).build();
-    private static final AttributeDefinition QUEUE_SIZE = new SimpleAttributeDefinitionBuilder("queue-size", ModelType.INT).setStorageRuntime()
-            .setUndefinedMetricValue(new ModelNode(0)).build();
-    private static final AttributeDefinition BUSY_WORKER_THREAD_COUNT = new SimpleAttributeDefinitionBuilder("busy-task-thread-count", ModelType.INT).setStorageRuntime()
-            .setUndefinedMetricValue(new ModelNode(0)).build();
-
+    private static final AttributeDefinition SHUTDOWN_REQUESTED = new SimpleAttributeDefinitionBuilder("shutdown-requested", ModelType.BOOLEAN).setStorageRuntime().build();
+    private static final AttributeDefinition CORE_WORKER_POOL_SIZE = new SimpleAttributeDefinitionBuilder("core-pool-size", ModelType.INT).build();
+    private static final AttributeDefinition MAX_WORKER_POOL_SIZE = new SimpleAttributeDefinitionBuilder("max-pool-size", ModelType.INT).build();
+    private static final AttributeDefinition IO_THREAD_COUNT = new SimpleAttributeDefinitionBuilder("io-thread-count", ModelType.INT).build();
+    private static final AttributeDefinition QUEUE_SIZE = new SimpleAttributeDefinitionBuilder("queue-size", ModelType.INT).build();
+    private static final AttributeDefinition BUSY_WORKER_THREAD_COUNT = new SimpleAttributeDefinitionBuilder("busy-task-thread-count", ModelType.INT).build();
 
     static final Map<String, OptionAttributeDefinition> ATTRIBUTES_BY_XMLNAME;
 
@@ -141,22 +135,16 @@ class WorkerResourceDefinition extends PersistentResourceDefinition {
 
 
     private WorkerResourceDefinition() {
-        super(IOExtension.WORKER_PATH,
-                IOExtension.getResolver(Constants.WORKER),
-                WorkerAdd.INSTANCE,
-                new ReloadRequiredRemoveStepHandler()
-        );
+        super(new SimpleResourceDefinition.Parameters(IOExtension.WORKER_PATH, IOExtension.getResolver(Constants.WORKER))
+                .setAddHandler(WorkerAdd.INSTANCE)
+                .setRemoveHandler(ReloadRequiredRemoveStepHandler.INSTANCE)
+                .addCapabilities(IO_WORKER_RUNTIME_CAPABILITY));
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public Collection<AttributeDefinition> getAttributes() {
         return (Collection) ATTRIBUTES_BY_XMLNAME.values();
-    }
-
-    @Override
-    public void registerCapabilities(ManagementResourceRegistration resourceRegistration) {
-        resourceRegistration.registerCapability(IO_WORKER_RUNTIME_CAPABILITY);
     }
 
     @Override
@@ -203,7 +191,8 @@ class WorkerResourceDefinition extends PersistentResourceDefinition {
                 });
 
         WorkerMetricsHandler metricsHandler = new WorkerMetricsHandler();
-        resourceRegistration.registerMetric(SHUTDOWN_REQUESTED, metricsHandler);
+        resourceRegistration.registerReadOnlyAttribute(SHUTDOWN_REQUESTED, metricsHandler);
+
         resourceRegistration.registerMetric(CORE_WORKER_POOL_SIZE, metricsHandler);
         resourceRegistration.registerMetric(MAX_WORKER_POOL_SIZE, metricsHandler);
         resourceRegistration.registerMetric(IO_THREAD_COUNT, metricsHandler);
@@ -255,7 +244,7 @@ class WorkerResourceDefinition extends PersistentResourceDefinition {
         @Override
         protected boolean applyUpdateToRuntime(OperationContext context, ModelNode operation, String attributeName, ModelNode value, ModelNode currentValue, HandbackHolder handbackHolder) throws OperationFailedException {
             XnioWorker worker = getXnioWorker(context);
-            if (worker == null) { //worker can be null if it is not started yet, it can happen when there are no dependencies to it.
+            if (worker == null || !value.isDefined()) { //worker can be null if it is not started yet, it can happen when there are no dependencies to it.
                 return true;
             }
             try {
