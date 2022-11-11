@@ -43,7 +43,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ADD
  *
  * @author John Bailey
  */
-public class AbstractAddStepHandler implements OperationStepHandler {
+public class AbstractAddStepHandler implements OperationStepHandler, OperationDescriptor {
 
     static final Set<RuntimeCapability> NULL_CAPABILITIES = Collections.emptySet();
     private static final Set<? extends AttributeDefinition> NULL_ATTRIBUTES = Collections.emptySet();
@@ -147,6 +147,11 @@ public class AbstractAddStepHandler implements OperationStepHandler {
         }
     }
 
+    @Override
+    public Collection<? extends AttributeDefinition> getAttributes() {
+        return this.attributes;
+    }
+
     /** {@inheritDoc */
     public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {
         final Resource resource = createResource(context, operation);
@@ -185,7 +190,7 @@ public class AbstractAddStepHandler implements OperationStepHandler {
         if (registration != null) {
             Set<String> orderedChildTypes = registration.getOrderedChildTypes();
             boolean orderedChildResource = registration.isOrderedChildResource();
-            if (orderedChildResource || orderedChildTypes.size() > 0) {
+            if (orderedChildResource || !orderedChildTypes.isEmpty()) {
                 return new OrderedResourceCreator(orderedChildResource, orderedChildTypes).createResource(context, operation);
             }
         }

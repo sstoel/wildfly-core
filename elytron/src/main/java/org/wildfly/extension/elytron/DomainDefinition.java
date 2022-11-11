@@ -170,6 +170,11 @@ class DomainDefinition extends SimpleResourceDefinition {
         .setCapabilityReference(ROLE_DECODER_CAPABILITY, SECURITY_DOMAIN_CAPABILITY)
         .build();
 
+    static final SimpleAttributeDefinition ROLE_DECODER = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.ROLE_DECODER, ModelType.STRING, true)
+            .setMinSize(1)
+            .setCapabilityReference(ROLE_DECODER_CAPABILITY, SECURITY_DOMAIN_CAPABILITY)
+            .build();
+
     static final ObjectTypeAttributeDefinition REALM = new ObjectTypeAttributeDefinition.Builder(ElytronDescriptionConstants.REALM, REALM_NAME, REALM_PRINCIPAL_TRANSFORMER, REALM_ROLE_DECODER, ROLE_MAPPER)
         .setRequired(true)
         .build();
@@ -211,7 +216,7 @@ class DomainDefinition extends SimpleResourceDefinition {
 
     private static final AttributeDefinition[] ATTRIBUTES = new AttributeDefinition[] { PRE_REALM_PRINCIPAL_TRANSFORMER, POST_REALM_PRINCIPAL_TRANSFORMER, PRINCIPAL_DECODER,
             REALM_MAPPER, ROLE_MAPPER, PERMISSION_MAPPER, DEFAULT_REALM, REALMS, TRUSTED_SECURITY_DOMAINS, OUTFLOW_ANONYMOUS, OUTFLOW_SECURITY_DOMAINS, SECURITY_EVENT_LISTENER,
-            EVIDENCE_DECODER};
+            EVIDENCE_DECODER, ROLE_DECODER};
 
     private static final DomainAddHandler ADD = new DomainAddHandler();
     private static final OperationStepHandler REMOVE = new DomainRemoveHandler(ADD);
@@ -254,6 +259,7 @@ class DomainDefinition extends SimpleResourceDefinition {
         String roleMapper = ROLE_MAPPER.resolveModelAttribute(context, model).asStringOrNull();
         String evidenceDecoder = EVIDENCE_DECODER.resolveModelAttribute(context, model).asStringOrNull();
         String securityEventListener = SECURITY_EVENT_LISTENER.resolveModelAttribute(context, model).asStringOrNull();
+        String roleDecoder = ROLE_DECODER.resolveModelAttribute(context, model).asStringOrNull();
 
         DomainService domain = new DomainService(defaultRealm, trustedSecurityDomain, identityOperator);
 
@@ -300,6 +306,10 @@ class DomainDefinition extends SimpleResourceDefinition {
                     SecurityEventListener.class, domain.getSecurityEventListenerInjector());
         }
 
+        if (roleDecoder != null) {
+            injectRoleDecoder(roleDecoder, context, domainBuilder, domain.createDomainRoleDecoderInjector(roleDecoder));
+        }
+
         if (realms.isDefined()) {
             for (ModelNode current : realms.asList()) {
                 String realmName = REALM_NAME.resolveModelAttribute(context, current).asString();
@@ -344,7 +354,7 @@ class DomainDefinition extends SimpleResourceDefinition {
         final Set<SecurityDomain> outflowSecurityDomains = new HashSet<>();
 
         installInitialService(context, initialName, model, trustedSecurityDomains::contains,
-                outflowSecurityDomainNames.size() > 0 ? i -> outflow(i, outflowAnonymous, outflowSecurityDomains) : UnaryOperator.identity());
+                !outflowSecurityDomainNames.isEmpty() ? i -> outflow(i, outflowAnonymous, outflowSecurityDomains) : UnaryOperator.identity());
 
         TrivialService<SecurityDomain> finalDomainService = new TrivialService<SecurityDomain>();
         finalDomainService.setValueSupplier(new ValueSupplier<SecurityDomain>() {
@@ -608,6 +618,7 @@ class DomainDefinition extends SimpleResourceDefinition {
             RuntimeCapability<Void> runtimeCapability = SECURITY_DOMAIN_RUNTIME_CAPABILITY.fromBaseCapability(context.getCurrentAddressValue());
             ServiceName domainServiceName = runtimeCapability.getCapabilityServiceName(SecurityDomain.class);
             ServiceController<SecurityDomain> serviceController = getRequiredService(serviceRegistry, domainServiceName, SecurityDomain.class);
+            startSecurityDomainServiceIfNotUp(serviceController);
             SecurityDomain domain = serviceController.getValue();
             ServerAuthenticationContext authenticationContext = domain.createNewAuthenticationContext();
             String principalName = NAME.resolveModelAttribute(context, operation).asString();
@@ -645,6 +656,17 @@ class DomainDefinition extends SimpleResourceDefinition {
                 }
             } catch (RealmUnavailableException e) {
                 throw ROOT_LOGGER.couldNotReadIdentity(principalName, domainServiceName, e);
+            }
+        }
+    }
+
+    private static void startSecurityDomainServiceIfNotUp(ServiceController<SecurityDomain> serviceController) throws OperationFailedException {
+        if (serviceController.getState() != ServiceController.State.UP) {
+            serviceController.setMode(Mode.ACTIVE);
+            try {
+                serviceController.awaitValue();
+            } catch (InterruptedException e) {
+                throw new OperationFailedException(e);
             }
         }
     }

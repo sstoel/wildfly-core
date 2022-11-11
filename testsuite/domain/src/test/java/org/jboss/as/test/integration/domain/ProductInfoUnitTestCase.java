@@ -44,7 +44,7 @@ import static org.jboss.as.controller.operations.global.GlobalInstallationReport
 import static org.jboss.as.controller.operations.global.GlobalInstallationReportHandler.STANDALONE_DOMAIN_IDENTIFIER;
 import static org.jboss.as.controller.operations.global.GlobalInstallationReportHandler.SUMMARY;
 import static org.jboss.as.test.integration.domain.management.util.DomainTestSupport.validateResponse;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 import java.util.List;
 import org.jboss.as.controller.PathAddress;
@@ -67,23 +67,23 @@ import org.junit.Test;
 public class ProductInfoUnitTestCase {
 
     private static DomainTestSupport testSupport;
-    private static DomainLifecycleUtil domainMasterLifecycleUtil;
-    private static DomainLifecycleUtil domainSlaveLifecycleUtil;
+    private static DomainLifecycleUtil domainPrimaryLifecycleUtil;
+    private static DomainLifecycleUtil domainSecondaryLifecycleUtil;
 
     @BeforeClass
     public static void setupDomain() throws Exception {
         testSupport = DomainTestSupport.createAndStartSupport(DomainTestSupport.Configuration.create(ProductInfoUnitTestCase.class.getSimpleName(),
-                "domain-configs/domain-minimal.xml", "host-configs/host-master.xml", "host-configs/host-minimal.xml", false, false, false, false, false));
-        domainMasterLifecycleUtil = testSupport.getDomainMasterLifecycleUtil();
-        domainSlaveLifecycleUtil = testSupport.getDomainSlaveLifecycleUtil();
+                "domain-configs/domain-minimal.xml", "host-configs/host-primary.xml", "host-configs/host-minimal.xml", false, false, false, false, false));
+        domainPrimaryLifecycleUtil = testSupport.getDomainPrimaryLifecycleUtil();
+        domainSecondaryLifecycleUtil = testSupport.getDomainSecondaryLifecycleUtil();
     }
 
     @AfterClass
     public static void tearDownDomain() throws Exception {
         testSupport.close();
         testSupport = null;
-        domainMasterLifecycleUtil = null;
-        domainSlaveLifecycleUtil = null;
+        domainPrimaryLifecycleUtil = null;
+        domainSecondaryLifecycleUtil = null;
     }
 
     @Test
@@ -91,13 +91,13 @@ public class ProductInfoUnitTestCase {
         final ModelNode operation = new ModelNode();
         operation.get(OP_ADDR).set(PathAddress.EMPTY_ADDRESS.toModelNode());
         operation.get(OP).set(OPERATION_NAME);
-        List<ModelNode> results = validateResponse(domainMasterLifecycleUtil.createDomainClient().execute(operation), true).asList();
+        List<ModelNode> results = validateResponse(domainPrimaryLifecycleUtil.createDomainClient().execute(operation), true).asList();
         assertThat(results.size(), is(2));
-        checkMaster(results.get(0));
-        checkSlave(results.get(1));
+        checkPrimary(results.get(0));
+        checkSecondary(results.get(1));
     }
 
-    private void checkMaster(ModelNode result) {
+    private void checkPrimary(ModelNode result) {
         List<Property> response = validateResponse(result, true).asPropertyList();
         assertThat(response.size(), is(5));
         for (Property serverSummary : response) {
@@ -106,16 +106,16 @@ public class ProductInfoUnitTestCase {
             assertThat(report.isDefined(), is(true));
             assertThat(report.hasDefined(NODE_NAME), is(true));
             String nodeName = report.get(NODE_NAME).asString();
-            assertThat(nodeName, anyOf(is("master:main-one"), is("master:main-two"), is("master"), is("master:reload-one"), is("master:other-one")));
-            boolean isRunning = "master".equals(nodeName) || "master:main-one".equals(nodeName);
+            assertThat(nodeName, anyOf(is("primary:main-one"), is("primary:main-two"), is("primary"), is("primary:reload-one"), is("primary:other-one")));
+            boolean isRunning = "primary".equals(nodeName) || "primary:main-one".equals(nodeName);
             if (isRunning) {
-                assertThat(report.get(ORGANIZATION).asString(), is("core-master"));
+                assertThat(report.get(ORGANIZATION).asString(), is("core-primary"));
                 assertThat(report.hasDefined(HOSTNAME), is(true));
                 assertThat(report.hasDefined(INSTANCE_ID), is(true));
                 assertThat(report.hasDefined(PRODUCT_COMMUNITY_IDENTIFIER), is(true));
                 assertThat(report.get(PRODUCT_COMMUNITY_IDENTIFIER).asString(), is(PROJECT_TYPE));
                 assertThat(report.hasDefined(STANDALONE_DOMAIN_IDENTIFIER), is(true));
-                if ("master".equals(nodeName)) {
+                if ("primary".equals(nodeName)) {
                     assertThat(report.get(STANDALONE_DOMAIN_IDENTIFIER).asString(), is(ProcessType.HOST_CONTROLLER.name()));
                 } else {
                     assertThat(report.get(STANDALONE_DOMAIN_IDENTIFIER).asString(), is(ProcessType.DOMAIN_SERVER.name()));
@@ -133,7 +133,7 @@ public class ProductInfoUnitTestCase {
         }
     }
 
-    private void checkSlave(ModelNode result) {
+    private void checkSecondary(ModelNode result) {
         List<Property> response = validateResponse(result, true).asPropertyList();
         assertThat(response.size(), is(5));
         for (Property serverSummary : response) {
@@ -144,15 +144,15 @@ public class ProductInfoUnitTestCase {
             String nodeName = report.get(NODE_NAME).asString();
             assertThat(report.hasDefined(ORGANIZATION), is(true));
             assertThat(report.get(ORGANIZATION).asString(), is("wildfly-core"));
-            assertThat(nodeName, anyOf(is("slave:main-three"), is("slave:main-four"), is("slave"), is("slave:reload-two"), is("slave:other-two")));
-            boolean isRunning = "slave".equals(nodeName) || "slave:main-three".equals(nodeName) || "slave:other-two".equals(nodeName);
+            assertThat(nodeName, anyOf(is("secondary:main-three"), is("secondary:main-four"), is("secondary"), is("secondary:reload-two"), is("secondary:other-two")));
+            boolean isRunning = "secondary".equals(nodeName) || "secondary:main-three".equals(nodeName) || "secondary:other-two".equals(nodeName);
             if (isRunning) {
                 assertThat(report.hasDefined(HOSTNAME), is(true));
                 assertThat(report.hasDefined(INSTANCE_ID), is(true));
                 assertThat(report.hasDefined(PRODUCT_COMMUNITY_IDENTIFIER), is(true));
                 assertThat(report.get(PRODUCT_COMMUNITY_IDENTIFIER).asString(), is(PROJECT_TYPE));
                 assertThat(report.hasDefined(STANDALONE_DOMAIN_IDENTIFIER), is(true));
-                if ("slave".equals(nodeName)) {
+                if ("secondary".equals(nodeName)) {
                     assertThat(report.get(STANDALONE_DOMAIN_IDENTIFIER).asString(), is(ProcessType.HOST_CONTROLLER.name()));
                 } else {
                     assertThat(report.get(STANDALONE_DOMAIN_IDENTIFIER).asString(), is(ProcessType.DOMAIN_SERVER.name()));

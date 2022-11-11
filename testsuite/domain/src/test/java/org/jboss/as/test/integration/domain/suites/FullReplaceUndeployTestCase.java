@@ -59,12 +59,12 @@ import org.junit.Test;
 public class FullReplaceUndeployTestCase {
 
     private static DomainTestSupport testSupport;
-    private static DomainLifecycleUtil domainMasterLifecycleUtil;
+    private static DomainLifecycleUtil domainPrimaryLifecycleUtil;
 
     @BeforeClass
     public static void setupDomain() throws Exception {
         testSupport = DomainTestSuite.createSupport(FullReplaceUndeployTestCase.class.getSimpleName());
-        domainMasterLifecycleUtil = testSupport.getDomainMasterLifecycleUtil();
+        domainPrimaryLifecycleUtil = testSupport.getDomainPrimaryLifecycleUtil();
         // Initialize the test extension
         ExtensionSetup.initializeTestExtension(testSupport);
     }
@@ -72,7 +72,7 @@ public class FullReplaceUndeployTestCase {
     @AfterClass
     public static void tearDownDomain() throws Exception {
         testSupport = null;
-        domainMasterLifecycleUtil = null;
+        domainPrimaryLifecycleUtil = null;
         DomainTestSuite.stopSupport();
     }
 
@@ -87,9 +87,9 @@ public class FullReplaceUndeployTestCase {
     }
 
     private void testDeployment(final Archive<?> archive) throws IOException {
-        final ModelControllerClient client = domainMasterLifecycleUtil.getDomainClient();
+        final ModelControllerClient client = domainPrimaryLifecycleUtil.getDomainClient();
         final ModelNode readServerSubsystems = Operations.createOperation(ClientConstants.READ_CHILDREN_NAMES_OPERATION,
-                Operations.createAddress("host", "master", "server", "main-one"));
+                Operations.createAddress("host", "primary", "server", "main-one"));
         readServerSubsystems.get(ClientConstants.CHILD_TYPE).set(ClientConstants.SUBSYSTEM);
 
         final String name = archive.getName();
@@ -100,17 +100,17 @@ public class FullReplaceUndeployTestCase {
 
         // Validate the subsystem child names on a server
         ModelNode result = execute(client, readServerSubsystems);
-        validateSubsystemModel("/host=master/server=main-one", result);
+        validateSubsystemModel("/host=primary/server=main-one", result);
 
         // Fully replace the deployment, but with the 'enabled' flag set to false, triggering undeploy
         final Operation fullReplaceOp = createReplaceAndDisableOperation(archive.as(ZipExporter.class).exportAsInputStream(), name, null);
         execute(client, fullReplaceOp);
 
-        // Below validates that WFCORE-1577 is fixed, the model should not be missing on the /host=master/server=main-one or main-two
+        // Below validates that WFCORE-1577 is fixed, the model should not be missing on the /host=primary/server=main-one or main-two
 
         // Validate the subsystem child names
         result = execute(client, readServerSubsystems);
-        validateSubsystemModel("/host=master/server=main-one", result);
+        validateSubsystemModel("/host=primary/server=main-one", result);
     }
 
     private void validateSubsystemModel(final String address, final ModelNode subsystemModel) {

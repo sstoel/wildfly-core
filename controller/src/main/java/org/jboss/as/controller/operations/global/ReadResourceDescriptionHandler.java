@@ -118,7 +118,7 @@ public class ReadResourceDescriptionHandler extends GlobalOperationHandlers.Abst
     private static final SimpleAttributeDefinition ACCESS_CONTROL = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.ACCESS_CONTROL, ModelType.STRING)
             .setRequired(false)
             .setDefaultValue(new ModelNode(AccessControl.NONE.toString()))
-            .setValidator(EnumValidator.create(AccessControl.class, true, AccessControl.NONE, AccessControl.COMBINED_DESCRIPTIONS, AccessControl.TRIM_DESCRIPTONS))
+            .setValidator(EnumValidator.create(AccessControl.class, AccessControl.NONE, AccessControl.COMBINED_DESCRIPTIONS, AccessControl.TRIM_DESCRIPTONS))
             .build();
 
 
@@ -403,11 +403,11 @@ public class ReadResourceDescriptionHandler extends GlobalOperationHandlers.Abst
      */
     static final class CheckResourceAccessHandler implements OperationStepHandler {
 
-        static final OperationDefinition DEFAULT_DEFINITION = new SimpleOperationDefinitionBuilder(GlobalOperationHandlers.CHECK_DEFAULT_RESOURCE_ACCESS, new NonResolvingResourceDescriptionResolver())
+        static final OperationDefinition DEFAULT_DEFINITION = new SimpleOperationDefinitionBuilder(GlobalOperationHandlers.CHECK_DEFAULT_RESOURCE_ACCESS, NonResolvingResourceDescriptionResolver.INSTANCE)
             .setPrivateEntry()
             .build();
 
-        static final OperationDefinition DEFINITION = new SimpleOperationDefinitionBuilder(GlobalOperationHandlers.CHECK_RESOURCE_ACCESS, new NonResolvingResourceDescriptionResolver())
+        static final OperationDefinition DEFINITION = new SimpleOperationDefinitionBuilder(GlobalOperationHandlers.CHECK_RESOURCE_ACCESS, NonResolvingResourceDescriptionResolver.INSTANCE)
             .setPrivateEntry()
             .build();
 
@@ -710,7 +710,7 @@ public class ReadResourceDescriptionHandler extends GlobalOperationHandlers.Abst
                                                                                         resource,
                                                                                         currentElement.getKey());
                 Set<String> childNames = childAddresses.get(currentElement.getKey());
-                if (childNames != null && childNames.size() > 0) {
+                if (childNames != null && !childNames.isEmpty()) {
                     for (String name : childNames) {
                         PathAddress address = currentAddress.append(PathElement.pathElement(currentElement.getKey(), name));
                         if (addParentResource(context, addresses, address)) {

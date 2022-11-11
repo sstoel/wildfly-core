@@ -39,11 +39,13 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OUT
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.PROCESS_STATE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESPONSE_HEADERS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SERVICE;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.STEPS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.USER;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.UUID;
 import static org.jboss.as.controller.logging.ControllerLogger.MGMT_OP_LOGGER;
 import static org.jboss.as.controller.logging.ControllerLogger.ROOT_LOGGER;
 import static org.jboss.as.controller.operations.common.Util.validateOperation;
+import static org.jboss.as.controller.operations.global.GlobalOperationHandlers.STD_READ_OPS;
 
 import java.io.IOException;
 import java.security.PrivilegedAction;
@@ -65,6 +67,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
+import org.jboss.as.controller.OperationContext.RollbackHandler;
 import org.jboss.as.controller.access.Authorizer;
 import org.jboss.as.controller.audit.AuditLogger;
 import org.jboss.as.controller.audit.ManagedAuditLogger;
@@ -79,6 +82,8 @@ import org.jboss.as.controller.extension.MutableRootResourceRegistrationProvider
 import org.jboss.as.controller.extension.ParallelExtensionAddHandler;
 import org.jboss.as.controller.logging.ControllerLogger;
 import org.jboss.as.controller.notification.NotificationSupport;
+import org.jboss.as.controller.operations.global.ReadResourceHandler;
+import org.jboss.as.controller.persistence.ConfigurationExtension;
 import org.jboss.as.controller.persistence.ConfigurationPersistenceException;
 import org.jboss.as.controller.persistence.ConfigurationPersister;
 import org.jboss.as.controller.registry.DelegatingResource;
@@ -122,6 +127,7 @@ class ModelControllerImpl implements ModelController {
     private final ProcessType processType;
     private final RunningModeControl runningModeControl;
     private final AtomicBoolean bootingFlag = new AtomicBoolean(true);
+    private final AtomicBoolean bootingReadOnlyFlag = new AtomicBoolean(false);
     private final OperationStepHandler prepareStep;
     private final ControlledProcessState processState;
     private final ExecutorService executorService;
@@ -144,7 +150,7 @@ class ModelControllerImpl implements ModelController {
     private final AbstractControllerService.PartialModelIndicator partialModelIndicator;
     private final AbstractControllerService.ControllerInstabilityListener instabilityListener;
 
-    private volatile ModelControllerClientFactory clientFactory;
+    private volatile ModelControllerClientFactoryImpl clientFactory;
 
     private PathAddress modelControllerResourceAddress;
 
@@ -205,7 +211,7 @@ class ModelControllerImpl implements ModelController {
         auditLogger.startBoot();
     }
 
-    ModelControllerClientFactory getClientFactory() {
+    private ModelControllerClientFactoryImpl getClientFactory() {
         if (clientFactory == null) {
             // In a race this could result in > 1 factories being instantiated but that is harmless
             this.clientFactory = new ModelControllerClientFactoryImpl(this, securityIdentitySupplier);
@@ -223,10 +229,17 @@ class ModelControllerImpl implements ModelController {
      */
     @Override
     public ModelNode execute(final ModelNode operation, final OperationMessageHandler handler, final OperationTransactionControl control, final OperationAttachments attachments) {
-        SecurityIdentity securityIdentity = securityIdentitySupplier.get();
-        OperationResponse or = securityIdentity.runAs((PrivilegedAction<OperationResponse>) () -> internalExecute(operation,
-                handler, control, attachments, prepareStep, false, partialModelIndicator.isModelPartial()));
+        return executeOperation(operation, handler, control, attachments, false);
+    }
 
+    @Override
+    public OperationResponse execute(Operation operation, OperationMessageHandler handler, OperationTransactionControl control) {
+        return executeOperation(operation, handler, control, false);
+    }
+
+    final ModelNode executeOperation(final ModelNode operation, final OperationMessageHandler handler, final OperationTransactionControl control,
+                            final OperationAttachments attachments, final boolean forBoot) {
+        OperationResponse or = executeForResponse(operation, handler, control, attachments, forBoot);
         ModelNode result = or.getResponseNode();
         try {
             or.close();
@@ -237,11 +250,15 @@ class ModelControllerImpl implements ModelController {
         return result;
     }
 
-    @Override
-    public OperationResponse execute(Operation operation, OperationMessageHandler handler, OperationTransactionControl control) {
+    final OperationResponse executeOperation(Operation operation, OperationMessageHandler handler, OperationTransactionControl control, boolean forBoot) {
+        return executeForResponse(operation.getOperation(), handler, control, operation, forBoot);
+    }
+
+    final OperationResponse executeForResponse(final ModelNode operation, OperationMessageHandler handler, OperationTransactionControl control,
+                                         final OperationAttachments attachments, final boolean forBoot) {
         SecurityIdentity securityIdentity = securityIdentitySupplier.get();
-        return securityIdentity.runAs((PrivilegedAction<OperationResponse>) () -> internalExecute(operation.getOperation(),
-                handler, control, operation, prepareStep, false, partialModelIndicator.isModelPartial()));
+        return securityIdentity.runAs((PrivilegedAction<OperationResponse>) () -> internalExecute(operation,
+                handler, control, attachments, prepareStep, false, partialModelIndicator.isModelPartial(), forBoot));
     }
 
     private AbstractOperationContext getDelegateContext(final int operationId) {
@@ -337,6 +354,12 @@ class ModelControllerImpl implements ModelController {
      */
     protected OperationResponse internalExecute(final ModelNode operation, final OperationMessageHandler handler, final OperationTransactionControl control,
                                                 final OperationAttachments attachments, final OperationStepHandler prepareStep, final boolean attemptLock, boolean partialModel) {
+        return internalExecute(operation, handler, control, attachments, prepareStep, attemptLock, partialModel, false);
+    }
+
+    private OperationResponse internalExecute(final ModelNode operation, final OperationMessageHandler handler, final OperationTransactionControl control,
+                                              final OperationAttachments attachments, final OperationStepHandler prepareStep,
+                                              final boolean attemptLock, final boolean partialModel, final boolean forBoot) {
 
         SecurityManager sm = System.getSecurityManager();
         if (sm != null) {
@@ -390,7 +413,10 @@ class ModelControllerImpl implements ModelController {
         } // else its an internal caller as external callers always get an AccessAuditContext
 
         // WFCORE-184. Exclude external callers during boot. AccessMechanism is always set for external callers
-        if (accessMechanism != null && bootingFlag.get()) {
+        // If the booting flag was cleared, then check if we are in a booting read only mode and if the current
+        // operation is not an allowed as a readOnly Operation, then it gets rejected
+        if ( (accessMechanism != null && bootingFlag.get()) ||
+                (accessMechanism != null && !bootingFlag.get() && bootingReadOnlyFlag.get() && !isReadOnlyOperation(operation)) ) {
             return handleExternalRequestDuringBoot();
         }
 
@@ -401,7 +427,7 @@ class ModelControllerImpl implements ModelController {
             final OperationContextImpl context = new OperationContextImpl(operationID, operation.get(OP).asString(),
                     operation.get(OP_ADDR), this, processType, runningModeControl.getRunningMode(),
                     headers, handler, attachments, managementModel.get(), originalResultTxControl, processState, auditLogger,
-                    bootingFlag.get(), hostServerGroupTracker, accessContext, notificationSupport,
+                    bootingFlag.get(), forBoot, hostServerGroupTracker, accessContext, notificationSupport,
                     false, extraValidationStepHandler, partialModel, securityIdentitySupplier);
             // Try again if the operation-id is already taken
             if(activeOperations.putIfAbsent(operationID, context) == null) {
@@ -471,7 +497,7 @@ class ModelControllerImpl implements ModelController {
 
     boolean boot(final List<ModelNode> bootList, final OperationMessageHandler handler, final OperationTransactionControl control,
                  final boolean rollbackOnRuntimeFailure, MutableRootResourceRegistrationProvider parallelBootRootResourceRegistrationProvider,
-                 final boolean skipModelValidation, final boolean partialModel) {
+                 final boolean skipModelValidation, final boolean partialModel, final ConfigurationExtension configExtension) {
 
         final Integer operationID = random.nextInt();
 
@@ -480,28 +506,32 @@ class ModelControllerImpl implements ModelController {
         //For the initial operations the model will not be complete, so defer the validation
         final AbstractOperationContext context = new OperationContextImpl(operationID, INITIAL_BOOT_OPERATION, EMPTY_ADDRESS,
                 this, processType, runningModeControl.getRunningMode(),
-                headers, handler, null, managementModel.get(), control, processState, auditLogger, bootingFlag.get(),
+                headers, handler, null, managementModel.get(), control, processState, auditLogger, bootingFlag.get(), true,
                 hostServerGroupTracker, null, notificationSupport, true, extraValidationStepHandler, true, securityIdentitySupplier);
 
         // Add to the context all ops prior to the first ExtensionAddHandler as well as all ExtensionAddHandlers; save the rest.
         // This gets extensions registered before proceeding to other ops that count on these registrations
         BootOperations bootOperations = organizeBootOperations(bootList, operationID, parallelBootRootResourceRegistrationProvider);
+
         OperationContext.ResultAction resultAction = bootOperations.invalid ? OperationContext.ResultAction.ROLLBACK : OperationContext.ResultAction.KEEP;
-        if (bootOperations.initialOps.size() > 0) {
+        if (!bootOperations.initialOps.isEmpty()) {
             // Run the steps up to the last ExtensionAddHandler
             for (ParsedBootOp initialOp : bootOperations.initialOps) {
                 context.addBootStep(initialOp);
             }
             resultAction = context.executeOperation();
         }
+        //here the meta-model is available
         if (resultAction == OperationContext.ResultAction.KEEP && bootOperations.postExtensionOps != null) {
             // Success. Now any extension handlers are registered. Continue with remaining ops
             final AbstractOperationContext postExtContext = new OperationContextImpl(operationID, POST_EXTENSION_BOOT_OPERATION,
                     EMPTY_ADDRESS, this, processType, runningModeControl.getRunningMode(),
                     headers, handler, null, managementModel.get(), control, processState, auditLogger,
-                            bootingFlag.get(), hostServerGroupTracker, null, notificationSupport, true,
+                            bootingFlag.get(), true, hostServerGroupTracker, null, notificationSupport, true,
                             extraValidationStepHandler, partialModel, securityIdentitySupplier);
-
+            if (configExtension != null && configExtension.shouldProcessOperations(runningModeControl.getRunningMode())) {
+                configExtension.processOperations(managementModel.get().getRootResourceRegistration(), bootOperations.postExtensionOps);
+            }
             for (ParsedBootOp parsedOp : bootOperations.postExtensionOps) {
                 if (parsedOp.handler == null) {
                     // The extension should have registered the handler now
@@ -514,28 +544,35 @@ class ModelControllerImpl implements ModelController {
                     // stop
                     break;
                 } else {
-                    postExtContext.addBootStep(parsedOp);
+                    if(parsedOp.handler instanceof ParallelBootOperationStepHandler &&
+                            ((ParallelBootOperationStepHandler)parsedOp.handler).getParsedBootOp().getChildOperations().size() != parsedOp.getChildOperations().size()) {
+                        ParallelBootOperationStepHandler updatedHandler =  new ParallelBootOperationStepHandler(executorService, managementModel.get().getRootResourceRegistration(), processState, this, operationID, extraValidationStepHandler);
+                        for(ModelNode childOp : parsedOp.getChildOperations()) {
+                            updatedHandler.addSubsystemOperation(new ParsedBootOp(childOp));
+                        }
+                        postExtContext.addBootStep(new ParsedBootOp(parsedOp.operation, updatedHandler));
+                    } else {
+                        postExtContext.addBootStep(parsedOp);
+                    }
                 }
             }
-
             resultAction = postExtContext.executeOperation();
 
             if (!skipModelValidation && resultAction == OperationContext.ResultAction.KEEP && bootOperations.postExtensionOps != null) {
                 //Get the modified resources from the initial operations and add to the resources to be validated by the post operations
-                Set<PathAddress> validateAddresses = new HashSet<PathAddress>();
+                Set<PathAddress> validateAddresses = new HashSet<>();
                 Resource root = managementModel.get().getRootResource();
                 addAllAddresses(managementModel.get().getRootResourceRegistration(), PathAddress.EMPTY_ADDRESS, root, validateAddresses);
 
                 final AbstractOperationContext validateContext = new OperationContextImpl(operationID, POST_EXTENSION_BOOT_OPERATION,
                         EMPTY_ADDRESS, this, processType, runningModeControl.getRunningMode(),
                         headers, handler, null, managementModel.get(), control, processState, auditLogger,
-                                bootingFlag.get(), hostServerGroupTracker, null, notificationSupport, false,
+                                bootingFlag.get(), true, hostServerGroupTracker, null, notificationSupport, false,
                                 extraValidationStepHandler, partialModel, securityIdentitySupplier);
                 validateContext.addModifiedResourcesForModelValidation(validateAddresses);
                 resultAction = validateContext.executeOperation();
             }
         }
-
         return  resultAction == OperationContext.ResultAction.KEEP;
     }
 
@@ -666,14 +703,32 @@ class ModelControllerImpl implements ModelController {
             }
         }
 
-
         return new BootOperations(initialOps, postExtensionOps, invalid);
     }
 
     void finishBoot() {
         // Notify the audit logger that we're done booting
         auditLogger.bootDone();
+        bootingReadOnlyFlag.set(false);
         bootingFlag.set(false);
+    }
+
+    /**
+     * Finish boot using an specific value for booting read only flag
+     * @param readOnly
+     */
+    void finishBoot(boolean readOnly) {
+        // Notify the audit logger that we're done booting
+        auditLogger.bootDone();
+        bootingReadOnlyFlag.set(readOnly);
+        bootingFlag.set(false);
+    }
+
+    /**
+     * Clears the current booting read only flag
+     */
+    void clearBootingReadOnlyFlag() {
+        bootingReadOnlyFlag.set(false);
     }
 
     ManagementModel getManagementModel() {
@@ -687,6 +742,10 @@ class ModelControllerImpl implements ModelController {
     @Override
     public ModelControllerClient createClient(final Executor executor) {
         return getClientFactory().createSuperUserClient(executor, false);
+    }
+
+    ModelControllerClient createBootClient(final Executor executor) {
+        return getClientFactory().createBootClient(executor);
     }
 
     ConfigurationPersister.PersistenceResource writeModel(final ManagementModelImpl model, final Set<PathAddress> affectedAddresses,
@@ -869,8 +928,8 @@ class ModelControllerImpl implements ModelController {
         return notificationSupport;
     }
 
-    ModelNode resolveExpressions(ModelNode node) throws OperationFailedException {
-        return expressionResolver.resolveExpressions(node);
+    ModelNode resolveExpressions(ModelNode node, OperationContext context) throws OperationFailedException {
+        return expressionResolver.resolveExpressions(node, context);
     }
 
     Authorizer getAuthorizer() {
@@ -905,7 +964,7 @@ class ModelControllerImpl implements ModelController {
         if (modelControllerResourceAddress == null) {
             Set<String> hosts = managementModel.getRootResource().getChildrenNames(HOST);
             // if we don't actually have a host name yet (e.g. --empty-host-config) we return null for now.
-            if (hosts.size() == 0) {
+            if (hosts.isEmpty()) {
                 return null;
             }
             String hostName = hosts.iterator().next();
@@ -943,7 +1002,14 @@ class ModelControllerImpl implements ModelController {
                     context.getFailureDescription().set(ControllerLogger.ROOT_LOGGER.noHandlerForOperation(operationName, address));
                 }
             }
-            context.completeStep(OperationContext.ResultHandler.NOOP_RESULT_HANDLER);
+            context.completeStep(new RollbackHandler() {
+                @Override
+                public void handleRollback(OperationContext context, ModelNode operation) {
+                    if (!context.getFailureDescription().isDefined() && context.getAttachment(ReadResourceHandler.ROLLBACKED_FAILURE_DESC) != null) {
+                        context.getFailureDescription().set(context.getAttachment(ReadResourceHandler.ROLLBACKED_FAILURE_DESC));
+                    }
+                }
+            });
         }
     }
 
@@ -980,6 +1046,27 @@ class ModelControllerImpl implements ModelController {
             }
         }
         return result;
+    }
+
+    private boolean isReadOnlyOperation(final ModelNode operation) {
+        if (operation.hasDefined(STEPS)) {
+            final List<ModelNode> steps = operation.get(STEPS).asList();
+            boolean readOnly = !steps.isEmpty();
+            for (ModelNode step : steps) {
+                readOnly = isReadOnlyOperation(step);
+                if (!readOnly) {
+                    break;
+                }
+            }
+            return readOnly;
+        } else {
+            final String operationName = operation.get(OP).asString();
+            return STD_READ_OPS.contains(operationName) ||
+                    "read-boot-errors".equals(operationName) ||
+                    "find-non-progressing-operation".equals(operationName) ||
+                    "whoami".equals(operationName) ||
+                    "read-log-file".equals(operationName);
+        }
     }
 
     private static final class BootOperations {

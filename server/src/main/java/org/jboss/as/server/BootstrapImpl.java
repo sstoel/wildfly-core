@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 import javax.management.ObjectName;
 
 import org.jboss.as.controller.ControlledProcessState;
+import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.ControlledProcessStateService;
 import org.jboss.as.server.jmx.RunningStateJmx;
 import org.jboss.as.server.logging.ServerLogger;
@@ -87,7 +88,7 @@ final class BootstrapImpl implements Bootstrap {
     private AsyncFuture<ServiceContainer> internalBootstrap(final Configuration configuration, final List<ServiceActivator> extraServices) {
         try {
             final Object value = ManagementFactory.getPlatformMBeanServer().getAttribute(new ObjectName("java.lang", "type", "OperatingSystem"), "MaxFileDescriptorCount");
-            final long fdCount = Long.valueOf(value.toString()).longValue();
+            final long fdCount = Long.parseLong(value.toString());
             if (fdCount < 4096L) {
                 ServerLogger.FD_LIMIT_LOGGER.fdTooLow(fdCount);
             }
@@ -114,12 +115,12 @@ final class BootstrapImpl implements Bootstrap {
         final ServiceTarget tracker = container.subTarget();
         final ControlledProcessState processState = new ControlledProcessState(true);
         shutdownHook.setControlledProcessState(processState);
-        ControlledProcessStateService controlledProcessStateService = ControlledProcessStateService.addService(tracker, processState).getValue();
+        ProcessStateNotifier processStateNotifier = ControlledProcessStateService.addService(tracker, processState).getValue();
         final SuspendController suspendController = new SuspendController();
         //Instantiating the suspendcontroller here to be able to get a reference to it in RunningStateJmx
         //Note that the SuspendController service will be started in the ServerService during the boot of the server.
         RunningStateJmx.registerMBean(
-                controlledProcessStateService, suspendController,
+                processStateNotifier, suspendController,
                 configuration.getRunningModeControl(),
                 configuration.getServerEnvironment().getLaunchType() != ServerEnvironment.LaunchType.APPCLIENT);
         final Service<?> applicationServerService = new ApplicationServerService(extraServices, configuration, processState, suspendController);

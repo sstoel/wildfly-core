@@ -46,9 +46,8 @@ import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 
 import org.jboss.as.controller.ControlledProcessState;
-import org.jboss.as.controller.ControlledProcessStateService;
+import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.remote.ResponseAttachmentInputStreamSupport;
-import org.jboss.as.domain.management.security.DomainManagedServerCallbackHandler;
 import org.jboss.as.protocol.ProtocolConnectionConfiguration;
 import org.jboss.as.protocol.StreamUtils;
 import org.jboss.as.server.logging.ServerLogger;
@@ -71,17 +70,16 @@ public class HostControllerConnectionService implements Service<HostControllerCl
 
     public static final ServiceName SERVICE_NAME = ServiceName.JBOSS.append("host", "controller", "client");
 
-    private static final String JBOSS_LOCAL_USER = "JBOSS-LOCAL-USER";
     private static final long SERVER_CONNECTION_TIMEOUT = 60000;
 
     private final Supplier<ExecutorService> executorSupplier;
     private final Supplier<ScheduledExecutorService> scheduledExecutorSupplier;
     private final Supplier<Endpoint> endpointSupplier;
-    private final Supplier<ControlledProcessStateService> processStateServiceSupplier;
+    private final Supplier<ProcessStateNotifier> processStateNotifierSupplier;
 
     private final URI connectionURI;
     private final String serverName;
-    private final String userName;
+    private final String userName = null; // TODO This likely needs to be further visited.
     private final String serverProcessName;
     private final String initialAuthKey;
     private final int connectOperationID;
@@ -97,10 +95,9 @@ public class HostControllerConnectionService implements Service<HostControllerCl
                                            final Supplier<ExecutorService> executorSupplier,
                                            final Supplier<ScheduledExecutorService> scheduledExecutorSupplier,
                                            final Supplier<Endpoint> endpointSupplier,
-                                           final Supplier<ControlledProcessStateService> processStateServiceSupplier) {
+                                           final Supplier<ProcessStateNotifier> processStateNotifierSupplier) {
         this.connectionURI= connectionURI;
         this.serverName = serverName;
-        this.userName = DomainManagedServerCallbackHandler.DOMAIN_SERVER_AUTH_PREFIX + serverName;
         this.serverProcessName = serverProcessName;
         this.initialAuthKey = authKey;
         this.connectOperationID = connectOperationID;
@@ -113,7 +110,7 @@ public class HostControllerConnectionService implements Service<HostControllerCl
         this.executorSupplier = executorSupplier;
         this.scheduledExecutorSupplier = scheduledExecutorSupplier;
         this.endpointSupplier = endpointSupplier;
-        this.processStateServiceSupplier = processStateServiceSupplier;
+        this.processStateNotifierSupplier = processStateNotifierSupplier;
     }
 
     @Override
@@ -126,6 +123,7 @@ public class HostControllerConnectionService implements Service<HostControllerCl
             // final OptionMap options = OptionMap.create(Options.SASL_DISALLOWED_MECHANISMS, Sequence.of(JBOSS_LOCAL_USER));
             // Create the connection configuration
             final ProtocolConnectionConfiguration configuration = ProtocolConnectionConfiguration.create(endpoint, connectionURI, OptionMap.EMPTY);
+            final String userName = this.userName != null ? this.userName : serverName;
             configuration.setCallbackHandler(HostControllerConnection.createClientCallbackHandler(userName, initialAuthKey));
             configuration.setConnectionTimeout(SERVER_CONNECTION_TIMEOUT);
             configuration.setSslContext(sslContextSupplier.get());
@@ -134,7 +132,7 @@ public class HostControllerConnectionService implements Service<HostControllerCl
             final HostControllerConnection connection = new HostControllerConnection(serverProcessName, userName, connectOperationID,
                     configuration, responseAttachmentSupport, executorSupplier.get());
             // Trigger the started notification based on the process state listener
-            final ControlledProcessStateService processService = processStateServiceSupplier.get();
+            final ProcessStateNotifier processService = processStateNotifierSupplier.get();
             processService.addPropertyChangeListener(new PropertyChangeListener() {
                 @Override
                 public void propertyChange(final PropertyChangeEvent evt) {

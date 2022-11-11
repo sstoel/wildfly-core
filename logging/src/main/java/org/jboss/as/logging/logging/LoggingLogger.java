@@ -25,7 +25,6 @@ package org.jboss.as.logging.logging;
 import static org.jboss.logging.Logger.Level.ERROR;
 import static org.jboss.logging.Logger.Level.WARN;
 
-import java.io.Closeable;
 import java.io.File;
 import java.util.Collection;
 import java.util.Set;
@@ -100,7 +99,7 @@ public interface LoggingLogger extends BasicLogger {
      */
     @LogMessage(level = ERROR)
     @Message(id = 6, value = "Failed to close resource %s")
-    void failedToCloseResource(@Cause Throwable cause, Closeable closeable);
+    void failedToCloseResource(@Cause Throwable cause, AutoCloseable closeable);
 
     /**
      * Logs a warning message indicating the attribute, represented by the {@code name} parameter, is not a
@@ -758,7 +757,7 @@ public interface LoggingLogger extends BasicLogger {
      * @return an {@link IllegalArgumentException} for the error
      */
     @Message(id = 72, value = "Filter '%s' is not found")
-    IllegalArgumentException filterNotFound(String name);
+    OperationFailedException filterNotFound(String name);
 
     /**
      * Creates an exception indicating an identifier was expected next in the filter expression.
@@ -985,4 +984,69 @@ public interface LoggingLogger extends BasicLogger {
      */
     @Message(id = 94, value = "Formatter name cannot end with '" + PatternFormatterResourceDefinition.DEFAULT_FORMATTER_SUFFIX + "'")
     OperationFailedException illegalFormatterName();
+
+    /**
+     * Creates an exception indicating the name of the filter is a reserved filter name.
+     *
+     * @param name          the invalid name
+     * @param reservedNames the collection of reserved names
+     *
+     * @return an {@link OperationFailedException} for the error
+     */
+    @Message(id = 95, value = "The name %s cannot be used as a filter name as it is a reserved filter name. Reserved names are: %s")
+    OperationFailedException reservedFilterName(String name, Collection<String> reservedNames);
+
+    /**
+     * Creates an exception indicating the name of the filter is a reserved filter name.
+     *
+     * @param name        the invalid name
+     * @param invalidChar the invalid character
+     *
+     * @return an {@link OperationFailedException} for the error
+     */
+    @Message(id = 96, value = "The name %s cannot be used as a filter name as it starts with an invalid character %s")
+    OperationFailedException invalidFilterNameStart(String name, char invalidChar);
+
+    /**
+     * Creates an exception indicating the name of the filter is a reserved filter name.
+     *
+     * @param name        the invalid name
+     * @param invalidChar the invalid character
+     *
+     * @return an {@link OperationFailedException} for the error
+     */
+    @Message(id = 97, value = "The name %s cannot be used as a filter name as it contains an invalid character %s")
+    OperationFailedException invalidFilterName(String name, char invalidChar);
+
+//    /**
+//     * Creates an exception indicating the filter is assigned to either loggers or handlers.
+//     *
+//     * @param name       the name of the filter
+//     * @param references the loggers and/or handlers the filter is assigned to
+//     *
+//     * @return an {@link OperationFailedException} for the error
+//     */
+//    @Message(id = 98, value = "Cannot remove filter %s as it's assigned to: %s")
+//    OperationFailedException cannotRemoveFilter(String name, Collection<String> references);
+
+    /**
+     * Logs a warning message indicating the deprecation of an appender being used for custom-handler.
+     *
+     * @param appenderType the appender being used
+     */
+    @Message(id = 99, value = "Usage of a log4j appender (%s) found in a custom-handler. Support for using appenders as " +
+            "custom handlers has been deprecated and will be removed in a future release.")
+    @LogMessage(level = WARN)
+    void usageOfAppender(String appenderType);
+
+    /**
+     * Logs a warning message indicating the deprecation of log4j configuration files in a deployment.
+     *
+     * @param fileName       the log4j configuration file
+     * @param deploymentName the deployment name
+     */
+    @Message(id = 100, value = "Usage of a log4j configuration file (%s) was found in deployment %s. Support for log4j " +
+            "configuration files in deployments has been deprecated and will be removed in a future release.")
+    @LogMessage(level = WARN)
+    void usageOfLog4j1Config(String fileName, String deploymentName);
 }

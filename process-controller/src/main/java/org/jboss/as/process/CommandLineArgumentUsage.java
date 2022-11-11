@@ -95,7 +95,7 @@ public abstract class CommandLineArgumentUsage {
             width = 35;
         }
 
-        if( input.size() > 0 ) {
+        if (!input.isEmpty()) {
             StringBuilder argumentsString = new StringBuilder();
             for( int i = 0; i < input.size(); ){
                 // Trim in case an argument is too large for the width. Shouldn't happen.
@@ -137,6 +137,20 @@ public abstract class CommandLineArgumentUsage {
         boolean isWindows = (WildFlySecurityManager.getPropertyPrivileged("os.name", null)).toLowerCase(Locale.ENGLISH).contains("windows");
         String executableName = isWindows ? executableBaseName : executableBaseName + ".sh";
 
+        if (USAGE == null) {
+            final StringBuilder sb = new StringBuilder();
+            sb.append(NEW_LINE).append(ProcessLogger.ROOT_LOGGER.argUsage(executableName)).append(NEW_LINE);
+
+            for (int i = 0; i < arguments.size(); i++) {
+                sb.append(getCommand(i)).append(NEW_LINE);
+            }
+            USAGE = sb.toString();
+        }
+        return USAGE;
+
+    }
+
+    protected static String customUsage(String executableName) {
         if (USAGE == null) {
             final StringBuilder sb = new StringBuilder();
             sb.append(NEW_LINE).append(ProcessLogger.ROOT_LOGGER.argUsage(executableName)).append(NEW_LINE);

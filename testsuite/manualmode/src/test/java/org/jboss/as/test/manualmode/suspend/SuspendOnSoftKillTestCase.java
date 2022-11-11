@@ -36,7 +36,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.jboss.as.test.integration.common.HttpRequest;
 import org.jboss.as.test.shared.PermissionUtils;
@@ -57,7 +57,7 @@ import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ServerControl;
 import org.wildfly.core.testrunner.ServerController;
 import org.wildfly.core.testrunner.UnsuccessfulOperationException;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 import org.wildfly.test.suspendresumeendpoint.SuspendResumeHandler;
 import org.wildfly.test.suspendresumeendpoint.TestSuspendServiceActivator;
 import org.wildfly.test.suspendresumeendpoint.TestUndertowService;
@@ -68,7 +68,7 @@ import org.xnio.IoUtils;
  *
  * @author Brian Stansberry
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
 public class SuspendOnSoftKillTestCase {
 
@@ -349,7 +349,7 @@ public class SuspendOnSoftKillTestCase {
         String[] getJpsCommand() {
             final File jreHome = new File(System.getProperty("java.home"));
             Assert.assertTrue("JRE home not found. File: " + jreHome.getAbsoluteFile(), jreHome.exists());
-            if (System.getProperty("java.vendor.url","whatever").contains("ibm.com")) {
+            if (TestSuiteEnvironment.isIbmJvm()) {
                 return new String[] { "sh", "-c", "ps -ef | awk '{$1=\"\"; print $0}'" };
             } else {
                 File jpsExe = new File(jreHome, "bin/jps");
@@ -357,7 +357,7 @@ public class SuspendOnSoftKillTestCase {
                     jpsExe = new File(jreHome, "../bin/jps");
                 }
                 Assert.assertTrue("JPS executable not found. File: " + jpsExe, jpsExe.exists());
-                return new String[] { jpsExe.getAbsolutePath(), "-lv" };
+                return new String[] { jpsExe.getAbsolutePath(), "-l", "-v" };
             }
         }
 
@@ -378,7 +378,7 @@ public class SuspendOnSoftKillTestCase {
                 jpsExe = new File(jreHome, "../bin/jps.exe");
             }
             Assert.assertTrue("JPS executable not found. File: " + jpsExe, jpsExe.exists());
-            return new String[] { jpsExe.getAbsolutePath(), "-lv" };
+            return new String[] { jpsExe.getAbsolutePath(), "-l", "-v" };
         }
 
         @Override

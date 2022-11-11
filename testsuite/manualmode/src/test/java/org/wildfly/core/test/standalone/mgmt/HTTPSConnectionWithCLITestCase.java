@@ -24,35 +24,30 @@ package org.wildfly.core.test.standalone.mgmt;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.not;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ENABLED;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NAME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.VALUE;
 import static org.jboss.as.test.integration.management.util.CustomCLIExecutor.HTTPS_CONTROLLER;
 import static org.jboss.as.test.integration.management.util.CustomCLIExecutor.MANAGEMENT_NATIVE_PORT;
 import static org.jboss.as.test.integration.management.util.ModelUtil.createOpNode;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertNotNull;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 import java.io.File;
-import java.io.IOException;
+import java.net.InetAddress;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.apache.commons.io.FileUtils;
 import org.jboss.as.cli.CommandContext;
-import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.test.integration.management.util.CLITestUtil;
 import org.jboss.as.test.integration.management.util.CustomCLIExecutor;
-import org.jboss.as.test.integration.security.common.AbstractBaseSecurityRealmsServerSetupTask;
 import org.jboss.as.test.integration.security.common.CoreUtils;
 import org.jboss.as.test.integration.security.common.SecurityTestConstants;
-import org.jboss.as.test.integration.security.common.config.realm.Authentication;
-import org.jboss.as.test.integration.security.common.config.realm.RealmKeystore;
-import org.jboss.as.test.integration.security.common.config.realm.SecurityRealm;
-import org.jboss.as.test.integration.security.common.config.realm.ServerIdentity;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
 import org.jboss.dmr.ModelNode;
-import org.jboss.logging.Logger;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -61,7 +56,8 @@ import org.wildfly.core.testrunner.ManagementClient;
 import org.wildfly.core.testrunner.ServerControl;
 import org.wildfly.core.testrunner.ServerController;
 import org.wildfly.core.testrunner.ServerSetupTask;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.UnsuccessfulOperationException;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  * Testing https connection to the http management interface with cli console
@@ -72,11 +68,9 @@ import org.wildfly.core.testrunner.WildflyTestRunner;
  * @author Filip Bogyai
  */
 
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
 public class HTTPSConnectionWithCLITestCase {
-
-    private static Logger LOGGER = Logger.getLogger(HTTPSConnectionWithCLITestCase.class);
 
     private static final File WORK_DIR = new File("native-if-workdir");
     public static final File SERVER_KEYSTORE_FILE = new File(WORK_DIR, SecurityTestConstants.SERVER_KEYSTORE);
@@ -85,27 +79,24 @@ public class HTTPSConnectionWithCLITestCase {
     public static final File CLIENT_TRUSTSTORE_FILE = new File(WORK_DIR, SecurityTestConstants.CLIENT_TRUSTSTORE);
     public static final File UNTRUSTED_KEYSTORE_FILE = new File(WORK_DIR, SecurityTestConstants.UNTRUSTED_KEYSTORE);
 
-    private static final String MANAGEMENT_NATIVE_REALM = "ManagementNativeRealm";
+    private static final String ELYTRON_SSC = "elytronHttpsSSC";
     private static final String JBOSS_CLI_FILE = "jboss-cli.xml";
     private static final File TRUSTED_JBOSS_CLI_FILE = new File(WORK_DIR, "trusted-jboss-cli.xml");
     private static final File UNTRUSTED_JBOSS_CLI_FILE = new File(WORK_DIR, "untrusted-jboss-cli.xml");
 
     private static final String TESTING_OPERATION = "/core-service=management/management-interface=http-interface:read-resource";
 
-    private static final ServerResourcesSetup keystoreFilesSetup = new ServerResourcesSetup();
-    private static final ManagementNativeRealmSetup managementNativeRealmSetup = new ManagementNativeRealmSetup();
+    private static final ServerResourcesSetup serverResourcesSetup = new ServerResourcesSetup();
 
     @Inject
     private static ServerController containerController;
 
     @BeforeClass
     public static void prepareServer() throws Exception {
-        containerController.startInAdminMode();
-        ManagementClient mgmtClient = containerController.getClient();
-        //final ModelControllerClient client = mgmtClient.getControllerClient();
-        keystoreFilesSetup.setup(mgmtClient);
-        managementNativeRealmSetup.setup(mgmtClient);
 
+        containerController.startInAdminMode();
+
+        serverResourcesSetup.setup(containerController.getClient());
 
         // To apply new security realm settings for http interface reload of  server is required
         reloadServer();
@@ -117,7 +108,7 @@ public class HTTPSConnectionWithCLITestCase {
      * connection.
      */
     @Test
-    public void testDefaultCLIConfiguration() throws InterruptedException, IOException {
+    public void testDefaultCLIConfiguration() {
         String cliOutput = CustomCLIExecutor.execute(null, TESTING_OPERATION, HTTPS_CONTROLLER, true);
         assertThat("Untrusted client should not be authenticated.", cliOutput, not(containsString("\"outcome\" => \"success\"")));
 
@@ -129,7 +120,7 @@ public class HTTPSConnectionWithCLITestCase {
      * therefore it rejects connection.
      */
     @Test
-    public void testUntrustedCLICertificate() throws InterruptedException, IOException {
+    public void testUntrustedCLICertificate() {
         String cliOutput = CustomCLIExecutor.execute(UNTRUSTED_JBOSS_CLI_FILE, TESTING_OPERATION, HTTPS_CONTROLLER);
         assertThat("Untrusted client should not be authenticated.", cliOutput, not(containsString("\"outcome\" => \"success\"")));
 
@@ -141,7 +132,7 @@ public class HTTPSConnectionWithCLITestCase {
      * server has certificate from client, so client can successfully connect.
      */
     @Test
-    public void testTrustedCLICertificate() throws InterruptedException, IOException {
+    public void testTrustedCLICertificate() {
         String cliOutput = CustomCLIExecutor.execute(TRUSTED_JBOSS_CLI_FILE, TESTING_OPERATION, HTTPS_CONTROLLER);
         assertThat("Client with valid certificate should be authenticated.", cliOutput, containsString("\"outcome\" => \"success\""));
 
@@ -149,20 +140,48 @@ public class HTTPSConnectionWithCLITestCase {
 
     @AfterClass
     public static void resetTestConfiguration() throws Exception {
-        ModelControllerClient client = HTTPSManagementInterfaceTestCase.getNativeModelControllerClient();
-        ManagementClient managementClient = new ManagementClient(client, TestSuiteEnvironment.getServerAddress(),
-                MANAGEMENT_NATIVE_PORT, "remoting");
 
-        HTTPSManagementInterfaceTestCase.resetHttpInterfaceConfiguration(client);
+        ModelControllerClient client = ModelControllerClient.Factory.create("remoting",
+                InetAddress.getByName(TestSuiteEnvironment.getServerAddress()),
+                MANAGEMENT_NATIVE_PORT, new org.wildfly.core.testrunner.Authentication.CallbackHandler());
+
+        resetHttpInterfaceConfiguration(client);
 
         // reload to apply changes
         reloadServer();//reload using CLI
 
-        keystoreFilesSetup.tearDown(managementClient);
-        managementNativeRealmSetup.tearDown(managementClient);
+        serverResourcesSetup.tearDown(containerController.getClient());
 
         containerController.stop();
         FileUtils.deleteDirectory(WORK_DIR);
+    }
+
+    static void resetHttpInterfaceConfiguration(ModelControllerClient client) throws Exception {
+
+        // change back security realm for http management interface
+        ModelNode operation = createOpNode("core-service=management/management-interface=http-interface",
+                ModelDescriptionConstants.WRITE_ATTRIBUTE_OPERATION);
+        operation.get(NAME).set("http-authentication-factory");
+        operation.get(VALUE).set("management-http-authentication");
+        CoreUtils.applyUpdate(operation, client);
+
+        // Restore the http-upgrade setting
+        ModelNode httpUpgrade = new ModelNode();
+        httpUpgrade.get(ENABLED).set(true);
+        httpUpgrade.get("sasl-authentication-factory").set("management-sasl-authentication");
+        operation.get(NAME).set("http-upgrade");
+        operation.get(VALUE).set(httpUpgrade);
+        CoreUtils.applyUpdate(operation, client);
+
+        // undefine secure socket binding from http interface
+        operation = createOpNode("core-service=management/management-interface=http-interface",
+                ModelDescriptionConstants.UNDEFINE_ATTRIBUTE_OPERATION);
+        operation.get(NAME).set("secure-socket-binding");
+        CoreUtils.applyUpdate(operation, client);
+
+        // remove the ssl-context
+        operation.get(NAME).set("ssl-context");
+        CoreUtils.applyUpdate(operation, client);
     }
 
     public static void reloadServer() throws Exception {
@@ -172,22 +191,6 @@ public class HTTPSConnectionWithCLITestCase {
             ctx.handle("reload");
         } finally {
             ctx.terminateSession();
-        }
-    }
-
-    static class ManagementNativeRealmSetup extends AbstractBaseSecurityRealmsServerSetupTask {
-
-        @Override
-        protected SecurityRealm[] getSecurityRealms() throws Exception {
-            final ServerIdentity serverIdentity = new ServerIdentity.Builder().ssl(
-                    new RealmKeystore.Builder().keystorePassword(SecurityTestConstants.KEYSTORE_PASSWORD)
-                            .keystorePath(SERVER_KEYSTORE_FILE.getAbsolutePath()).build()).build();
-            final Authentication authentication = new Authentication.Builder().truststore(
-                    new RealmKeystore.Builder().keystorePassword(SecurityTestConstants.KEYSTORE_PASSWORD)
-                            .keystorePath(SERVER_TRUSTSTORE_FILE.getAbsolutePath()).build()).build();
-            final SecurityRealm realm = new SecurityRealm.Builder().name(MANAGEMENT_NATIVE_REALM).serverIdentity(serverIdentity)
-                    .authentication(authentication).build();
-            return new SecurityRealm[]{realm};
         }
     }
 
@@ -206,13 +209,37 @@ public class HTTPSConnectionWithCLITestCase {
             FileUtils.write(UNTRUSTED_JBOSS_CLI_FILE, CoreUtils.propertiesReplacer(JBOSS_CLI_FILE, UNTRUSTED_KEYSTORE_FILE,
                     CLIENT_TRUSTSTORE_FILE, SecurityTestConstants.KEYSTORE_PASSWORD));
 
+            // create native interface to control server while http interface is secured
+
             final ModelControllerClient client = managementClient.getControllerClient();
 
+            // add native socket binding
+            ModelNode operation = createOpNode("socket-binding-group=standard-sockets/socket-binding=management-native",ModelDescriptionConstants.ADD);
+            operation.get("port").set(MANAGEMENT_NATIVE_PORT);
+            operation.get("interface").set("management");
+            CoreUtils.applyUpdate(operation, client);
+
+            // Find the sasl-authentication-factory that's already known to be working so it can be reused
+            ModelNode op = createOpNode("core-service=management/"
+                    + "management-interface=http-interface/", "read-attribute");
+            op.get("name").set("http-upgrade");
+            ModelNode result = managementClient.executeForResult(op);
+            String nativeSecurityValue = result.get("sasl-authentication-factory").asStringOrNull();
+            assertNotNull("Invalid http-upgrade setting: " + result, nativeSecurityValue);
+
+            operation = createOpNode("core-service=management/management-interface=native-interface", ModelDescriptionConstants.ADD);
+            operation.get("sasl-authentication-factory").set(nativeSecurityValue);
+            operation.get("socket-binding").set("management-native");
+            CoreUtils.applyUpdate(operation, client);
+
             // secure http interface
-            ModelNode operation = createOpNode("core-service=management/management-interface=http-interface",
+
+            setupElytronSSL(managementClient);
+
+            operation = createOpNode("core-service=management/management-interface=http-interface",
                     ModelDescriptionConstants.WRITE_ATTRIBUTE_OPERATION);
-            operation.get(NAME).set("security-realm");
-            operation.get(VALUE).set(MANAGEMENT_NATIVE_REALM);
+            operation.get(NAME).set("ssl-context");
+            operation.get(VALUE).set(ELYTRON_SSC);
             CoreUtils.applyUpdate(operation, client);
 
             operation = createOpNode("core-service=management/management-interface=http-interface",
@@ -221,24 +248,17 @@ public class HTTPSConnectionWithCLITestCase {
             operation.get(VALUE).set("management-https");
             CoreUtils.applyUpdate(operation, client);
 
-            // add native socket binding
-            operation = createOpNode("socket-binding-group=standard-sockets/socket-binding=management-native",ModelDescriptionConstants.ADD);
-            operation.get("port").set(MANAGEMENT_NATIVE_PORT);
-            operation.get("interface").set("management");
+            // reuse the existing address and op name, but different params
+            operation.get(NAME).set("http-upgrade");
+            ModelNode httpUpgrade = new ModelNode();
+            httpUpgrade.get(ENABLED).set(true);
+            httpUpgrade.get("sasl-authentication-factory").set("client-cert");
+            operation.get(VALUE).set(httpUpgrade);
             CoreUtils.applyUpdate(operation, client);
 
-            // create native interface to control server while http interface
-            // will be secured
-            operation = org.jboss.as.controller.operations.common.Util.createEmptyOperation("composite", PathAddress.EMPTY_ADDRESS);
-            operation.get("steps").add(createOpNode("core-service=management/security-realm=native-realm", ModelDescriptionConstants.ADD));
-            ModelNode localAuth = createOpNode("core-service=management/security-realm=native-realm/authentication=local", ModelDescriptionConstants.ADD);
-            localAuth.get("default-user").set("$local");
-            operation.get("steps").add(localAuth);
-            CoreUtils.applyUpdate(operation, client);
 
-            operation = createOpNode("core-service=management/management-interface=native-interface", ModelDescriptionConstants.ADD);
-            operation.get("security-realm").set("native-realm");
-            operation.get("socket-binding").set("management-native");
+            operation.get(NAME).set("http-authentication-factory");
+            operation.get(VALUE).set("client-cert");
             CoreUtils.applyUpdate(operation, client);
         }
 
@@ -252,10 +272,99 @@ public class HTTPSConnectionWithCLITestCase {
             operation = createOpNode("socket-binding-group=standard-sockets/socket-binding=management-native", ModelDescriptionConstants.REMOVE);
             CoreUtils.applyUpdate(operation, client);
 
-            operation = createOpNode("core-service=management/security-realm=native-realm", ModelDescriptionConstants.REMOVE);
-            CoreUtils.applyUpdate(operation, client);
+            removeElytronSsl(managementClient);
+        }
 
-            FileUtils.deleteDirectory(WORK_DIR);
+        private static void setupElytronSSL(ManagementClient mgmtClient) throws Exception {
+            ModelNode operation = createOpNode("subsystem=elytron/key-store=elytronHttpsKS", "add");
+            operation.get("path").set(SERVER_KEYSTORE_FILE.getAbsolutePath());
+            operation.get("credential-reference", "clear-text").set(SecurityTestConstants.KEYSTORE_PASSWORD);
+            operation.get("type").set("JKS");
+            mgmtClient.executeForResult(operation);
+
+            operation = createOpNode("subsystem=elytron/key-manager=elytronHttpsKM", "add");
+            operation.get("key-store").set("elytronHttpsKS");
+            operation.get("credential-reference", "clear-text").set(SecurityTestConstants.KEYSTORE_PASSWORD);
+            mgmtClient.executeForResult(operation);
+
+            operation = createOpNode("subsystem=elytron/key-store=elytronHttpsTS", "add");
+            operation.get("path").set(SERVER_TRUSTSTORE_FILE.getAbsolutePath());
+            operation.get("credential-reference", "clear-text").set(SecurityTestConstants.KEYSTORE_PASSWORD);
+            operation.get("type").set("JKS");
+            mgmtClient.executeForResult(operation);
+
+            operation = createOpNode("subsystem=elytron/trust-manager=elytronHttpsTM", "add");
+            operation.get("key-store").set("elytronHttpsTS");
+            //operation.get("credential-reference", "clear-text").set(SecurityTestConstants.KEYSTORE_PASSWORD);
+            mgmtClient.executeForResult(operation);
+
+            operation = createOpNode("subsystem=elytron/key-store-realm=client-cert-realm", "add");
+            operation.get("key-store").set("elytronHttpsTS");
+            mgmtClient.executeForResult(operation);
+
+            operation = createOpNode("subsystem=elytron/security-domain=client-cert-domain", "add");
+            operation.get("realms").add("realm","client-cert-realm");
+            operation.get("default-realm").set("client-cert-realm");
+            operation.get("permission-mapper").set("default-permission-mapper");
+            mgmtClient.executeForResult(operation);
+
+            operation = createOpNode("subsystem=elytron/server-ssl-context=elytronHttpsSSC", "add");
+            operation.get("key-manager").set("elytronHttpsKM");
+            operation.get("trust-manager").set("elytronHttpsTM");
+            operation.get("protocols").add("TLSv1.2");
+            operation.get("security-domain").set("client-cert-domain");
+            operation.get("need-client-auth").set(true);
+            mgmtClient.executeForResult(operation);
+
+            operation = createOpNode("subsystem=elytron/constant-realm-mapper=client-cert-mapper", "add");
+            operation.get("realm-name").set("client-cert-realm");
+            mgmtClient.executeForResult(operation);
+
+            operation = createOpNode("subsystem=elytron/http-authentication-factory=client-cert", "add");
+            operation.get("http-server-mechanism-factory").set("global");
+            operation.get("security-domain").set("client-cert-domain");
+            ModelNode mechConfig = operation.get("mechanism-configurations").add();
+            mechConfig.get("mechanism-name").set("CLIENT_CERT");
+            mechConfig.get("realm-mapper").set("client-cert-mapper");
+            mgmtClient.executeForResult(operation);
+
+            operation = createOpNode("subsystem=elytron/sasl-authentication-factory=client-cert", "add");
+            operation.get("security-domain").set("client-cert-domain");
+            operation.get("sasl-server-factory").set("configured");
+            ModelNode mechConfigs = operation.get("mechanism-configurations");
+            mechConfig = mechConfigs.add();
+            mechConfig.get("mechanism-name").set("EXTERNAL");
+            mechConfig.get("realm-mapper").set("client-cert-mapper");
+            mgmtClient.executeForResult(operation);
+        }
+
+        private static void removeElytronSsl(ManagementClient client) {
+            remove(client, "subsystem=elytron/sasl-authentication-factory=client-cert");
+            remove(client, "subsystem=elytron/http-authentication-factory=client-cert");
+            remove(client, "subsystem=elytron/constant-realm-mapper=client-cert-mapper");
+            remove(client, "subsystem=elytron/server-ssl-context=elytronHttpsSSC");
+            remove(client, "subsystem=elytron/security-domain=client-cert-domain");
+            remove(client, "subsystem=elytron/security-realm=client-cert-realm");
+            remove(client, "subsystem=elytron/key-manager=elytronHttpsTM");
+            remove(client, "subsystem=elytron/key-store=elytronHttpsTS");
+            remove(client, "subsystem=elytron/key-manager=elytronHttpsKM");
+            remove(client, "subsystem=elytron/key-store=elytronHttpsKS");
+        }
+
+        private static void remove(ManagementClient client, String addr) {
+            try {
+                ModelNode remove = createOpNode(addr, "remove");
+                client.executeForResult(remove);
+            } catch (UnsuccessfulOperationException uoe) {
+                // It's ok if the resource doesn't exist due to failure in the test to create it
+                try {
+                    client.executeForResult(createOpNode(addr, "read-resource"));
+                    // success means it wasn't a missing resource
+                    throw uoe;
+                } catch (UnsuccessfulOperationException ignored) {
+                    // assume it's due to no such resource
+                }
+            }
         }
     }
 }

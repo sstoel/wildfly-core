@@ -39,8 +39,6 @@ import org.jboss.logging.annotations.Cause;
 import org.jboss.logging.annotations.LogMessage;
 import org.jboss.logging.annotations.Message;
 import org.jboss.logging.annotations.MessageLogger;
-import org.jboss.marshalling.Marshaller;
-import org.jboss.marshalling.Unmarshaller;
 
 /**
  * Date: 29.06.2011
@@ -435,23 +433,23 @@ public interface ProcessLogger extends BasicLogger {
      *
      * @return the message.
      */
-    @Message(id = Message.NONE, value = "Set the host controller's running type to ADMIN_ONLY causing it to open administrative interfaces and accept management requests but not start servers or, if this host controller is the master for the domain, accept incoming connections from slave host controllers.")
+    @Message(id = Message.NONE, value = "Set the host controller's running type to ADMIN_ONLY causing it to open administrative interfaces and accept management requests but not start servers or, if this host controller is the primary for the domain, accept incoming connections from secondary host controllers.")
     String argAdminOnly();
 
     /**
-     * Instructions for the {@link CommandLineConstants#MASTER_ADDRESS} command line argument.
+     * Instructions for the {@link CommandLineConstants#PRIMARY_ADDRESS} command line argument.
      *
      * @return the message.
      */
-    @Message(id = Message.NONE, value = "Set system property jboss.domain.master.address to the given value. In a default slave Host Controller config, this is used to configure the address of the master Host Controller.")
+    @Message(id = Message.NONE, value = "Set system property jboss.domain.primary.address to the given value. In a default secondary Host Controller config, this is used to configure the address of the primary Host Controller.")
     String argMasterAddress();
 
     /**
-     * Instructions for the {@link CommandLineConstants#MASTER_PORT} command line argument.
+     * Instructions for the {@link CommandLineConstants#PRIMARY_PORT} command line argument.
      *
      * @return the message.
      */
-    @Message(id = Message.NONE, value = "Set system property jboss.domain.master.port to the given value. In a default slave Host Controller config, this is used to configure the port used for native management communication by the master Host Controller.")
+    @Message(id = Message.NONE, value = "Set system property jboss.domain.primary.port to the given value. In a default secondary Host Controller config, this is used to configure the port used for native management communication by the primary Host Controller.")
     String argMasterPort();
 
     /**
@@ -587,25 +585,13 @@ public interface ProcessLogger extends BasicLogger {
     @Message(id = 36, value = "Failed to close a socket")
     void failedToCloseSocket(@Cause Throwable cause);
 
-    /**
-     * Logs an error message indicating a failure to finish the marshaller.
-     *
-     * @param cause      the cause of the error.
-     * @param marshaller the marshaller in error.
-     */
-    @LogMessage(level = ERROR)
-    @Message(id = 37, value = "Failed to finish the marshaller %s")
-    void failedToFinishMarshaller(@Cause Throwable cause, Marshaller marshaller);
+    //@LogMessage(level = ERROR)
+    //@Message(id = 37, value = "Failed to finish the marshaller %s")
+    //void failedToFinishMarshaller(@Cause Throwable cause, Marshaller marshaller);
 
-    /**
-     * Logs an error message indicating a failure to finish the unmarshaller.
-     *
-     * @param cause        the cause of the error.
-     * @param unmarshaller the marshaller in error.
-     */
-    @LogMessage(level = ERROR)
-    @Message(id = 38, value = "Failed to finish the unmarshaller %s")
-    void failedToFinishUnmarshaller(@Cause Throwable cause, Unmarshaller unmarshaller);
+    //@LogMessage(level = ERROR)
+    //@Message(id = 38, value = "Failed to finish the unmarshaller %s")
+    //void failedToFinishUnmarshaller(@Cause Throwable cause, Unmarshaller unmarshaller);
 
     /**
      * Logs an error message indicating a failure to handle the incoming connection.

@@ -24,11 +24,12 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffEntry;
 import org.eclipse.jgit.errors.IncorrectObjectTypeException;
+import org.eclipse.jgit.lib.ConfigConstants;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
@@ -57,7 +58,7 @@ import org.wildfly.core.testrunner.UnsuccessfulOperationException;
  */
 public class AbstractGitRepositoryTestCase {
 
-    private final Path jbossServerBaseDir = new File(System.getProperty("jboss.home", System.getenv("JBOSS_HOME"))).toPath().resolve("standalone");
+    private static final Path JBOSS_SERVER_BASE_DIR = new File(System.getProperty("jboss.home", System.getenv("JBOSS_HOME"))).toPath().resolve("standalone");
     private static final String TEST_DEPLOYMENT_RUNTIME_NAME = "test.jar";
     private static final ModelNode TEST_SYSTEM_PROPERTY_ADDRESS = new ModelNode().add("system-property", "git-history-property");
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmssSSS");
@@ -74,11 +75,14 @@ public class AbstractGitRepositoryTestCase {
 
     @Before
     public void prepareEmptyRemoteRepository() throws Exception {
-        emptyRemoteRoot = new File("target", "empty-remote").toPath();
+        emptyRemoteRoot = Files.createTempDirectory("AbstractGitRepositoryTestCase").resolve("empty-remote");
         Files.createDirectories(emptyRemoteRoot);
         File gitDir = new File(emptyRemoteRoot.toFile(), Constants.DOT_GIT);
         if (!gitDir.exists()) {
-            try (Git git = Git.init().setDirectory(emptyRemoteRoot.toFile()).call()) {
+            try (Git git = Git.init().setDirectory(emptyRemoteRoot.toFile()).setInitialBranch(Constants.MASTER).call()) {
+                StoredConfig config = git.getRepository().getConfig();
+                config.setBoolean(ConfigConstants.CONFIG_COMMIT_SECTION, null, ConfigConstants.CONFIG_KEY_GPGSIGN, false);
+                config.save();
             }
         }
         Assert.assertTrue(gitDir.exists());
@@ -89,7 +93,7 @@ public class AbstractGitRepositoryTestCase {
         if (emptyRemoteRepository != null) {
             emptyRemoteRepository.close();
         }
-        FileUtils.delete(emptyRemoteRoot.toFile(), FileUtils.RECURSIVE | FileUtils.RETRY);
+        FileUtils.delete(emptyRemoteRoot.getParent().toFile(), FileUtils.RECURSIVE | FileUtils.RETRY);
     }
 
     protected Repository createRepository() throws IOException {
@@ -111,6 +115,12 @@ public class AbstractGitRepositoryTestCase {
         }
         if(Files.exists(getDotGitIgnore())) {
             FileUtils.delete(getDotGitIgnore().toFile(), FileUtils.RECURSIVE | FileUtils.RETRY);
+        }
+    }
+
+    protected List<String> listCommits(Repository repository, String branchName) throws IOException, GitAPIException {
+        try (Git git = new Git(repository)) {
+            return listCommits(git, branchName);
         }
     }
 
@@ -258,15 +268,15 @@ public class AbstractGitRepositoryTestCase {
     }
 
     protected Path getDotGitDir() {
-        return jbossServerBaseDir.resolve(".git");
+        return JBOSS_SERVER_BASE_DIR.resolve(".git");
     }
 
     protected Path getDotGitIgnore() {
-        return jbossServerBaseDir.resolve(".gitignore");
+        return JBOSS_SERVER_BASE_DIR.resolve(".gitignore");
     }
 
-    protected Path getJbossServerBaseDir() {
-        return jbossServerBaseDir;
+    protected static Path getJbossServerBaseDir() {
+        return JBOSS_SERVER_BASE_DIR;
     }
 
 }

@@ -18,7 +18,6 @@ package org.wildfly.core.testrunner;
 
 import static org.jboss.as.controller.client.helpers.ClientConstants.CONTROLLER_PROCESS_STATE_STARTING;
 import static org.jboss.as.controller.client.helpers.ClientConstants.CONTROLLER_PROCESS_STATE_STOPPING;
-import static org.jboss.as.controller.client.helpers.ClientConstants.DEPLOYMENT;
 import static org.jboss.as.controller.client.helpers.ClientConstants.FAILURE_DESCRIPTION;
 import static org.jboss.as.controller.client.helpers.ClientConstants.OP;
 import static org.jboss.as.controller.client.helpers.ClientConstants.OP_ADDR;
@@ -28,6 +27,7 @@ import static org.jboss.as.controller.client.helpers.ClientConstants.READ_RESOUR
 import static org.jboss.as.controller.client.helpers.ClientConstants.RECURSIVE;
 import static org.jboss.as.controller.client.helpers.ClientConstants.RESULT;
 import static org.jboss.as.controller.client.helpers.ClientConstants.SUCCESS;
+import static org.wildfly.common.Assert.checkNotNullParam;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -37,6 +37,7 @@ import java.util.List;
 import javax.management.remote.JMXServiceURL;
 
 import org.jboss.as.controller.client.ModelControllerClient;
+import static org.jboss.as.controller.client.helpers.ClientConstants.RUNNING_STATE_NORMAL;
 import org.jboss.as.network.NetworkUtils;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
@@ -55,9 +56,6 @@ public class ManagementClient implements AutoCloseable, Closeable {
     private static final String UNDERTOW = "undertow";
     private static final String NAME = "name";
 
-    private static final String POSTFIX_WEB = ".war";
-    private static final String POSTFIX_EAR = ".ear";
-
     private final String mgmtAddress;
     private final int mgmtPort;
     private final String mgmtProtocol;
@@ -71,10 +69,7 @@ public class ManagementClient implements AutoCloseable, Closeable {
 
 
     public ManagementClient(ModelControllerClient client, final String mgmtAddress, final int managementPort, final String protocol) {
-        if (client == null) {
-            throw new IllegalArgumentException("Client must be specified");
-        }
-        this.client = client;
+        this.client = checkNotNullParam("client", client);
         this.mgmtAddress = mgmtAddress;
         this.mgmtPort = managementPort;
         this.mgmtProtocol = protocol;
@@ -140,6 +135,22 @@ public class ManagementClient implements AutoCloseable, Closeable {
         }
     }
 
+    public boolean isServerInNormalMode() {
+        try {
+            ModelNode op = new ModelNode();
+            op.get(OP).set(READ_ATTRIBUTE_OPERATION);
+            op.get(OP_ADDR).setEmptyList();
+            op.get(NAME).set("running-mode");
+            ModelNode rsp = client.execute(op);
+            return SUCCESS.equals(rsp.get(OUTCOME).asString())
+                    && RUNNING_STATE_NORMAL.toUpperCase().equals(rsp.get(RESULT).asString());
+        } catch (RuntimeException rte) {
+            throw rte;
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
     @Override
     public void close() {
         try {
@@ -179,32 +190,6 @@ public class ManagementClient implements AutoCloseable, Closeable {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-
-    //-------------------------------------------------------------------------------------||
-    // Metadata Extraction Operations -----------------------------------------------------||
-    //-------------------------------------------------------------------------------------||
-
-    private boolean isEnterpriseArchive(String deploymentName) {
-        return deploymentName.endsWith(POSTFIX_EAR);
-    }
-
-    private boolean isWebArchive(String deploymentName) {
-        return deploymentName.endsWith(POSTFIX_WEB);
-    }
-
-    private ModelNode createDeploymentAddress(String deploymentName) {
-        ModelNode address = new ModelNode();
-        address.add(DEPLOYMENT, deploymentName);
-        return address;
-    }
-
-    private String toContextName(String deploymentName) {
-        String correctedName = deploymentName;
-        if (correctedName.startsWith("/")) {
-            correctedName = correctedName.substring(1);
-        }
-        return correctedName;
     }
 
     //-------------------------------------------------------------------------------------||

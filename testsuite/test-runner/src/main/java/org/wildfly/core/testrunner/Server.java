@@ -6,6 +6,7 @@ import static org.jboss.as.controller.client.helpers.ClientConstants.OP_ADDR;
 import static org.jboss.as.controller.client.helpers.ClientConstants.READ_ATTRIBUTE_OPERATION;
 import static org.jboss.as.controller.client.helpers.ClientConstants.RESULT;
 import static org.jboss.as.controller.client.helpers.ClientConstants.SERVER_CONFIG;
+import static org.wildfly.common.Assert.checkNotNullParamWithNullPointerException;
 import static org.junit.Assert.fail;
 
 import java.io.File;
@@ -17,7 +18,8 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Objects;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -32,9 +34,12 @@ import org.jboss.as.controller.client.helpers.Operations;
 import org.jboss.dmr.ModelNode;
 import org.jboss.logging.Logger;
 import org.junit.Assert;
+import org.wildfly.core.launcher.BootableJarCommandBuilder;
+import org.wildfly.core.launcher.CommandBuilder;
 import org.wildfly.core.launcher.Launcher;
 import org.wildfly.core.launcher.ProcessHelper;
 import org.wildfly.core.launcher.StandaloneCommandBuilder;
+import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**
  * encapsulation of a server process
@@ -43,6 +48,19 @@ import org.wildfly.core.launcher.StandaloneCommandBuilder;
  * @author Tomaz Cerar
  */
 public class Server {
+
+    private static final String FACTOR_SYS_PROP = "ts.timeout.factor";
+    private static final String serverDebug = "wildfly.debug";
+    private static int factor;
+
+    static {
+        factor = WildFlySecurityManager.isChecking() ? AccessController.doPrivileged((PrivilegedAction<Integer>) () -> Integer.getInteger(FACTOR_SYS_PROP, 100)) : Integer.getInteger(FACTOR_SYS_PROP, 100);
+    }
+
+    // Bootable jar
+    private final String bootableJar = System.getProperty("wildfly.bootable.jar.jar");
+    private final String installDir = System.getProperty("wildfly.bootable.jar.install.dir");
+    private final Boolean isBootableJar = Boolean.getBoolean("wildfly.bootable.jar");
 
     public static final String LEGACY_JAVA_HOME = "legacy.java.home";
 
@@ -59,10 +77,9 @@ public class Server {
     private final String managementProtocol = System.getProperty("management.protocol", "remote+http");
 
     // timeouts
-    private final int startupTimeout = Integer.getInteger("server.startup.timeout", 30);
-    private final int stopTimeout = Integer.getInteger("server.stop.timeout", 10);
+    private final int startupTimeout = adjust(Integer.getInteger("server.startup.timeout", 60));
+    private final int stopTimeout = adjust(Integer.getInteger("server.stop.timeout", 30));
 
-    private final String serverDebug = "wildfly.debug";
     private final int serverDebugPort = Integer.getInteger("wildfly.debug.port", 8787);
     private StartMode startMode = StartMode.NORMAL;
 
@@ -78,6 +95,8 @@ public class Server {
     private String gitRepository;
     private String gitBranch;
     private String gitAuthConfiguration;
+    private Path configDir;
+    private Path[] yamlFiles = null;
 
     public Server() {
         this(null, false);
@@ -141,11 +160,17 @@ public class Server {
      * @param gitAuthConfig
      */
     public void setGitRepository(final String gitRepository, final String gitBranch, final String gitAuthConfig) {
-        Objects.requireNonNull(gitRepository);
-
-        this.gitRepository = gitRepository;
+        this.gitRepository = checkNotNullParamWithNullPointerException("gitRepository", gitRepository);
         this.gitBranch = gitBranch;
         this.gitAuthConfiguration = gitAuthConfig;
+    }
+
+    public void setYamlFiles(Path[] yamlFiles) {
+        this.yamlFiles = yamlFiles;
+    }
+
+    public void setConfigDir(Path configDir) {
+        this.configDir = configDir;
     }
 
     protected void start() {
@@ -154,56 +179,97 @@ public class Server {
 
     protected void start(PrintStream out) {
         try {
-            final Path jbossHomeDir = Paths.get(jbossHome);
-            if (Files.notExists(jbossHomeDir) && !Files.isDirectory(jbossHomeDir)) {
-                throw new IllegalStateException("Cannot find: " + jbossHomeDir);
-            }
+            CommandBuilder cbuilder = null;
+            boolean needNormalModeCheck = false;
+            if (isBootableJar) {
+                final Path bootableJarPath = Paths.get(bootableJar);
+                if (Files.notExists(bootableJarPath) || Files.isDirectory(bootableJarPath)) {
+                    throw new IllegalStateException("Cannot find: " + bootableJar);
+                }
+                final BootableJarCommandBuilder commandBuilder = BootableJarCommandBuilder.of(bootableJarPath);
+                commandBuilder.setInstallDir(Paths.get(installDir));
+                cbuilder = commandBuilder;
 
-            final StandaloneCommandBuilder commandBuilder = StandaloneCommandBuilder.of(jbossHomeDir);
+                commandBuilder.setJavaHome(legacyJavaHome == null ? javaHome : legacyJavaHome);
+                if (jvmArgs != null) {
+                    commandBuilder.setJavaOptions(jvmArgs.split("\\s+"));
+                }
+                if (Boolean.getBoolean(serverDebug)) {
+                    commandBuilder.setDebug(true, serverDebugPort);
+                }
 
-            if (modulePath != null && !modulePath.isEmpty()) {
-                commandBuilder.setModuleDirs(modulePath.split(Pattern.quote(File.pathSeparator)));
-            }
+                //we are testing, of course we want assertions and set-up some other defaults
+                commandBuilder.addJavaOption("-ea")
+                        .setBindAddressHint("management", managementAddress);
 
-            commandBuilder.setJavaHome(legacyJavaHome == null ? javaHome : legacyJavaHome);
-            if (jvmArgs != null) {
-                commandBuilder.setJavaOptions(jvmArgs.split("\\s+"));
-            }
-            if(Boolean.getBoolean(serverDebug)) {
-                commandBuilder.setDebug(true, serverDebugPort);
-            }
-
-            if (this.startMode == StartMode.ADMIN_ONLY) {
-                commandBuilder.setAdminOnly();
-            } else if (this.startMode == StartMode.SUSPEND){
-                commandBuilder.setStartSuspended();
-            }
-
-            if(readOnly) {
-                commandBuilder.setServerReadOnlyConfiguration(serverConfig);
+                if (jbossArgs != null) {
+                    String[] args = jbossArgs.split("\\s+");
+                    for (String a : args) {
+                        if (a.startsWith("--cli-script=")) {
+                            needNormalModeCheck = true;
+                            break;
+                        }
+                    }
+                    commandBuilder.addServerArguments(args);
+                }
+                commandBuilder.addServerArgument("-D[Standalone]");
             } else {
-                commandBuilder.setServerConfiguration(serverConfig);
+                final Path jbossHomeDir = Paths.get(jbossHome);
+                if (Files.notExists(jbossHomeDir) && !Files.isDirectory(jbossHomeDir)) {
+                    throw new IllegalStateException("Cannot find: " + jbossHomeDir);
+                }
+
+                final StandaloneCommandBuilder commandBuilder = StandaloneCommandBuilder.of(jbossHomeDir);
+                cbuilder = commandBuilder;
+                if (modulePath != null && !modulePath.isEmpty()) {
+                    commandBuilder.setModuleDirs(modulePath.split(Pattern.quote(File.pathSeparator)));
+                }
+
+                commandBuilder.setJavaHome(legacyJavaHome == null ? javaHome : legacyJavaHome);
+                if (jvmArgs != null) {
+                    commandBuilder.setJavaOptions(jvmArgs.split("\\s+"));
+                }
+                if (Boolean.getBoolean(serverDebug)) {
+                    commandBuilder.setDebug(true, serverDebugPort);
+                }
+
+                if (this.startMode == StartMode.ADMIN_ONLY) {
+                    commandBuilder.setAdminOnly();
+                } else if (this.startMode == StartMode.SUSPEND) {
+                    commandBuilder.setStartSuspended();
+                }
+
+                if (readOnly) {
+                    commandBuilder.setServerReadOnlyConfiguration(serverConfig);
+                } else {
+                    commandBuilder.setServerConfiguration(serverConfig);
+                }
+
+                if (gitRepository != null) {
+                    commandBuilder.setGitRepository(gitRepository, gitBranch, gitAuthConfiguration);
+                }
+
+                commandBuilder.setYamlFiles(yamlFiles);
+
+                if (configDir != null) {
+                    commandBuilder.addJavaOption("-Djboss.server.config.dir="+configDir.toString());
+                }
+
+                //we are testing, of course we want assertions and set-up some other defaults
+                commandBuilder.addJavaOption("-ea")
+                        .setBindAddressHint("management", managementAddress);
+
+                if (jbossArgs != null) {
+                    commandBuilder.addServerArguments(jbossArgs.split("\\s+"));
+                }
+                commandBuilder.addServerArgument("-D[Standalone]");
             }
-
-            if (gitRepository != null) {
-                commandBuilder.setGitRepository(gitRepository, gitBranch, gitAuthConfiguration);
-            }
-
-            //we are testing, of course we want assertions and set-up some other defaults
-            commandBuilder.addJavaOption("-ea")
-                    .setBindAddressHint("management", managementAddress);
-
-            if (jbossArgs != null) {
-                commandBuilder.addServerArguments(jbossArgs.split("\\s+"));
-            }
-            commandBuilder.addServerArgument("-D[Standalone]");
-
             StringBuilder builder = new StringBuilder("Starting container with: ");
-            for(String arg : commandBuilder.build()) {
+            for (String arg : cbuilder.build()) {
                 builder.append(arg).append(" ");
             }
             log.info(builder.toString());
-            process = Launcher.of(commandBuilder)
+            process = Launcher.of(cbuilder)
                     // Redirect the output and error stream to a file
                     .setRedirectErrorStream(true)
                     .launch();
@@ -219,6 +285,9 @@ public class Server {
             while (timeout > 0 && !serverAvailable) {
                 long before = System.currentTimeMillis();
                 serverAvailable = client.isServerInRunningState();
+                if (serverAvailable && needNormalModeCheck) {
+                    serverAvailable = client.isServerInNormalMode();
+                }
                 timeout -= (System.currentTimeMillis() - before);
                 if (!serverAvailable) {
                     if (processHasDied(proc))
@@ -274,6 +343,18 @@ public class Server {
             throw new RuntimeException("Could not stop container", e);
         } finally {
             safeCloseClient();
+            // Attempt to delete the PID file if this is a bootable JAR. Some manual mode tests don't seem to be able
+            // to connect to the server for shutdown. This causes the Process.destroy() to be invoked. This can also
+            // happen when Server.stop(true) is invoked. When Process.destroy() is invoked on Windows the shutdown
+            // hooks don't seem to be invoked causing this file to not be deleted.
+            if (isBootableJar) {
+                final Path pidFile = Paths.get(jbossHome, "wildfly.pid");
+                try {
+                    Files.deleteIfExists(pidFile);
+                } catch (IOException e) {
+                    log.warnf(e, "Failed to delete PID file \"%s\" for bootable JAR.", pidFile);
+                }
+            }
         }
     }
 
@@ -411,6 +492,29 @@ public class Server {
 
         }
         fail("Live Server did not reload in the imparted time.");
+    }
+
+    /**
+     * Adjusts timeout for operations.
+     *
+     * @return given timeout adjusted by ratio from system property "ts.timeout.factor"
+     */
+    private static int adjust(int amount) {
+        if(amount<0){
+            throw new IllegalArgumentException("amount must be non-negative");
+        }
+        int numerator = amount * factor;
+        int finalTimeout;
+        if(numerator % 100 == 0){
+            //in this case there is no lost of accuracy in integer division
+            finalTimeout = numerator / 100;
+        } else {
+          /*in this case there is a loss of accuracy. It's better to round the result up because
+          if we round down, we would get 0 in case that amount<100.
+           */
+            finalTimeout = (numerator / 100) + 1;
+        }
+        return finalTimeout;
     }
 
 

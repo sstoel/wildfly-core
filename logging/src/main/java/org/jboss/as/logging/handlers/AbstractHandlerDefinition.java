@@ -24,7 +24,6 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ENA
 import static org.jboss.as.logging.CommonAttributes.ENABLED;
 import static org.jboss.as.logging.CommonAttributes.ENCODING;
 import static org.jboss.as.logging.CommonAttributes.FILTER;
-import static org.jboss.as.logging.CommonAttributes.FILTER_SPEC;
 import static org.jboss.as.logging.CommonAttributes.LEVEL;
 import static org.jboss.as.logging.CommonAttributes.NAME;
 
@@ -47,6 +46,7 @@ import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.transform.description.ResourceTransformationDescriptionBuilder;
 import org.jboss.as.logging.CommonAttributes;
 import org.jboss.as.logging.ConfigurationProperty;
+import org.jboss.as.logging.ElementAttributeMarshaller;
 import org.jboss.as.logging.KnownModelVersion;
 import org.jboss.as.logging.LoggingExtension;
 import org.jboss.as.logging.LoggingOperations;
@@ -54,7 +54,6 @@ import org.jboss.as.logging.PropertyAttributeDefinition;
 import org.jboss.as.logging.TransformerResourceDefinition;
 import org.jboss.as.logging.capabilities.Capabilities;
 import org.jboss.as.logging.formatters.PatternFormatterResourceDefinition;
-import org.jboss.as.logging.logmanager.PropertySorter;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 
@@ -66,6 +65,13 @@ public abstract class AbstractHandlerDefinition extends TransformerResourceDefin
 
     public static final String UPDATE_OPERATION_NAME = "update-properties";
     public static final String CHANGE_LEVEL_OPERATION_NAME = "change-log-level";
+
+    public static final PropertyAttributeDefinition FILTER_SPEC = PropertyAttributeDefinition.Builder.of("filter-spec", ModelType.STRING, true)
+            .addAlternatives("filter")
+            .setAllowExpression(true)
+            .setAttributeMarshaller(ElementAttributeMarshaller.VALUE_ATTRIBUTE_MARSHALLER)
+            .setCapabilityReference(Capabilities.HANDLER_FILTER_REFERENCE_RECORDER)
+            .build();
 
     public static final PropertyAttributeDefinition FORMATTER = PropertyAttributeDefinition.Builder.of("formatter", ModelType.STRING, true)
             .setAllowExpression(true)
@@ -120,42 +126,38 @@ public abstract class AbstractHandlerDefinition extends TransformerResourceDefin
     private final OperationStepHandler writeHandler;
     private final AttributeDefinition[] writableAttributes;
     private final AttributeDefinition[] readOnlyAttributes;
-    private final PropertySorter propertySorter;
     private final boolean registerLegacyOps;
 
     protected AbstractHandlerDefinition(final PathElement path,
                                         final Class<? extends Handler> type,
                                         final AttributeDefinition[] attributes) {
-        this(createParameters(path, type, PropertySorter.NO_OP, attributes), true, PropertySorter.NO_OP, null, attributes);
+        this(createParameters(path, type, attributes), true, null, attributes);
     }
 
     protected AbstractHandlerDefinition(final PathElement path,
                                         final boolean registerLegacyOps,
                                         final Class<? extends Handler> type,
-                                        final PropertySorter propertySorter,
                                         final AttributeDefinition[] attributes) {
-        this(createParameters(path, type, propertySorter, attributes), registerLegacyOps, propertySorter, null, attributes);
+        this(createParameters(path, type, attributes), registerLegacyOps, null, attributes);
     }
 
     protected AbstractHandlerDefinition(final PathElement path,
                                         final Class<? extends Handler> type,
                                         final AttributeDefinition[] attributes,
                                         final ConfigurationProperty<?>... constructionProperties) {
-        this(createParameters(path, type, PropertySorter.NO_OP, attributes, constructionProperties),
-                true, PropertySorter.NO_OP, null, attributes);
+        this(createParameters(path, type, attributes, constructionProperties),
+                true, null, attributes);
     }
 
     protected AbstractHandlerDefinition(final Parameters parameters,
                                         final boolean registerLegacyOps,
-                                        final PropertySorter propertySorter,
                                         final AttributeDefinition[] readOnlyAttributes,
                                         final AttributeDefinition[] writableAttributes) {
         super(parameters);
         this.registerLegacyOps = registerLegacyOps;
         this.writableAttributes = writableAttributes;
-        writeHandler = new HandlerOperations.LogHandlerWriteAttributeHandler(propertySorter, this.writableAttributes);
+        writeHandler = new HandlerOperations.LogHandlerWriteAttributeHandler(this.writableAttributes);
         this.readOnlyAttributes = readOnlyAttributes;
-        this.propertySorter = propertySorter;
     }
 
     @Override
@@ -203,7 +205,7 @@ public abstract class AbstractHandlerDefinition extends TransformerResourceDefin
                     .setParameters(writableAttributes)
                     .build();
 
-            registration.registerOperationHandler(updateProperties, new HandlerOperations.HandlerUpdateOperationStepHandler(propertySorter, writableAttributes));
+            registration.registerOperationHandler(updateProperties, new HandlerOperations.HandlerUpdateOperationStepHandler(writableAttributes));
         }
     }
 
@@ -238,17 +240,16 @@ public abstract class AbstractHandlerDefinition extends TransformerResourceDefin
      *
      * @param path                   the resource path
      * @param type                   the known type of the resource or {@code null} if the type is unknown
-     * @param propertySorter         the property sorter
      * @param addAttributes          the attributes for the add operation step handler
      * @param constructionProperties the construction properties required for the handler
      *
      * @return the default parameters
      */
-    private static Parameters createParameters(final PathElement path, final Class<? extends Handler> type,
-                                               final PropertySorter propertySorter, final AttributeDefinition[] addAttributes,
+    static Parameters createParameters(final PathElement path, final Class<? extends Handler> type,
+                                               final AttributeDefinition[] addAttributes,
                                                final ConfigurationProperty<?>... constructionProperties) {
         return new Parameters(path, LoggingExtension.getResourceDescriptionResolver(path.getKey()))
-                .setAddHandler(new HandlerOperations.HandlerAddOperationStepHandler(propertySorter, type, addAttributes, constructionProperties))
+                .setAddHandler(new HandlerOperations.HandlerAddOperationStepHandler(type, addAttributes, constructionProperties))
                 .setRemoveHandler(HandlerOperations.REMOVE_HANDLER)
                 .setCapabilities(Capabilities.HANDLER_CAPABILITY);
     }

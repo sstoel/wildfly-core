@@ -31,7 +31,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
@@ -47,13 +47,13 @@ import org.junit.rules.ErrorCollector;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ManagementClient;
 import org.wildfly.core.testrunner.ServerSetup;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 import org.wildfly.test.jmx.JMXListenerDeploymentSetupTask;
 
 /**
  * @author Emmanuel Hugonnet (c) 2016 Red Hat, inc.; Jan Martiska (c) 2017 Red Hat, inc
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerSetup({JMXListenerDeploymentSetupTask.class})
 public class JmxControlledStateNotificationsTestCase {
     static final Path DATA = Paths.get("target/notifications/data");

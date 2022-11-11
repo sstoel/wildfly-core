@@ -101,7 +101,7 @@ public class ValidateAddressOperationTestCase  {
     public void testRemote() throws Exception {
         ModelNode op = ModelUtil.createOpNode(null, ValidateAddressOperationHandler.OPERATION_NAME);
         final ModelNode addr = op.get(VALUE);
-        addr.add("host", "slave");
+        addr.add("host", "secondary");
         assertTrue(executeOperation(op).get(VALID).asBoolean());
 
         addr.add("server", "main-three");
@@ -116,7 +116,7 @@ public class ValidateAddressOperationTestCase  {
     }
 
     private ModelNode executeOperation(final ModelNode op) throws IOException, MgmtOperationException {
-        return DomainTestUtils.executeForResult(op, testSupport.getDomainMasterLifecycleUtil().getDomainClient());
+        return DomainTestUtils.executeForResult(op, testSupport.getDomainPrimaryLifecycleUtil().getDomainClient());
     }
 
 }

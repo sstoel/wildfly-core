@@ -23,7 +23,7 @@ package org.jboss.as.controller.test;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 import org.jboss.as.controller.AbstractAddStepHandler;
 import org.jboss.as.controller.AbstractRemoveStepHandler;
@@ -78,7 +78,7 @@ public class RevertReloadRequiredTestCase extends AbstractControllerTestBase {
 
         public TestResource() {
             super(PathElement.pathElement("test"),
-                    new NonResolvingResourceDescriptionResolver(),
+                    NonResolvingResourceDescriptionResolver.INSTANCE,
                     new TestResourceAddHandler(),
                     new AbstractRemoveStepHandler() {
                     });

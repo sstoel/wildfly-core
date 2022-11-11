@@ -76,7 +76,7 @@ public class JvmXml {
     private static String parseJvmAttributes(XMLExtendedStreamReader reader, ModelNode addOp, Set<String> jvmNames, boolean server) throws XMLStreamException {
         // Handle attributes
         String name = null;
-        Boolean debugEnabled = null;
+        boolean debugEnabled = false;
         String debugOptions = null;
         final int count = reader.getAttributeCount();
         for (int i = 0; i < count; i++) {
@@ -113,7 +113,7 @@ public class JvmXml {
                         if (!server) {
                             throw ParseUtils.unexpectedAttribute(reader, i);
                         }
-                        debugEnabled = Boolean.valueOf(value);
+                        debugEnabled = Boolean.parseBoolean(value);
                         JvmAttributes.DEBUG_ENABLED.parseAndSetParameter(value, addOp, reader);
                         break;
                     }
@@ -141,7 +141,7 @@ public class JvmXml {
             // domain and host levels aren't mixed in. OR make name required in xsd always
             throw ParseUtils.missingRequired(reader, Collections.singleton(Attribute.NAME));
         }
-        if (debugEnabled != null && debugOptions == null && debugEnabled) {
+        if (debugEnabled && debugOptions == null) {
             throw ParseUtils.missingRequired(reader, EnumSet.of(Attribute.DEBUG_OPTIONS));
         }
 
@@ -272,6 +272,10 @@ public class JvmXml {
                 }
                 case LAUNCH_COMMAND: {
                     parseLaunchCommand(reader, addOp);
+                    break;
+                }
+                case MODULE_OPTIONS: {
+                    parseModuleOptions(reader, addOp);
                     break;
                 }
                 default:
@@ -575,6 +579,48 @@ public class JvmXml {
         addOp.get(JvmAttributes.JVM_OPTIONS).set(options);
     }
 
+    static void parseModuleOptions(final XMLExtendedStreamReader reader, final ModelNode addOp) throws XMLStreamException {
+
+        final ModelNode options = new ModelNode();
+        // Handle attributes
+        ParseUtils.requireNoAttributes(reader);
+        // Handle elements
+        while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
+            final Element moduleOptionElement = Element.forName(reader.getLocalName());
+            if (moduleOptionElement == Element.OPTION) {
+                // Handle attributes
+                ModelNode option = null;
+                final int count = reader.getAttributeCount();
+                for (int i = 0; i < count; i++) {
+                    final String attrValue = reader.getAttributeValue(i);
+                    if (!isNoNamespaceAttribute(reader, i)) {
+                        throw ParseUtils.unexpectedAttribute(reader, i);
+                    } else {
+                        final Attribute attribute = Attribute.forName(reader.getAttributeLocalName(i));
+                        if (attribute == Attribute.VALUE) {
+                            option = ParseUtils.parsePossibleExpression(attrValue);
+                        } else {
+                            throw ParseUtils.unexpectedAttribute(reader, i);
+                        }
+                    }
+                }
+                if (option == null) {
+                    throw ParseUtils.missingRequired(reader, Collections.singleton(Attribute.VALUE));
+                }
+
+                options.add(option);
+                // Handle elements
+                requireNoContent(reader);
+            } else {
+                throw unexpectedElement(reader);
+            }
+        }
+        if (!options.isDefined()) {
+            throw missingRequiredElement(reader, Collections.singleton(Element.OPTION));
+        }
+        addOp.get(JvmAttributes.MODULE_OPTIONS.getName()).set(options);
+    }
+
     public static void writeJVMElement(final XMLExtendedStreamWriter writer, final String jvmName, final ModelNode jvmElement)
             throws XMLStreamException {
         writer.writeStartElement(Element.JVM.getLocalName());
@@ -625,6 +671,10 @@ public class JvmXml {
         if (JvmAttributes.LAUNCH_COMMAND.isMarshallable(jvmElement)) {
             writer.writeEmptyElement(Element.LAUNCH_COMMAND.getLocalName());
             JvmAttributes.PREFIX.marshallAsAttribute(jvmElement, writer);
+        }
+
+        if (JvmAttributes.MODULE_OPTIONS.isMarshallable(jvmElement)) {
+            JvmAttributes.MODULE_OPTIONS.marshallAsElement(jvmElement, writer);
         }
 
         writer.writeEndElement();

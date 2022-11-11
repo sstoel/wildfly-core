@@ -38,6 +38,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import org.jboss.as.controller.ControlledProcessState;
+import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.ControlledProcessStateService;
 import org.jboss.as.controller.ModelControllerClientFactory;
 import org.jboss.as.controller.client.ModelControllerClient;
@@ -217,7 +218,7 @@ public class EmbeddedStandaloneServerFactory {
         private ControlledProcessState.State currentProcessState;
         private ModelControllerClient modelControllerClient;
         private ExecutorService executorService;
-        private ControlledProcessStateService controlledProcessStateService;
+        private ProcessStateNotifier processStateNotifier;
 
         public StandaloneServerImpl(String[] cmdargs, Properties systemProps, Map<String, String> systemEnv, ModuleLoader moduleLoader, ClassLoader embeddedModuleCL) {
             this.cmdargs = cmdargs;
@@ -249,9 +250,9 @@ public class EmbeddedStandaloneServerFactory {
 
         @Override
         public void start() throws EmbeddedProcessStartException {
-            ClassLoader tccl = EmbeddedManagedProcess.getTccl();
+            ClassLoader tccl = SecurityActions.getTccl();
             try {
-                EmbeddedManagedProcess.setTccl(embeddedModuleCL);
+                SecurityActions.setTccl(embeddedModuleCL);
                 Bootstrap bootstrap = null;
                 try {
                     final long startTime = System.currentTimeMillis();
@@ -266,7 +267,10 @@ public class EmbeddedStandaloneServerFactory {
 
                     // Determine the ServerEnvironment
                     ServerEnvironment serverEnvironment = Main.determineEnvironment(cmdargs, systemProps, systemEnv, ServerEnvironment.LaunchType.EMBEDDED, startTime).getServerEnvironment();
-
+                    if (serverEnvironment == null) {
+                        // Nothing to do
+                        return;
+                    }
                     bootstrap = Bootstrap.Factory.newInstance();
 
                     Bootstrap.Configuration configuration = new Bootstrap.Configuration(serverEnvironment);
@@ -302,10 +306,11 @@ public class EmbeddedStandaloneServerFactory {
 
                     executorService = Executors.newCachedThreadPool();
 
-                    @SuppressWarnings("unchecked") final Value<ControlledProcessStateService> processStateServiceValue = (Value<ControlledProcessStateService>) serviceContainer.getRequiredService(ControlledProcessStateService.SERVICE_NAME);
-                    controlledProcessStateService = processStateServiceValue.getValue();
-                    controlledProcessStateService.addPropertyChangeListener(processStateListener);
-                    establishModelControllerClient(controlledProcessStateService.getCurrentState(), true);
+                    @SuppressWarnings({"unchecked", "deprecation"})
+                    final Value<ProcessStateNotifier> processStateNotifierValue = (Value<ProcessStateNotifier>) serviceContainer.getRequiredService(ControlledProcessStateService.SERVICE_NAME);
+                    processStateNotifier = processStateNotifierValue.getValue();
+                    processStateNotifier.addPropertyChangeListener(processStateListener);
+                    establishModelControllerClient(processStateNotifier.getCurrentState(), true);
 
                 } catch (RuntimeException rte) {
                     if (bootstrap != null) {
@@ -319,19 +324,31 @@ public class EmbeddedStandaloneServerFactory {
                     throw EmbeddedLogger.ROOT_LOGGER.cannotStartEmbeddedServer(ex);
                 }
             } finally {
-                EmbeddedManagedProcess.setTccl(tccl);
+                SecurityActions.setTccl(tccl);
             }
         }
 
         @Override
         public void stop() {
-            ClassLoader tccl = EmbeddedManagedProcess.getTccl();
+            ClassLoader tccl = SecurityActions.getTccl();
             try {
-                EmbeddedManagedProcess.setTccl(embeddedModuleCL);
+                SecurityActions.setTccl(embeddedModuleCL);
                 exit();
             } finally {
-                EmbeddedManagedProcess.setTccl(tccl);
+                SecurityActions.setTccl(tccl);
             }
+        }
+
+        @Override
+        public String getProcessState() {
+            // The access to the internal process state is unsupported for the standalone embedded server, you can use a
+            // management operation to query the current server process state instead.
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean canQueryProcessState() {
+            return false;
         }
 
         private void exit() {
@@ -350,9 +367,9 @@ public class EmbeddedStandaloneServerFactory {
                     EmbeddedLogger.ROOT_LOGGER.error(ex.getLocalizedMessage(), ex);
                 }
             }
-            if (controlledProcessStateService != null) {
-                controlledProcessStateService.removePropertyChangeListener(processStateListener);
-                controlledProcessStateService = null;
+            if (processStateNotifier != null) {
+                processStateNotifier.removePropertyChangeListener(processStateListener);
+                processStateNotifier = null;
             }
             if (executorService != null) {
                 try {

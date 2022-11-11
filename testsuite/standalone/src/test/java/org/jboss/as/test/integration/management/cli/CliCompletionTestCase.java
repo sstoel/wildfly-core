@@ -22,6 +22,28 @@
  */
 package org.jboss.as.test.integration.management.cli;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import org.aesh.complete.AeshCompleteOperation;
+import org.aesh.readline.completion.Completion;
+import org.aesh.readline.terminal.formatting.TerminalString;
+import org.hamcrest.CoreMatchers;
+import org.jboss.as.cli.CommandContext;
+import org.jboss.as.cli.CommandLineException;
+import org.jboss.as.cli.Util;
+import org.jboss.as.test.integration.management.util.CLITestUtil;
+import org.jboss.as.test.shared.TestSuiteEnvironment;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.wildfly.core.testrunner.WildFlyRunner;
+
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -33,34 +55,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.aesh.complete.AeshCompleteOperation;
-import org.aesh.readline.completion.Completion;
-import org.aesh.readline.terminal.formatting.TerminalString;
-import org.hamcrest.CoreMatchers;
-import org.jboss.as.cli.CommandContext;
-import org.jboss.as.cli.Util;
-import org.jboss.as.test.integration.management.util.CLITestUtil;
-import org.jboss.as.test.shared.TestSuiteEnvironment;
-
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.wildfly.core.testrunner.WildflyTestRunner;
 
 /**
  *
  * @author jdenise@redhat.com
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 public class CliCompletionTestCase {
 
     private static CommandContext ctx;
@@ -118,7 +118,54 @@ public class CliCompletionTestCase {
             assertEquals(candidates.toString(), Arrays.asList(","), candidates);
         }
     }
+    /**
+     * Checks CLI completion for "read-attribute " command
+     */
+    @Test
+    public void readAttributeWithSpaceTest() {
+        for (List<String> candidates : getCandidatesLists("read-attribute ", null)) {
+            assertTrue(candidates.contains("--resolve-expressions"));
+            assertTrue(candidates.contains("management-major-version"));
+            assertFalse(candidates.contains("--admin-only"));
+        }
+    }
+    /**
+     * Checks CLI completion for "read-a" command
+     */
+    @Test
+    public void readAttributeWithUnfinishedCmdTest() {
+        for (List<String> candidates : getCandidatesLists("read-a", true)) {
+            assertTrue(candidates.contains("read-attribute"));
+        }
+    }
+    /**
+     * Checks CLI completion for "read-attribute --" command
+     */
+    @Test
+    public void readAttributeWithUnfinishedArgumentTest() {
+        for (List<String> candidates : getCandidatesLists("read-attribute --", false)) {
+            assertTrue(candidates.contains("--resolve-expressions"));
+            assertTrue(candidates.contains("--verbose"));
+        }
+    }
 
+    @Test
+    public void readAttributeAfterSystemPropertyTest() throws CommandLineException {
+        CommandContext ctx = CLITestUtil
+                .getCommandContext(TestSuiteEnvironment.getServerAddress(), TestSuiteEnvironment.getServerPort(), System.in,
+                        System.out);
+        ctx.connectController();
+        ctx.handle("cd /system-property");
+        try {
+            String cmd = "read-attribute ";
+            List candidates = new ArrayList<>();
+            ctx.getDefaultCommandCompleter().complete(ctx, cmd, cmd.length(), candidates);
+            candidates = complete(ctx, cmd, null);
+            assertTrue(candidates.contains("--verbose"));
+        } finally {
+            ctx.terminateSession();
+        }
+    }
     /**
      * Checks CLI completion for "help" command
      */
@@ -706,7 +753,7 @@ public class CliCompletionTestCase {
                 List<String> candidates = new ArrayList<>();
                 ctx.getDefaultCommandCompleter().complete(ctx,
                         cmd, cmd.length(), candidates);
-                List<String> res = Arrays.asList("--management-interface=", "--no-reload");
+                List<String> res = Arrays.asList("--lets-encrypt", "--management-interface=", "--no-reload");
                 assertEquals(candidates.toString(), res, candidates);
                 candidates = complete(ctx, cmd, null);
                 assertEquals(candidates.toString(), res, candidates);
@@ -747,7 +794,7 @@ public class CliCompletionTestCase {
                 List<String> candidates = new ArrayList<>();
                 ctx.getDefaultCommandCompleter().complete(ctx,
                         cmd, cmd.length(), candidates);
-                List<String> res = Arrays.asList("--no-reload");
+                List<String> res = Arrays.asList("--lets-encrypt", "--no-reload");
                 assertEquals(candidates.toString(), res, candidates);
                 candidates = complete(ctx, cmd, null);
                 assertEquals(candidates.toString(), res, candidates);
@@ -755,6 +802,28 @@ public class CliCompletionTestCase {
 
             {
                 String cmd = "security enable-ssl-management --interactive --management-interface=foo --no-reload ";
+                List<String> candidates = new ArrayList<>();
+                ctx.getDefaultCommandCompleter().complete(ctx,
+                        cmd, cmd.length(), candidates);
+                List<String> res = Arrays.asList("--lets-encrypt");
+                assertEquals(candidates.toString(), res, candidates);
+                candidates = complete(ctx, cmd, null);
+                assertEquals(candidates.toString(), res, candidates);
+            }
+
+            {
+                String cmd = "security enable-ssl-management --interactive --management-interface=foo --no-reload --lets-encrypt ";
+                List<String> candidates = new ArrayList<>();
+                ctx.getDefaultCommandCompleter().complete(ctx,
+                        cmd, cmd.length(), candidates);
+                List<String> res = Arrays.asList("--ca-account=");
+                assertEquals(candidates.toString(), res, candidates);
+                candidates = complete(ctx, cmd, null);
+                assertEquals(candidates.toString(), res, candidates);
+            }
+
+            {
+                String cmd = "security enable-ssl-management --interactive --management-interface=foo --no-reload --lets-encrypt --ca-account=foo";
                 List<String> candidates = new ArrayList<>();
                 ctx.getDefaultCommandCompleter().complete(ctx,
                         cmd, cmd.length(), candidates);
@@ -771,9 +840,9 @@ public class CliCompletionTestCase {
                 ctx.getDefaultCommandCompleter().complete(ctx,
                         cmd, cmd.length(), candidates);
                 List<String> res = Arrays.asList("foo");
-                assertEquals(candidates.toString(), res, candidates);
+                assertTrue(candidates.toString(), candidates.contains("foo"));
                 candidates = complete(ctx, cmd, null);
-                assertEquals(candidates.toString(), res, candidates);
+                assertTrue(candidates.toString(), candidates.contains("foo"));
             }
 
             {
@@ -852,9 +921,9 @@ public class CliCompletionTestCase {
                 ctx.getDefaultCommandCompleter().complete(ctx,
                         cmd, cmd.length(), candidates);
                 List<String> res = Arrays.asList("foo");
-                assertEquals(candidates.toString(), res, candidates);
+                assertTrue(candidates.toString(), candidates.contains("foo"));
                 candidates = complete(ctx, cmd, null);
-                assertEquals(candidates.toString(), res, candidates);
+                assertTrue(candidates.toString(), candidates.contains("foo"));
             }
 
             {
@@ -927,7 +996,7 @@ public class CliCompletionTestCase {
                 ctx.getDefaultCommandCompleter().complete(ctx,
                         cmd, cmd.length(), candidates);
                 List<String> res = Arrays.asList("BASIC", "CLIENT_CERT",
-                        "DIGEST", "DIGEST-SHA-256", "FORM");
+                        "DIGEST", "DIGEST-SHA-256", "EXTERNAL", "FORM");
                 assertEquals(candidates.toString(), res, candidates);
                 candidates = complete(ctx, cmd, null);
                 assertEquals(candidates.toString(), res, candidates);
@@ -954,9 +1023,9 @@ public class CliCompletionTestCase {
                 ctx.getDefaultCommandCompleter().complete(ctx,
                         cmd, cmd.length(), candidates);
                 List<String> res = Arrays.asList("foo");
-                assertEquals(candidates.toString(), res, candidates);
+                assertTrue(candidates.toString(), candidates.contains("foo"));
                 candidates = complete(ctx, cmd, null);
-                assertEquals(candidates.toString(), res, candidates);
+                assertTrue(candidates.toString(), candidates.contains("foo"));
             }
 
             {
@@ -1104,6 +1173,7 @@ public class CliCompletionTestCase {
                         "--new-realm-name=",
                         "--new-security-domain-name=",
                         "--no-reload",
+                        "--plain-text",
                         "--relative-to=");
                 assertEquals(candidates.toString(), res, candidates);
                 candidates = complete(ctx, cmd, null);
@@ -1175,9 +1245,9 @@ public class CliCompletionTestCase {
                 ctx.getDefaultCommandCompleter().complete(ctx,
                         cmd, cmd.length(), candidates);
                 List<String> res = Arrays.asList("foo");
-                assertEquals(candidates.toString(), res, candidates);
+                assertTrue(candidates.toString(), candidates.contains("foo"));
                 candidates = complete(ctx, cmd, null);
-                assertEquals(candidates.toString(), res, candidates);
+                assertTrue(candidates.toString(), candidates.contains("foo"));
             }
 
             {
@@ -1346,6 +1416,7 @@ public class CliCompletionTestCase {
                         "--new-realm-name=",
                         "--new-security-domain-name=",
                         "--no-reload",
+                        "--plain-text",
                         "--relative-to=");
                 assertEquals(candidates.toString(), res, candidates);
                 candidates = complete(ctx, cmd, null);
@@ -1467,6 +1538,87 @@ public class CliCompletionTestCase {
                 assertEquals(candidates.toString(), Arrays.asList("clear"), candidates);
                 candidates = complete(ctx, cmd, null);
                 assertEquals(candidates.toString(), Arrays.asList("clear"), candidates);
+            }
+        } finally {
+            ctx.terminateSession();
+        }
+    }
+
+    @Test
+    public void genericCommandCompletion() throws Exception {
+        CommandContext ctx = CLITestUtil.getCommandContext(TestSuiteEnvironment.getServerAddress(),
+                TestSuiteEnvironment.getServerPort(), System.in, System.out);
+        ctx.connectController();
+        try {
+
+            {
+                String cmd = "command add ";
+                List<String> candidates = new ArrayList<>();
+                ctx.getDefaultCommandCompleter().complete(ctx,
+                        cmd, cmd.length(), candidates);
+                assertEquals(candidates.toString(), Arrays.asList("--node-child", "--node-type"), candidates);
+                candidates = complete(ctx, cmd, null);
+                assertEquals(candidates.toString(), Arrays.asList("--node-child", "--node-type"), candidates);
+            }
+
+            {
+                String cmd = "command add --node-child=/foo=bar ";
+                List<String> candidates = new ArrayList<>();
+                ctx.getDefaultCommandCompleter().complete(ctx,
+                        cmd, cmd.length(), candidates);
+                assertEquals(candidates.toString(), Arrays.asList("--command-name"), candidates);
+                candidates = complete(ctx, cmd, null);
+                assertEquals(candidates.toString(), Arrays.asList("--command-name"), candidates);
+            }
+
+            {
+                String cmd = "command add --node-child=/foo=bar --command-name=";
+                List<String> candidates = new ArrayList<>();
+                ctx.getDefaultCommandCompleter().complete(ctx,
+                        cmd, cmd.length(), candidates);
+                assertEquals(candidates.toString(), Arrays.asList("bar"), candidates);
+                candidates = complete(ctx, cmd, null);
+                assertEquals(candidates.toString(), Arrays.asList("bar"), candidates);
+            }
+
+            {
+                String cmd = "command add --node-child=/foo=bar --command-name=bar ";
+                List<String> candidates = new ArrayList<>();
+                ctx.getDefaultCommandCompleter().complete(ctx,
+                        cmd, cmd.length(), candidates);
+                assertEquals(candidates.toString(), Collections.emptyList(), candidates);
+                candidates = complete(ctx, cmd, null);
+                assertEquals(candidates.toString(), Collections.emptyList(), candidates);
+            }
+
+            {
+                String cmd = "command add --node-type=/foo ";
+                List<String> candidates = new ArrayList<>();
+                ctx.getDefaultCommandCompleter().complete(ctx,
+                        cmd, cmd.length(), candidates);
+                assertEquals(candidates.toString(), Arrays.asList("--command-name", "--property-id"), candidates);
+                candidates = complete(ctx, cmd, null);
+                assertEquals(candidates.toString(), Arrays.asList("--command-name", "--property-id"), candidates);
+            }
+
+            {
+                String cmd = "command add --node-type=/foo --command-name=";
+                List<String> candidates = new ArrayList<>();
+                ctx.getDefaultCommandCompleter().complete(ctx,
+                        cmd, cmd.length(), candidates);
+                assertEquals(candidates.toString(), Arrays.asList("foo"), candidates);
+                candidates = complete(ctx, cmd, null);
+                assertEquals(candidates.toString(), Arrays.asList("foo"), candidates);
+            }
+
+            {
+                String cmd = "command add --node-type=/foo --command-name=foo ";
+                List<String> candidates = new ArrayList<>();
+                ctx.getDefaultCommandCompleter().complete(ctx,
+                        cmd, cmd.length(), candidates);
+                assertEquals(candidates.toString(), Arrays.asList("--property-id"), candidates);
+                candidates = complete(ctx, cmd, null);
+                assertEquals(candidates.toString(), Arrays.asList("--property-id"), candidates);
             }
         } finally {
             ctx.terminateSession();

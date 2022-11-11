@@ -27,9 +27,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.jboss.as.controller.client.helpers.Operations;
 import org.jboss.as.test.integration.management.util.CustomCLIExecutor;
@@ -42,14 +43,18 @@ import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ManagementClient;
 import org.wildfly.core.testrunner.ServerControl;
 import org.wildfly.core.testrunner.ServerController;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
+import org.wildfly.security.auth.client.AuthenticationConfiguration;
+import org.wildfly.security.auth.client.AuthenticationContext;
+import org.wildfly.security.auth.client.MatchRule;
+import org.wildfly.security.auth.principal.NamePrincipal;
 
 /**
  * Tests that the {@link ManagementClient} will connect to a server configured for an Elytron realm.
  *
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
 public class ElytronModelControllerClientTestCase {
 
@@ -88,6 +93,27 @@ public class ElytronModelControllerClientTestCase {
 
         // Stop the container
         CONTROLLER.stop();
+    }
+
+    @Test
+    public void testDefaultClient_AuthenticationConfiguration() throws Exception {
+        // The AuthenticationConfiguration being established will deliberatly not work.
+        AuthenticationConfiguration configuration = AuthenticationConfiguration.empty().usePrincipal(new NamePrincipal("bad"))
+                .usePassword("bad").useRealm("bad");
+
+        AuthenticationContext context = AuthenticationContext.empty().with(MatchRule.ALL, configuration);
+
+        context.run((PrivilegedExceptionAction<Void>) () -> {
+            // Start the server - this form of the start() method uses a CallbackHandler to supply the clients details.
+            CONTROLLER.start();
+
+            testConnection();
+
+            // Stop the container
+            CONTROLLER.stop();
+
+            return null;
+        });
     }
 
     private void testConnection() throws IOException {

@@ -27,7 +27,7 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.jboss.as.test.integration.management.util.HttpMgmtProxy;
 import org.jboss.dmr.ModelNode;
@@ -37,7 +37,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ManagementClient;
 import org.wildfly.core.testrunner.ServerController;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -48,7 +48,7 @@ import static org.junit.Assert.assertTrue;
  *
  * @author Dominik Pospisil <dpospisi@redhat.com>
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 public class HttpPostMgmtOpsTestCase {
 
     private static final int MGMT_PORT = 9990;
@@ -115,7 +115,7 @@ public class HttpPostMgmtOpsTestCase {
 
         ModelNode result = ret.get("result");
         // check that a boolean is returned
-        assertEquals(result.getType(), ModelType.BOOLEAN);
+        assertEquals(ModelType.BOOLEAN, result.getType());
 
     }
 

@@ -420,7 +420,7 @@ public class JMXExtension implements Extension {
                 final String attribute = reader.getAttributeLocalName(i);
                 switch (attribute) {
                     case CommonAttributes.NON_CORE_MBEANS:
-                        JMXSubsystemRootResource.CORE_MBEAN_SENSITIVITY.parseAndSetParameter(value, add, reader);
+                        JMXSubsystemRootResource.NON_CORE_MBEAN_SENSITIVITY.parseAndSetParameter(value, add, reader);
                         break;
                     default:
                         throw ParseUtils.unexpectedAttribute(reader, i);
@@ -554,7 +554,7 @@ public class JMXExtension implements Extension {
                 JmxAuditLoggerResourceDefinition.LOG_READ_ONLY.marshallAsAttribute(auditLog, writer);
                 JmxAuditLoggerResourceDefinition.ENABLED.marshallAsAttribute(auditLog, writer);
 
-                if (auditLog.hasDefined(HANDLER) && auditLog.get(HANDLER).keys().size() > 0) {
+                if (auditLog.hasDefined(HANDLER) && !auditLog.get(HANDLER).keys().isEmpty()) {
                     writer.writeStartElement(CommonAttributes.HANDLERS);
                     for (String key : auditLog.get(HANDLER).keys()) {
                         writer.writeEmptyElement(CommonAttributes.HANDLER);
@@ -565,9 +565,9 @@ public class JMXExtension implements Extension {
 
                 writer.writeEndElement();
             }
-            if (node.hasDefined(JMXSubsystemRootResource.CORE_MBEAN_SENSITIVITY.getName())) {
+            if (node.hasDefined(JMXSubsystemRootResource.NON_CORE_MBEAN_SENSITIVITY.getName())) {
                 writer.writeStartElement(CommonAttributes.SENSITIVITY);
-                JMXSubsystemRootResource.CORE_MBEAN_SENSITIVITY.marshallAsAttribute(node, writer);
+                JMXSubsystemRootResource.NON_CORE_MBEAN_SENSITIVITY.marshallAsAttribute(node, writer);
                 writer.writeEndElement();
             }
             writer.writeEndElement();

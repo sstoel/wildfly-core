@@ -75,7 +75,9 @@ import javax.management.openmbean.OpenMBeanParameterInfoSupport;
 import javax.management.openmbean.OpenType;
 import javax.management.openmbean.SimpleType;
 
+import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.CompositeOperationHandler;
+import org.jboss.as.controller.OperationDefinition;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.descriptions.DescriptionProvider;
@@ -173,18 +175,14 @@ public class MBeanInfoFactory {
         ModelNode attribute = providedDescription.require(ATTRIBUTES).require(name);
         AttributeAccess access = resourceRegistration.getAttributeAccess(PathAddress.EMPTY_ADDRESS, name);
         if (access == null) {
-            // Check for a bogus attribute in the description that's really a child
-            Set<String> childTypes = resourceRegistration.getChildNames(PathAddress.EMPTY_ADDRESS);
-            if (childTypes.contains(name)) {
-                return null;
-            }
+            return null; // access is needed to create a new OpenMBeanAttributeInfoSupport object
         }
-        final boolean writable = mutabilityChecker.mutable(pathAddress) && (access != null && access.getAccessType() == AccessType.READ_WRITE);
+        final boolean writable = mutabilityChecker.mutable(pathAddress) && (access.getAccessType() == AccessType.READ_WRITE);
 
         return new OpenMBeanAttributeInfoSupport(
                 escapedName,
                 getDescription(attribute),
-                converters.convertToMBeanType(attribute),
+                converters.convertToMBeanType(access.getAttributeDefinition(), attribute),
                 true,
                 writable,
                 false,
@@ -211,7 +209,6 @@ public class MBeanInfoFactory {
                         opName.equals(READ_RESOURCE_DESCRIPTION_OPERATION) || opName.equals(READ_CHILDREN_NAMES_OPERATION) ||
                         opName.equals(READ_CHILDREN_TYPES_OPERATION) || opName.equals(READ_CHILDREN_RESOURCES_OPERATION) ||
                         opName.equals(READ_OPERATION_NAMES_OPERATION) || opName.equals(READ_OPERATION_DESCRIPTION_OPERATION) ||
-                        opName.equals(READ_RESOURCE_OPERATION) || opName.equals(READ_RESOURCE_OPERATION) ||
                         opName.equals(WRITE_ATTRIBUTE_OPERATION) || opName.equals(ValidateAddressOperationHandler.OPERATION_NAME) ||
                         opName.equals(CompositeOperationHandler.NAME) || opName.equals(DeploymentUploadStreamAttachmentHandler.OPERATION_NAME)) {
                     //Ignore some of the global operations which probably don't make much sense here
@@ -240,7 +237,7 @@ public class MBeanInfoFactory {
 
     private OpenMBeanOperationInfo getOperation(String name, OpenMBeanParameterInfo addWildcardChildName, OperationEntry entry) {
         ModelNode opNode = entry.getDescriptionProvider().getModelDescription(null);
-        OpenMBeanParameterInfo[] params = getParameterInfos(opNode);
+        OpenMBeanParameterInfo[] params = getParameterInfos(entry.getOperationDefinition(), opNode);
         if (addWildcardChildName != null) {
             OpenMBeanParameterInfo[] newParams = new OpenMBeanParameterInfo[params.length + 1];
             newParams[0] = addWildcardChildName;
@@ -256,24 +253,35 @@ public class MBeanInfoFactory {
                 createOperationDescriptor());
     }
 
-    private OpenMBeanParameterInfo[] getParameterInfos(ModelNode opNode) {
+    private OpenMBeanParameterInfo[] getParameterInfos(OperationDefinition opDef, ModelNode opNode) {
         if (!opNode.hasDefined(REQUEST_PROPERTIES)) {
             return EMPTY_PARAMETERS;
         }
         List<Property> propertyList = opNode.get(REQUEST_PROPERTIES).asPropertyList();
         List<OpenMBeanParameterInfo> params = new ArrayList<OpenMBeanParameterInfo>(propertyList.size());
 
+        Map<String, AttributeDefinition> attributeDefinitions = new HashMap<>();
+        AttributeDefinition[] attrs = opDef.getParameters();
+        if (attrs != null) {
+            for (AttributeDefinition attributeDefinition : attrs) {
+                attributeDefinitions.put(attributeDefinition.getName(), attributeDefinition);
+            }
+        }
+
         for (Property prop : propertyList) {
+            String name = prop.getName();
             ModelNode value = prop.getValue();
-            String paramName = NameConverter.convertToCamelCase(prop.getName());
+            AttributeDefinition attributeDefinition = attributeDefinitions.get(name);
+
+            String paramName = NameConverter.convertToCamelCase(name);
 
             Map<String, Object> descriptions = new HashMap<String, Object>(4);
 
-            boolean expressionsAllowed = prop.getValue().hasDefined(EXPRESSIONS_ALLOWED) && prop.getValue().get(EXPRESSIONS_ALLOWED).asBoolean();
+            boolean expressionsAllowed = value.hasDefined(EXPRESSIONS_ALLOWED) && value.get(EXPRESSIONS_ALLOWED).asBoolean();
             descriptions.put(DESC_EXPRESSIONS_ALLOWED, String.valueOf(expressionsAllowed));
 
             if (!expressionsAllowed) {
-                Object defaultValue = getIfExists(value, DEFAULT);
+                Object defaultValue = getIfExists(attributeDefinition, value, DEFAULT);
                 descriptions.put(DEFAULT_VALUE_FIELD, defaultValue);
                 if (value.has(ALLOWED)) {
                     if (value.get(TYPE).asType()!=ModelType.LIST){
@@ -282,13 +290,13 @@ public class MBeanInfoFactory {
                     }
                 } else {
                     if (value.has(MIN)) {
-                        Comparable minC = getIfExistsAsComparable(value, MIN);
+                        Comparable minC = getIfExistsAsComparable(attributeDefinition, value, MIN);
                         if (minC instanceof Number) {
                             descriptions.put(MIN_VALUE_FIELD, minC);
                         }
                     }
                     if (value.has(MAX)) {
-                        Comparable maxC = getIfExistsAsComparable(value, MAX);
+                        Comparable maxC = getIfExistsAsComparable(attributeDefinition, value, MAX);
                         if (maxC instanceof Number) {
                             descriptions.put(MAX_VALUE_FIELD, maxC);
                         }
@@ -300,8 +308,8 @@ public class MBeanInfoFactory {
             params.add(
                     new OpenMBeanParameterInfoSupport(
                             paramName,
-                            getDescription(prop.getValue()),
-                            converters.convertToMBeanType(value),
+                            getDescription(value),
+                            converters.convertToMBeanType(attributeDefinition, value),
                             new ImmutableDescriptor(descriptions)));
 
         }
@@ -311,24 +319,24 @@ public class MBeanInfoFactory {
     private Set<?> fromModelNodes(final List<ModelNode> nodes) {
         Set<Object> values = new HashSet<Object>(nodes.size());
         for (ModelNode node : nodes) {
-            values.add(converters.getConverter(ModelType.STRING,null).fromModelNode(node));
+            values.add(converters.getConverter(null, ModelType.STRING,null).fromModelNode(node));
         }
         return values;
     }
 
-    private Object getIfExists(final ModelNode parentNode, final String name) {
+    private Object getIfExists(AttributeDefinition attributeDefinition, final ModelNode parentNode, final String name) {
         if (parentNode.has(name)) {
             ModelNode defaultNode = parentNode.get(name);
-            return converters.fromModelNode(parentNode, defaultNode);
+            return converters.fromModelNode(attributeDefinition, parentNode, defaultNode);
         } else {
             return null;
         }
     }
 
-    private Comparable<?> getIfExistsAsComparable(final ModelNode parentNode, final String name) {
+    private Comparable<?> getIfExistsAsComparable(AttributeDefinition attributeDefinition, final ModelNode parentNode, final String name) {
         if (parentNode.has(name)) {
             ModelNode defaultNode = parentNode.get(name);
-            Object value = converters.fromModelNode(parentNode, defaultNode);
+            Object value = converters.fromModelNode(attributeDefinition, parentNode, defaultNode);
             if (value instanceof Comparable) {
                 return (Comparable<?>) value;
             }
@@ -340,13 +348,13 @@ public class MBeanInfoFactory {
         if (!opNode.hasDefined(REPLY_PROPERTIES)) {
             return SimpleType.VOID;
         }
-        if (opNode.get(REPLY_PROPERTIES).asList().size() == 0) {
+        if (opNode.get(REPLY_PROPERTIES).asList().isEmpty()) {
             return SimpleType.VOID;
         }
 
         //TODO might have more than one REPLY_PROPERTIES?
         ModelNode reply = opNode.get(REPLY_PROPERTIES);
-        return converters.convertToMBeanType(reply);
+        return converters.convertToMBeanType(null, reply);
     }
 
     private MBeanNotificationInfo[] getNotifications() {
@@ -380,8 +388,8 @@ public class MBeanInfoFactory {
     private Descriptor createAttributeDescriptor(ModelNode attribute) {
         Map<String, String> descriptions = new HashMap<String, String>();
         addMBeanExpressionSupport(descriptions);
-        Boolean allowExpressions = attribute.hasDefined(EXPRESSIONS_ALLOWED) && attribute.get(EXPRESSIONS_ALLOWED).asBoolean();
-        descriptions.put(DESC_EXPRESSIONS_ALLOWED, allowExpressions.toString());
+        boolean allowExpressions = attribute.hasDefined(EXPRESSIONS_ALLOWED) && attribute.get(EXPRESSIONS_ALLOWED).asBoolean();
+        descriptions.put(DESC_EXPRESSIONS_ALLOWED, Boolean.toString(allowExpressions));
         descriptions.put(DESC_EXPRESSIONS_ALLOWED_DESC, allowExpressions ?
                 JmxLogger.ROOT_LOGGER.descriptorAttributeExpressionsAllowedTrue() : JmxLogger.ROOT_LOGGER.descriptorAttributeExpressionsAllowedFalse());
         return new ImmutableDescriptor(descriptions);

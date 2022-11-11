@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
+import org.hamcrest.MatcherAssert;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.repository.PathUtil;
@@ -50,7 +51,6 @@ import org.jboss.shrinkwrap.api.exporter.StreamExporter;
 import org.jboss.shrinkwrap.api.exporter.ZipExporter;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.AfterClass;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -93,7 +93,7 @@ public class ProcessStateListenerTestCase {
     }
 
     private static ModelNode executeForResult(final ModelNode op) throws RuntimeException {
-        return testSupport.getDomainMasterLifecycleUtil().executeForResult(op);
+        return testSupport.getDomainPrimaryLifecycleUtil().executeForResult(op);
     }
 
     @BeforeClass
@@ -104,7 +104,7 @@ public class ProcessStateListenerTestCase {
 
         // create domain test support
         testSupport = DomainTestSupport.create(DomainTestSupport.Configuration.create(ProcessStateListenerTestCase.class.getSimpleName(),
-                "domain-configs/domain-standard.xml", "host-configs/host-master.xml", null));
+                "domain-configs/domain-standard.xml", "host-configs/host-primary.xml", null));
         // add module
         initializeModule(testSupport);
     }
@@ -124,15 +124,15 @@ public class ProcessStateListenerTestCase {
     }
 
     /**
-     * Add a process-state-listener on the master host by invoking a management operation. The listener will write a
+     * Add a process-state-listener on the primary host by invoking a management operation. The listener will write a
      * line in a file for every host controller state changes.
      */
     @Test
     public void testListenerOnHostController() throws Throwable {
-        PathAddress address = testSupport.getDomainMasterLifecycleUtil().getAddress()
+        PathAddress address = testSupport.getDomainPrimaryLifecycleUtil().getAddress()
                 .append("subsystem", "core-management")
                 .append("process-state-listener", "my-listener");
-        startMasterHost();
+        startPrimaryHost();
         try {
             addListener(address, TestListener.class.getPackage().getName(), null, null);
 
@@ -165,7 +165,7 @@ public class ProcessStateListenerTestCase {
 
             runningStateChanges.verify();
         } finally {
-            stopMasterHost();
+            stopPrimaryHost();
         }
     }
 
@@ -174,7 +174,7 @@ public class ProcessStateListenerTestCase {
         PathAddress address = PathAddress.pathAddress("profile", "default")
                 .append("subsystem", "core-management")
                 .append("process-state-listener", "my-listener");
-        startMasterHost();
+        startPrimaryHost();
         try {
             addListener(address, TestListener.class.getPackage().getName(), null, null);
 
@@ -219,17 +219,17 @@ public class ProcessStateListenerTestCase {
 
             runningStateChanges.verify();
         } finally {
-            stopMasterHost();
+            stopPrimaryHost();
         }
     }
 
     private void performStateChanges() throws Exception {
-        reloadMasterHost(true);
-        reloadMasterHost(false);
+        reloadPrimaryHost(true);
+        reloadPrimaryHost(false);
         restartMainServerGroup();
         suspendMainServerGroup();
         resumeMainServerGroup();
-        shutdownMasterHost();
+        shutdownPrimaryHost();
     }
 
     private static void addListener(PathAddress address, String module, Properties properties, Integer timeout) {
@@ -250,36 +250,36 @@ public class ProcessStateListenerTestCase {
         executeForResult(addListener);
     }
 
-    private void reloadMasterHost(boolean adminOnly) throws Exception {
-        ModelNode reload = Util.createEmptyOperation("reload", testSupport.getDomainMasterLifecycleUtil().getAddress());
+    private void reloadPrimaryHost(boolean adminOnly) throws Exception {
+        ModelNode reload = Util.createEmptyOperation("reload", testSupport.getDomainPrimaryLifecycleUtil().getAddress());
         if (adminOnly)
             reload.get("admin-only").set(true);
-        testSupport.getDomainMasterLifecycleUtil().executeAwaitConnectionClosed(reload);
-        testSupport.getDomainMasterLifecycleUtil().connect();
+        testSupport.getDomainPrimaryLifecycleUtil().executeAwaitConnectionClosed(reload);
+        testSupport.getDomainPrimaryLifecycleUtil().connect();
         if (adminOnly) {
-            testSupport.getDomainMasterLifecycleUtil().awaitHostController(System.currentTimeMillis());
+            testSupport.getDomainPrimaryLifecycleUtil().awaitHostController(System.currentTimeMillis());
         } else {
-            testSupport.getDomainMasterLifecycleUtil().awaitServers(System.currentTimeMillis());
+            testSupport.getDomainPrimaryLifecycleUtil().awaitServers(System.currentTimeMillis());
         }
     }
 
-    private void shutdownMasterHost() throws Exception {
-        ModelNode shutdown = Util.createEmptyOperation("shutdown", testSupport.getDomainMasterLifecycleUtil().getAddress());
-        testSupport.getDomainMasterLifecycleUtil().executeAwaitConnectionClosed(shutdown);
+    private void shutdownPrimaryHost() throws Exception {
+        ModelNode shutdown = Util.createEmptyOperation("shutdown", testSupport.getDomainPrimaryLifecycleUtil().getAddress());
+        testSupport.getDomainPrimaryLifecycleUtil().executeAwaitConnectionClosed(shutdown);
     }
 
-    private void startMasterHost() {
-        testSupport.getDomainMasterLifecycleUtil().start();
+    private void startPrimaryHost() {
+        testSupport.getDomainPrimaryLifecycleUtil().start();
     }
 
-    private void stopMasterHost() {
-        testSupport.getDomainMasterLifecycleUtil().stop();
+    private void stopPrimaryHost() {
+        testSupport.getDomainPrimaryLifecycleUtil().stop();
     }
 
     private void restartMainServerGroup() throws TimeoutException, InterruptedException {
         ModelNode suspend = Util.createEmptyOperation("restart-servers", MAIN_SERVER_GROUP_ADDRESS);
         executeForResult(suspend);
-        testSupport.getDomainMasterLifecycleUtil().awaitServers(System.currentTimeMillis());
+        testSupport.getDomainPrimaryLifecycleUtil().awaitServers(System.currentTimeMillis());
     }
 
     private void suspendMainServerGroup() {
@@ -290,7 +290,7 @@ public class ProcessStateListenerTestCase {
     private void resumeMainServerGroup() throws Exception {
         ModelNode resume = Util.createEmptyOperation("resume-servers", MAIN_SERVER_GROUP_ADDRESS);
         executeForResult(resume);
-        testSupport.getDomainMasterLifecycleUtil().awaitServers(System.currentTimeMillis());
+        testSupport.getDomainPrimaryLifecycleUtil().awaitServers(System.currentTimeMillis());
     }
 
     private abstract static class StateChanges {
@@ -307,7 +307,7 @@ public class ProcessStateListenerTestCase {
             List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
             //MatcherAssert.assertThat(lines, Is.is(changes));
             for(int i = 0; i <lines.size(); i++) {
-                Assert.assertThat("Incorrect match at line " + i + " " + lines.get(i), lines.get(i), is(changes.get(i)));
+                MatcherAssert.assertThat("Incorrect match at line " + i + " " + lines.get(i), lines.get(i), is(changes.get(i)));
             }
         }
     }

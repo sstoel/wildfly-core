@@ -54,23 +54,33 @@ public enum ConsoleMode {
      * Show the console normally
      */
     CONSOLE {
+
+        private Boolean consoleLoadable;
         @Override
         ResourceHandlerDefinition createConsoleHandler(String slot) throws ModuleLoadException {
-            return ConsoleHandler.createConsoleHandler(slot);
+            consoleLoadable = null;
+            try {
+                return ConsoleHandler.createConsoleHandler(slot);
+            } catch (ModuleLoadException e) {
+                consoleLoadable = false;
+                throw e;
+            }
         }
 
         @Override
         public boolean hasConsole() {
-            return true;
+            // We assume true until trying to create the handler shows otherwise.
+            // A bit dodgy but in practice we try to create the handler before this is ever called.
+            return consoleLoadable == null ? true : consoleLoadable;
         }
     },
     /**
-     * If an attempt is made to go to the console show an error saying the host is a slave
+     * If an attempt is made to go to the console show an error saying the host is a Secondary Host
      */
     SLAVE_HC {
         @Override
         ResourceHandlerDefinition createConsoleHandler(String slot) throws ModuleLoadException {
-            return DisabledConsoleHandler.createNoConsoleForSlave(slot);
+            return DisabledConsoleHandler.createNoConsoleForSecondaryHost(slot);
         }
 
         @Override
@@ -171,7 +181,7 @@ public enum ConsoleMode {
 
         private static final String ERROR_MODULE = "org.jboss.as.domain-http-error-context";
         private static final String CONTEXT = "/consoleerror";
-        private static final String NO_CONSOLE_FOR_SLAVE = "/noConsoleForSlaveDcError.html";
+        private static final String NO_CONSOLE_FOR_SECONDARY = "/noConsoleForSecondaryHostError.html";
         private static final String NO_CONSOLE_FOR_ADMIN_MODE = "/noConsoleForAdminModeError.html";
 
         static ResourceHandlerDefinition createConsoleHandler(String slot, String resource) throws ModuleLoadException {
@@ -188,8 +198,8 @@ public enum ConsoleMode {
         }
 
 
-        static ResourceHandlerDefinition createNoConsoleForSlave(String slot) throws ModuleLoadException {
-            return createConsoleHandler(slot, NO_CONSOLE_FOR_SLAVE);
+        static ResourceHandlerDefinition createNoConsoleForSecondaryHost(String slot) throws ModuleLoadException {
+            return createConsoleHandler(slot, NO_CONSOLE_FOR_SECONDARY);
         }
 
         static ResourceHandlerDefinition createNoConsoleForAdminMode(String slot) throws ModuleLoadException {

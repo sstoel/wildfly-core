@@ -37,10 +37,16 @@ class EmbeddedManagedProcessImpl implements EmbeddedManagedProcess, StandaloneSe
     private final Method methodStart;
     private final Method methodStop;
     private final Method methodGetModelControllerClient;
+    private final Method methodGetProcessState;
     private final Context context;
 
     EmbeddedManagedProcessImpl(Class<?> processClass, Object managedProcess, Context context) {
+       this(processClass, managedProcess, context, null);
+    }
+
+    EmbeddedManagedProcessImpl(Class<?> processClass, Object managedProcess, Context context, Method methodGetProcessState) {
         this.managedProcess = managedProcess;
+        this.methodGetProcessState = methodGetProcessState;
         // Get a handle on the {@link EmbeddedManagedProcess} methods
         try {
             methodStart = processClass.getMethod("start");
@@ -65,6 +71,19 @@ class EmbeddedManagedProcessImpl implements EmbeddedManagedProcess, StandaloneSe
         } finally {
             context.restore();
         }
+    }
+
+    @Override
+    public String getProcessState() {
+        if (canQueryProcessState()) {
+            return (String) safeInvokeOnServer(methodGetProcessState);
+        }
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean canQueryProcessState() {
+       return (methodGetProcessState != null);
     }
 
     @Override

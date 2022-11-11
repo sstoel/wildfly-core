@@ -401,8 +401,8 @@ public class BasicResourceTestCase {
         OperationTransformer.TransformedOperation op = transformOperation(version,  node);
         Assert.assertTrue(op.rejectOperation(success()));
         PathAddress transformed = PathAddress.pathAddress(op.getTransformedOperation().require(OP_ADDR));
-        Assert.assertEquals(transformed.getLastElement().getKey(), "test");
-        Assert.assertEquals(transformed.getLastElement().getValue(), "configuration");
+        Assert.assertEquals("test", transformed.getLastElement().getKey());
+        Assert.assertEquals("configuration", transformed.getLastElement().getValue());
     }
 
     @Test
@@ -647,7 +647,7 @@ public class BasicResourceTestCase {
         return TransformationTargetImpl.create(null, registry, version, Collections.<PathAddress, ModelVersion>emptyMap(), type);
     }
 
-    private static final ResourceDefinition ROOT = new SimpleResourceDefinition(PathElement.pathElement("test"), new NonResolvingResourceDescriptionResolver());
+    private static final ResourceDefinition ROOT = new SimpleResourceDefinition(PathElement.pathElement("test"), NonResolvingResourceDescriptionResolver.INSTANCE);
 
     private static ModelNode success() {
         final ModelNode result = new ModelNode();

@@ -31,8 +31,10 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.COM
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.DESCRIPTION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FAILED;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FAILURE_DESCRIPTION;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.INCLUDE_RUNTIME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.INTERFACE;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.LOCAL_DESTINATION_OUTBOUND_SOCKET_BINDING;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NAME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OPERATION_HEADERS;
@@ -45,9 +47,12 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REA
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.READ_RESOURCE_OPERATION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RECURSIVE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RECURSIVE_DEPTH;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REMOTE_DESTINATION_OUTBOUND_SOCKET_BINDING;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REMOVE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESULT;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ROLLBACK_ON_RUNTIME_FAILURE;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SOCKET_BINDING_GROUP;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SOCKET_BINDING_REF;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.STEPS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUCCESS;
@@ -60,7 +65,7 @@ import static org.jboss.as.test.integration.domain.management.util.DomainTestSup
 import static org.jboss.as.test.integration.domain.management.util.DomainTestSupport.validateResponse;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -79,7 +84,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.jboss.as.controller.CompositeOperationHandler;
 import org.jboss.as.controller.ExpressionResolver;
@@ -98,7 +103,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ManagementClient;
 import org.wildfly.core.testrunner.ServerSetup;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  * Basic management operation unit test.
@@ -106,7 +111,7 @@ import org.wildfly.core.testrunner.WildflyTestRunner;
  * @author Emanuel Muckenhuber
  */
 @ServerSetup(ServerReload.SetupTask.class)
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 public class BasicOperationsUnitTestCase {
     private static final DateTimeFormatter DATE_FORMAT = new DateTimeFormatterBuilder().appendInstant().appendZoneId().toFormatter(Locale.ENGLISH);
     private static final ZoneId ZONE_ID = ZoneId.of(Calendar.getInstance().getTimeZone().getID());
@@ -136,6 +141,44 @@ public class BasicOperationsUnitTestCase {
             assertTrue(step.hasDefined(RESULT));
             assertEquals(SUCCESS, step.get(OUTCOME).asString());
         }
+    }
+
+    @Test
+    public void testSocketBindingsFixedSourcePort() throws IOException {
+        //remote destinations
+        PathAddress address = PathAddress.pathAddress(SOCKET_BINDING_GROUP, "standard-sockets")
+                .append(PathAddress.pathAddress(REMOTE_DESTINATION_OUTBOUND_SOCKET_BINDING, "remote-socket-binding"));
+        ModelNode operation = Operations.createAddOperation(address.toModelNode());
+        operation.get(HOST).set("localhost");
+        operation.get(PORT).set("7900");
+
+        ModelNode result = managementClient.getControllerClient().execute(operation);
+        assertEquals(SUCCESS, result.get(OUTCOME).asString());
+
+        operation = Operations.createWriteAttributeOperation(address.toModelNode(), "fixed-source-port", true);
+        result = managementClient.getControllerClient().execute(operation);
+        assertEquals(SUCCESS, result.get(OUTCOME).asString());
+
+        operation = Operations.createRemoveOperation(address.toModelNode());
+        result = managementClient.getControllerClient().execute(operation);
+        assertEquals(SUCCESS, result.get(OUTCOME).asString());
+
+        //local destinations
+        address = PathAddress.pathAddress(SOCKET_BINDING_GROUP, "standard-sockets")
+                .append(PathAddress.pathAddress(LOCAL_DESTINATION_OUTBOUND_SOCKET_BINDING, "local-socket-binding"));
+        operation = Operations.createAddOperation(address.toModelNode());
+        operation.get(SOCKET_BINDING_REF).set("management-http");
+
+        result = managementClient.getControllerClient().execute(operation);
+        assertEquals(SUCCESS, result.get(OUTCOME).asString());
+
+        operation = Operations.createWriteAttributeOperation(address.toModelNode(), "fixed-source-port", true);
+        result = managementClient.getControllerClient().execute(operation);
+        assertEquals(SUCCESS, result.get(OUTCOME).asString());
+
+        operation = Operations.createRemoveOperation(address.toModelNode());
+        result = managementClient.getControllerClient().execute(operation);
+        assertEquals(SUCCESS, result.get(OUTCOME).asString());
     }
 
     @Test

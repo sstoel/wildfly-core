@@ -31,9 +31,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ServerControl;
 import org.wildfly.core.testrunner.UnsuccessfulOperationException;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
 public class GitRepositoryTestCase extends AbstractGitRepositoryTestCase {
 
@@ -107,13 +107,13 @@ public class GitRepositoryTestCase extends AbstractGitRepositoryTestCase {
         repository = createRepository();
         addSystemProperty();
         int expectedNumberOfCommits = 2;
-        List<String> commits = listCommits(repository);
+        List<String> commits = listCommits(repository, "my_branch");
         Assert.assertEquals(expectedNumberOfCommits, commits.size());
         Assert.assertEquals("Storing configuration", commits.get(0));
         Assert.assertEquals("Repository initialized", commits.get(1));
         container.stop();
 
-        // create tag in local repo and change master for next test
+        // create tag in local repo and change Primary for next test
         container.startGitBackedConfiguration("local", null, null);
         takeSnapshot("my_tag", null);
         Assert.assertEquals(1, listTags(repository).size());

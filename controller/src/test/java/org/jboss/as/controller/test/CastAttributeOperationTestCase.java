@@ -27,7 +27,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NAM
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.READ_ATTRIBUTE_OPERATION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.VALUE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.WRITE_ATTRIBUTE_OPERATION;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -77,7 +77,7 @@ public class CastAttributeOperationTestCase extends AbstractControllerTestBase {
     private static final String BIGINT_ATT_NAME = "bigint-att";
     private static final String BIGDEC_ATT_NAME = "bigdec-att";
 
-    private static final OperationDefinition SETUP_OP_DEF = new SimpleOperationDefinitionBuilder("setup", new NonResolvingResourceDescriptionResolver())
+    private static final OperationDefinition SETUP_OP_DEF = new SimpleOperationDefinitionBuilder("setup", NonResolvingResourceDescriptionResolver.INSTANCE)
             .setPrivateEntry()
             .build();
 
@@ -175,7 +175,7 @@ public class CastAttributeOperationTestCase extends AbstractControllerTestBase {
         GlobalNotifications.registerGlobalNotifications(rootRegistration, processType);
 
         ResourceDefinition profileDef = ResourceBuilder.Factory.create(PathElement.pathElement("profile", "*"),
-                new NonResolvingResourceDescriptionResolver())
+                NonResolvingResourceDescriptionResolver.INSTANCE)
                 .addReadOnlyAttribute(SimpleAttributeDefinitionBuilder.create(NAME, ModelType.STRING, false).setMinSize(1).build())
                 .pushChild(PathElement.pathElement("subsystem", "subsystem1"))
                 .addReadWriteAttribute(BOOLEAN_ATT, null, handler)

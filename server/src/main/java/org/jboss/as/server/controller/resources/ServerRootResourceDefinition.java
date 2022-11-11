@@ -132,15 +132,18 @@ import org.jboss.as.server.services.net.SocketBindingGroupResourceDefinition;
 import org.jboss.as.server.services.net.SpecifiedInterfaceAddHandler;
 import org.jboss.as.server.services.net.SpecifiedInterfaceRemoveHandler;
 import org.jboss.as.server.services.net.SpecifiedInterfaceResolveHandler;
-import org.jboss.as.server.services.security.AbstractVaultReader;
 import org.jboss.as.server.suspend.SuspendController;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
+
 /**
  *
  * @author <a href="kabir.khan@jboss.com">Kabir Khan</a>
  */
 public class ServerRootResourceDefinition extends SimpleResourceDefinition {
+
+    public static final String IBM_JDK = "ibm.jdk";
+    public static final String WILDFLY_EE_API = "wildflyee.api";
 
     private static final ParameterValidator NOT_NULL_STRING_LENGTH_ONE_VALIDATOR = new StringLengthValidator(1, false, false);
 
@@ -210,19 +213,19 @@ public class ServerRootResourceDefinition extends SimpleResourceDefinition {
             .setValidator(NOT_NULL_STRING_LENGTH_ONE_VALIDATOR)
             .build();
     public static final SimpleAttributeDefinition LAUNCH_TYPE = SimpleAttributeDefinitionBuilder.create(ServerDescriptionConstants.LAUNCH_TYPE, ModelType.STRING)
-            .setValidator(new EnumValidator<LaunchType>(LaunchType.class, false, false))
+            .setValidator(EnumValidator.create(LaunchType.class))
             .setStorageRuntime()
             .setRuntimeServiceNotRequired()
             .build();
 
     public static final AttributeDefinition RUNNING_MODE = SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.RUNNING_MODE, ModelType.STRING)
-            .setValidator(new EnumValidator<RunningMode>(RunningMode.class, false, false))
+            .setValidator(EnumValidator.create(RunningMode.class))
             .setStorageRuntime()
             .setRuntimeServiceNotRequired()
             .build();
 
     public static final AttributeDefinition SUSPEND_STATE = SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.SUSPEND_STATE, ModelType.STRING)
-            .setValidator(new EnumValidator<SuspendController.State>(SuspendController.State.class, false, false))
+            .setValidator(EnumValidator.create(SuspendController.State.class))
             .setStorageRuntime()
             .setRuntimeServiceNotRequired()
             .build();
@@ -269,7 +272,6 @@ public class ServerRootResourceDefinition extends SimpleResourceDefinition {
     private final ServerEnvironment serverEnvironment;
     private final ControlledProcessState processState;
     private final RunningModeControl runningModeControl;
-    private final AbstractVaultReader vaultReader;
     private final ExtensionRegistry extensionRegistry;
     private final boolean parallelBoot;
     private final PathManagerService pathManager;
@@ -287,7 +289,6 @@ public class ServerRootResourceDefinition extends SimpleResourceDefinition {
             final ServerEnvironment serverEnvironment,
             final ControlledProcessState processState,
             final RunningModeControl runningModeControl,
-            final AbstractVaultReader vaultReader,
             final ExtensionRegistry extensionRegistry,
             final boolean parallelBoot,
             final PathManagerService pathManager,
@@ -312,7 +313,6 @@ public class ServerRootResourceDefinition extends SimpleResourceDefinition {
         this.serverEnvironment = serverEnvironment;
         this.processState = processState;
         this.runningModeControl = runningModeControl;
-        this.vaultReader = vaultReader;
         this.extensionRegistry = extensionRegistry;
         this.parallelBoot = parallelBoot;
         this.pathManager = pathManager;
@@ -363,8 +363,8 @@ public class ServerRootResourceDefinition extends SimpleResourceDefinition {
         DeploymentUploadBytesHandler.register(resourceRegistration, contentRepository);
         DeploymentUploadURLHandler.register(resourceRegistration, contentRepository);
         DeploymentUploadStreamAttachmentHandler.register(resourceRegistration, contentRepository);
-        resourceRegistration.registerOperationHandler(DeploymentAttributes.REPLACE_DEPLOYMENT_DEFINITION, DeploymentReplaceHandler.create(contentRepository, vaultReader));
-        resourceRegistration.registerOperationHandler(DeploymentAttributes.FULL_REPLACE_DEPLOYMENT_DEFINITION, DeploymentFullReplaceHandler.create(contentRepository, vaultReader));
+        resourceRegistration.registerOperationHandler(DeploymentAttributes.REPLACE_DEPLOYMENT_DEFINITION, DeploymentReplaceHandler.create(contentRepository));
+        resourceRegistration.registerOperationHandler(DeploymentAttributes.FULL_REPLACE_DEPLOYMENT_DEFINITION, DeploymentFullReplaceHandler.create(contentRepository));
 
         if (!isDomain) {
             if(serverEnvironment.useGit()) {
@@ -494,9 +494,6 @@ public class ServerRootResourceDefinition extends SimpleResourceDefinition {
         // System Properties
         resourceRegistration.registerSubModel(SystemPropertyResourceDefinition.createForStandaloneServer(serverEnvironment));
 
-        //vault
-        resourceRegistration.registerSubModel(new VaultResourceDefinition(vaultReader));
-
         // Central Management
         // Start with the base /core-service=management MNR. The Resource for this is added by ServerService itself, so there is no add/remove op handlers
         final EnvironmentNameReader environmentReader = new EnvironmentNameReader() {
@@ -559,7 +556,7 @@ public class ServerRootResourceDefinition extends SimpleResourceDefinition {
         resourceRegistration.registerSubModel(SocketBindingGroupResourceDefinition.INSTANCE);
 
         // Deployments
-        ManagementResourceRegistration deployments = resourceRegistration.registerSubModel(ServerDeploymentResourceDefinition.create(contentRepository, vaultReader, serverEnvironment));
+        ManagementResourceRegistration deployments = resourceRegistration.registerSubModel(ServerDeploymentResourceDefinition.create(contentRepository, serverEnvironment));
 
         //deployment overlays
         resourceRegistration.registerSubModel(new DeploymentOverlayDefinition(false, contentRepository, null));
@@ -625,6 +622,9 @@ public class ServerRootResourceDefinition extends SimpleResourceDefinition {
 
     @Override
     public void registerAdditionalRuntimePackages(ManagementResourceRegistration resourceRegistration) {
-        resourceRegistration.registerAdditionalRuntimePackages(RuntimePackageDependency.required("ibm.jdk"));
+        resourceRegistration.registerAdditionalRuntimePackages(
+                RuntimePackageDependency.required(IBM_JDK),
+                RuntimePackageDependency.optional(WILDFLY_EE_API)
+        );
     }
 }

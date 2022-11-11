@@ -26,7 +26,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import org.jboss.as.cli.scriptsupport.CLI;
 import org.jboss.as.cli.scriptsupport.CLI.Result;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
@@ -35,7 +35,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ServerControl;
 import org.wildfly.core.testrunner.ServerController;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -44,7 +44,7 @@ import static org.junit.Assert.assertTrue;
  *
  * @author Jean-Francois Denise (jdenise@redhat.com)
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
 public class CLIScriptSupportTestCase {
 

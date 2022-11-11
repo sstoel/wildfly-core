@@ -72,9 +72,9 @@ public class JBossEntityResolver implements EntityResolver, LSResourceResolver {
     private ThreadLocal<Boolean> entityResolved = new ThreadLocal<Boolean>();
 
     static {
-        AccessController.doPrivileged(new PrivilegedAction() {
-            public Object run() {
-                warnOnNonFileURLs = new Boolean(System.getProperty("org.jboss.resolver.warning", "false")).booleanValue();
+        AccessController.doPrivileged(new PrivilegedAction<Void>() {
+            public Void run() {
+                warnOnNonFileURLs = Boolean.parseBoolean(System.getProperty("org.jboss.resolver.warning", "false"));
                 return null;
             }
         });
@@ -436,14 +436,11 @@ public class JBossEntityResolver implements EntityResolver, LSResourceResolver {
             }
 
             InputStream ins = url.openStream();
-            if (ins != null) {
-                inputSource = new InputSource(ins);
-                inputSource.setSystemId(systemId);
-            } else {
-                log.warn("Cannot load systemId as URL: " + systemId);
-            }
+            assert ins != null;
+            inputSource = new InputSource(ins);
+            inputSource.setSystemId(systemId);
 
-            if (trace) { log.trace("Resolved systemId as a URL"); }
+            if (trace) { log.tracef("Resolved systemId %s as a URL", systemId); }
         } catch (MalformedURLException ignored) {
             if (trace) { log.trace("SystemId is not a url: " + systemId, ignored); }
         } catch (IOException e) {

@@ -70,6 +70,7 @@ import org.wildfly.security.http.util.PropertiesServerMechanismFactory;
 import org.wildfly.security.http.util.SecurityProviderServerMechanismFactory;
 import org.wildfly.security.http.util.ServiceLoaderServerMechanismFactory;
 import org.wildfly.security.http.util.SetMechanismInformationMechanismFactory;
+import org.wildfly.security.http.util.SocketAddressCallbackServerMechanismFactory;
 
 /**
  * Resource definitions for loading and configuring the HTTP server side authentication mechanisms.
@@ -90,8 +91,7 @@ class HttpServerDefinitions {
         .setCapabilityReference(PROVIDERS_CAPABILITY, HTTP_SERVER_MECHANISM_FACTORY_CAPABILITY)
         .build();
 
-    static final SimpleAttributeDefinition PATTERN_FILTER = new SimpleAttributeDefinitionBuilder(RegexAttributeDefinitions.PATTERN)
-        .setName(ElytronDescriptionConstants.PATTERN_FILTER)
+    static final SimpleAttributeDefinition PATTERN_FILTER = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.PATTERN_FILTER, RegexAttributeDefinitions.PATTERN)
         .setXmlName(ElytronDescriptionConstants.PATTERN)
         .build();
 
@@ -163,6 +163,7 @@ class HttpServerDefinitions {
                 final Map<String, String> propertiesMap = PROPERTIES.unwrap(context, model);
                 return () -> {
                     HttpServerAuthenticationMechanismFactory factory = factoryInjector.getValue();
+                    factory = new SocketAddressCallbackServerMechanismFactory(factory);
                     factory = new SetMechanismInformationMechanismFactory(factory);
                     factory = finalFilter != null ? new FilterServerMechanismFactory(factory, finalFilter) : factory;
                     factory = propertiesMap != null ? new PropertiesServerMechanismFactory(factory, propertiesMap) : factory;
@@ -204,7 +205,7 @@ class HttpServerDefinitions {
                     if ( findProviderService(actualProviders, serviceFilter) == null ) {
                         throw ROOT_LOGGER.noSuitableProvider(HttpServerAuthenticationMechanismFactory.class.getSimpleName());
                     }
-                    return new SetMechanismInformationMechanismFactory(new SecurityProviderServerMechanismFactory(actualProviders));
+                    return new SocketAddressCallbackServerMechanismFactory(new SetMechanismInformationMechanismFactory(new SecurityProviderServerMechanismFactory(actualProviders)));
                 };
             }
 
@@ -216,7 +217,7 @@ class HttpServerDefinitions {
 
     static ResourceDefinition getServiceLoaderServerMechanismFactoryDefinition() {
         AttributeDefinition[] attributes = new AttributeDefinition[] { MODULE };
-        AbstractAddStepHandler add = new TrivialAddHandler<HttpServerAuthenticationMechanismFactory>(HttpServerAuthenticationMechanismFactory.class, ServiceController.Mode.ACTIVE, ServiceController.Mode.LAZY, attributes, HTTP_SERVER_MECHANISM_FACTORY_RUNTIME_CAPABILITY) {
+        AbstractAddStepHandler add = new TrivialAddHandler<HttpServerAuthenticationMechanismFactory>(HttpServerAuthenticationMechanismFactory.class, ServiceController.Mode.ACTIVE, ServiceController.Mode.PASSIVE, attributes, HTTP_SERVER_MECHANISM_FACTORY_RUNTIME_CAPABILITY) {
 
             @Override
             protected ValueSupplier<HttpServerAuthenticationMechanismFactory> getValueSupplier(
@@ -228,7 +229,7 @@ class HttpServerDefinitions {
                     try {
                         ClassLoader classLoader = doPrivileged((PrivilegedExceptionAction<ClassLoader>) () -> resolveClassLoader(module));
 
-                        return new SetMechanismInformationMechanismFactory(new ServiceLoaderServerMechanismFactory(classLoader));
+                        return new SocketAddressCallbackServerMechanismFactory(new SetMechanismInformationMechanismFactory(new ServiceLoaderServerMechanismFactory(classLoader)));
                     } catch (Exception e) {
                         throw new StartException(e);
                     }

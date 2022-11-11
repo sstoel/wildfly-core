@@ -22,11 +22,12 @@
 package org.jboss.as.test.integration.respawn;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MASTER;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.PRIMARY;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NAME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OUTCOME;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.READ_ATTRIBUTE_OPERATION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.READ_RESOURCE_OPERATION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESTART;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESULT;
@@ -102,14 +103,14 @@ public class RespawnTestCase {
     public static void createProcessController() throws IOException, URISyntaxException, NoSuchAlgorithmException {
 
         // Setup client
-        utils = TestControllerUtils.create(DomainTestSupport.masterAddress, HC_PORT, getCallbackHandler());
+        utils = TestControllerUtils.create(DomainTestSupport.primaryAddress, HC_PORT, getCallbackHandler());
         client = new TestControllerClient(utils.getConfiguration(), utils.getExecutor());
 
         final String testName = RespawnTestCase.class.getSimpleName();
         final File domains = new File("target" + File.separator + "domains" + File.separator + testName);
-        final File masterDir = new File(domains, "master");
-        final String masterDirPath = masterDir.getAbsolutePath();
-        domainConfigDir = new File(masterDir, "configuration");
+        final File primaryDir = new File(domains, "primary");
+        final String primaryDirPath = primaryDir.getAbsolutePath();
+        domainConfigDir = new File(primaryDir, "configuration");
         // TODO this should not be necessary
         domainConfigDir.mkdirs();
 
@@ -128,7 +129,7 @@ public class RespawnTestCase {
         URL url = tccl.getResource("domain-configs/domain-respawn.xml");
         Assert.assertNotNull(url);
         File domainXml = new File(url.toURI());
-        url = tccl.getResource("host-configs/respawn-master.xml");
+        url = tccl.getResource("host-configs/respawn-primary.xml");
         hostXml = new File(url.toURI());
 
         Assert.assertTrue(domainXml.exists());
@@ -139,11 +140,11 @@ public class RespawnTestCase {
         // No point backing up the file in a test scenario, just write what we need.
         File usersFile = new File(domainConfigDir, "mgmt-users.properties");
         Files.write(usersFile.toPath(),
-                ("slave=" + new UsernamePasswordHashUtil().generateHashedHexURP("slave", "ManagementRealm", "slave_user_password".toCharArray())+"\n")
+                ("secondary=" + new UsernamePasswordHashUtil().generateHashedHexURP("secondary", "ManagementRealm", "secondary_user_password".toCharArray())+"\n")
                         .getBytes(StandardCharsets.UTF_8));
         String localRepo = System.getProperty("settings.localRepository");
 
-        final String address = System.getProperty("jboss.test.host.master.address", "127.0.0.1");
+        final String address = System.getProperty("jboss.test.host.primary.address", "127.0.0.1");
 
         List<String> args = new ArrayList<String>();
         args.add("-jboss-home");
@@ -154,9 +155,9 @@ public class RespawnTestCase {
         if(localRepo != null) {
             args.add("-Dmaven.repo.local=" + localRepo);
         }
-        args.add("-Dorg.jboss.boot.log.file=" + masterDirPath + "/log/host-controller.log");
+        args.add("-Dorg.jboss.boot.log.file=" + primaryDirPath + "/log/host-controller.log");
         args.add("-Dlogging.configuration=file:" + jbossHome + "/domain/configuration/logging.properties");
-        args.add("-Djboss.test.host.master.address=" + address);
+        args.add("-Djboss.test.host.primary.address=" + address);
         TestSuiteEnvironment.getIpv6Args(args);
         args.add("-Xms64m");
         args.add("-Xmx512m");
@@ -170,8 +171,8 @@ public class RespawnTestCase {
         args.add(processUtil.getJavaCommand());
         args.add("--host-config=" + hostXml.getName());
         args.add("--domain-config=" + domainXml.getName());
-        args.add("-Djboss.test.host.master.address=" + address);
-        args.add("-Djboss.domain.base.dir=" + masterDir.getAbsolutePath());
+        args.add("-Djboss.test.host.primary.address=" + address);
+        args.add("-Djboss.domain.base.dir=" + primaryDir.getAbsolutePath());
         if(localRepo != null) {
             args.add("-Dmaven.repo.local=" + localRepo);
         }
@@ -203,7 +204,7 @@ public class RespawnTestCase {
         //Make sure everything started
         List<RunningProcess> processes = waitForAllProcessesFullyStarted();
 
-        //Kill the master HC and make sure that it gets restarted
+        //Kill the primary HC and make sure that it gets restarted
         RunningProcess originalHc = processUtil.getProcess(processes, HOST_CONTROLLER);
         Assert.assertNotNull(originalHc);
         processUtil.killProcess(originalHc);
@@ -260,7 +261,7 @@ public class RespawnTestCase {
         long minCheckPeriod =  start + 5000;
         while (true) {
             Thread.sleep(500);
-            if (lookupServerInModel(MASTER, SERVER_ONE) || lookupServerInModel(MASTER, SERVER_TWO)) {
+            if (lookupServerInModel(PRIMARY, SERVER_ONE) || lookupServerInModel(PRIMARY, SERVER_TWO)) {
                 if (System.currentTimeMillis() >= timeout) {
                     Assert.fail("Should not have servers in restarted admin-only HC model");
                 }
@@ -303,8 +304,12 @@ public class RespawnTestCase {
 
         //Execute reload w/ restart-servers=false, admin-only=false
         executeReloadOperation(false, false);
+
         //Wait for servers
         readHostControllerServer(SERVER_TWO);
+
+        // we need to wait for the primary being in running state before execute this operation
+        awaitHostController(PRIMARY);
 
         manageServer("stop", SERVER_ONE);
         Thread.sleep(5000);
@@ -396,7 +401,7 @@ public class RespawnTestCase {
     private void executeReloadOperation(Boolean restartServers, Boolean adminOnly) throws Exception {
         ModelNode operation = new ModelNode();
         operation.get(OP).set("reload");
-        operation.get(OP_ADDR).set(PathAddress.pathAddress(PathElement.pathElement(HOST, "master")).toModelNode());
+        operation.get(OP_ADDR).set(PathAddress.pathAddress(PathElement.pathElement(HOST, "primary")).toModelNode());
         if (restartServers != null) {
             operation.get(ModelDescriptionConstants.RESTART_SERVERS).set(restartServers);
         }
@@ -413,7 +418,7 @@ public class RespawnTestCase {
     private void shutdownHostController(boolean restart) throws Exception {
         final ModelNode operation = new ModelNode();
         operation.get(OP).set(SHUTDOWN);
-        operation.get(OP_ADDR).set(PathAddress.pathAddress(PathElement.pathElement(HOST, "master")).toModelNode());
+        operation.get(OP_ADDR).set(PathAddress.pathAddress(PathElement.pathElement(HOST, "primary")).toModelNode());
         operation.get(RESTART).set(restart);
 
     }
@@ -421,7 +426,7 @@ public class RespawnTestCase {
     private void manageServer(String operationName, String serverName) throws Exception {
         ModelNode operation = new ModelNode();
         operation.get(OP).set(operationName);
-        operation.get(OP_ADDR).set(getHostControllerServerConfigAddress(MASTER, serverName));
+        operation.get(OP_ADDR).set(getHostControllerServerConfigAddress(PRIMARY, serverName));
         operation.get("blocking").set(true);
 
         try {
@@ -436,7 +441,7 @@ public class RespawnTestCase {
 
         do {
             Thread.sleep(250);
-            hasOne = lookupServerInModel(MASTER, serverName);
+            hasOne = lookupServerInModel(PRIMARY, serverName);
             if (hasOne) {
                 break;
             }
@@ -450,8 +455,8 @@ public class RespawnTestCase {
         boolean hasTwo = false;
         do {
             Thread.sleep(250);
-            hasOne = lookupServerInModel(MASTER, SERVER_ONE);
-            hasTwo = lookupServerInModel(MASTER, SERVER_TWO);
+            hasOne = lookupServerInModel(PRIMARY, SERVER_ONE);
+            hasTwo = lookupServerInModel(PRIMARY, SERVER_TWO);
             if (hasOne && hasTwo) {
                 break;
             }
@@ -559,6 +564,31 @@ public class RespawnTestCase {
     static TestControllerClient getControllerClient() throws IOException {
         client.connect(); // Ensure connected
         return client;
+    }
+
+    private void awaitHostController(String hostControllerName) throws Exception {
+        final long time = System.currentTimeMillis() + TIMEOUT;
+        do {
+            Thread.sleep(250);
+
+            final ModelNode operation = new ModelNode();
+            operation.get(OP).set(READ_ATTRIBUTE_OPERATION);
+            PathAddress pathElements = PathAddress.pathAddress(PathElement.pathElement(HOST, hostControllerName));
+            operation.get(OP_ADDR).set(pathElements.toModelNode());
+            operation.get(NAME).set("host-state");
+
+            try {
+                final ModelNode result = getControllerClient().execute(operation);
+                if (result.get(OUTCOME).asString().equals(SUCCESS)) {
+                    if ("running".equals(result.require(RESULT).asString())) {
+                        break;
+                    }
+                }
+            } catch (IOException e) {
+                //
+            }
+
+        } while (System.currentTimeMillis() < time);
     }
 
     private abstract static class ProcessUtil {
@@ -697,7 +727,7 @@ public class RespawnTestCase {
         String[] getJpsCommand() {
             final File jreHome = new File(System.getProperty("java.home"));
             Assert.assertTrue("JRE home not found. File: " + jreHome.getAbsoluteFile(), jreHome.exists());
-            if (System.getProperty("java.vendor.url","whatever").contains("ibm.com")) {
+            if (TestSuiteEnvironment.isIbmJvm()) {
                 return new String[] { "sh", "-c", "ps -ef | awk '{$1=\"\"; print $0}'" };
             } else {
                 File jpsExe = new File(jreHome, "bin/jps");
@@ -705,7 +735,7 @@ public class RespawnTestCase {
                     jpsExe = new File(jreHome, "../bin/jps");
                 }
                 Assert.assertTrue("JPS executable not found. File: " + jpsExe, jpsExe.exists());
-                return new String[] { jpsExe.getAbsolutePath(), "-lv" };
+                return new String[] { jpsExe.getAbsolutePath(), "-l", "-v" };
             }
         }
 
@@ -731,7 +761,7 @@ public class RespawnTestCase {
                 jpsExe = new File(jreHome, "../bin/jps.exe");
             }
             Assert.assertTrue("JPS executable not found. File: " + jpsExe, jpsExe.exists());
-            return new String[] { jpsExe.getAbsolutePath(), "-lv" };
+            return new String[] { jpsExe.getAbsolutePath(), "-l", "-v" };
         }
 
         @Override

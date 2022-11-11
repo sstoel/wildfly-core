@@ -35,13 +35,17 @@ import org.jboss.as.test.shared.TestSuiteEnvironment;
 import org.jboss.as.test.shared.TimeoutUtil;
 import static org.junit.Assert.fail;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.wildfly.core.launcher.CliCommandBuilder;
 import org.wildfly.core.launcher.Launcher;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  *
  * @author Jean-François Denise <jdenise@redhat.com>
  */
+// Required by Bootable JAR in order to create the installation directory
+@RunWith(WildFlyRunner.class)
 public class JBossCliXmlConfigTestCase {
 
     @Test
@@ -67,7 +71,7 @@ public class JBossCliXmlConfigTestCase {
             fail("jboss.dist system property is not set");
         }
 
-        final CliCommandBuilder commandBuilder = CliCommandBuilder.of(jbossDist);
+        final CliCommandBuilder commandBuilder = CliCommandBuilder.asModularLauncher(jbossDist);
         commandBuilder.addJavaOptions("-Djboss.cli.config=" + f.toPath());
         commandBuilder.addJavaOptions(System.getProperty("cli.jvm.args", "").split("\\s+"));
         commandBuilder.addCliArgument("--command=help");

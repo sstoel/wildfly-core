@@ -49,7 +49,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.UND
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1966,7 +1966,7 @@ public class FileSystemDeploymentServiceUnitTestCase {
     }
 
     private TesteeSet createTestee(final MockServerController sc, final ScheduledExecutorService executor, DeploymentOperations ops) throws OperationFailedException {
-        final FileSystemDeploymentService testee = new FileSystemDeploymentService(resourceAddress, null, tmpDir, null, sc, executor, null);
+        final FileSystemDeploymentService testee = new FileSystemDeploymentService(resourceAddress, null, tmpDir, null, sc, executor);
         testee.startScanner(ops);
         return new TesteeSet(testee, sc);
     }
@@ -2222,7 +2222,7 @@ public class FileSystemDeploymentServiceUnitTestCase {
                 } else {
                     // Report what our scanner would configure
                     result.get(deployment, PERSISTENT).set(false);
-                    result.get(deployment, OWNER).set(resourceAddress.toModelNode());
+                    result.get(deployment, OWNER).set(resourceAddress.toModelNode().asObject());
                 }
             }
             return content;

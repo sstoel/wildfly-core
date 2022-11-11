@@ -45,6 +45,7 @@ import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.client.helpers.ClientConstants;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.services.path.PathResourceDefinition;
+import org.jboss.as.logging.filters.FilterResourceDefinition;
 import org.jboss.as.logging.formatters.CustomFormatterResourceDefinition;
 import org.jboss.as.logging.formatters.PatternFormatterResourceDefinition;
 import org.jboss.as.logging.handlers.AbstractHandlerDefinition;
@@ -59,6 +60,7 @@ import org.jboss.as.logging.handlers.SocketHandlerResourceDefinition;
 import org.jboss.as.logging.handlers.SyslogHandlerResourceDefinition;
 import org.jboss.as.logging.handlers.SyslogHandlerResourceDefinition.FacilityAttribute;
 import org.jboss.as.logging.handlers.Target;
+import org.jboss.as.logging.loggers.LoggerAttributes;
 import org.jboss.as.logging.loggers.LoggerResourceDefinition;
 import org.jboss.as.logging.loggers.RootLoggerResourceDefinition;
 import org.jboss.as.logging.logmanager.ConfigurationPersistence;
@@ -290,11 +292,11 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
                         final String configValue = loggerConfig.getLevel();
                         final String modelValue = loggerModel.get(attribute).asString();
                         Assert.assertEquals(String.format("Levels do not match. Config Value: %s  Model Value: %s", configValue, modelValue), configValue, modelValue);
-                    } else if (attribute.equals(CommonAttributes.FILTER_SPEC.getName())) {
+                    } else if (attribute.equals(LoggerAttributes.FILTER_SPEC.getName())) {
                         final String configValue = loggerConfig.getFilter();
                         final String modelValue = loggerModel.hasDefined(attribute) ? loggerModel.get(attribute).asString() : null;
                         Assert.assertEquals(String.format("Filter expressions do not match. Config Value: %s  Model Value: %s", configValue, modelValue), configValue, modelValue);
-                    } else if (attribute.equals(CommonAttributes.HANDLERS.getName())) {
+                    } else if (attribute.equals(LoggerAttributes.HANDLERS.getName())) {
                         final List<String> handlerNames = loggerConfig.getHandlerNames();
                         final ModelNode handlers = loggerModel.get(attribute);
                         if (handlers.isDefined()) {
@@ -382,7 +384,7 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
                         }
                     }
                     modelStringValue = modelValue.asString();
-                } else if (modelPropertyName.equals(CommonAttributes.FILTER_SPEC.getName())) {
+                } else if (modelPropertyName.equals(AbstractHandlerDefinition.FILTER_SPEC.getName())) {
                     configValue = handlerConfig.getFilter();
                 } else if (modelPropertyName.equals(CommonAttributes.LEVEL.getName())) {
                     configValue = handlerConfig.getLevel();
@@ -596,6 +598,10 @@ public abstract class AbstractLoggingSubsystemTest extends AbstractSubsystemBase
             } else if (CustomFormatterResourceDefinition.NAME.equals(key1)) {
                 result = LESS;
             } else if (CustomFormatterResourceDefinition.NAME.equals(key2)) {
+                result = GREATER;
+            } else if (FilterResourceDefinition.NAME.equals(key1)) {
+                result = LESS;
+            } else if (FilterResourceDefinition.NAME.equals(key2)) {
                 result = GREATER;
             } else if (RootLoggerResourceDefinition.NAME.equals(key1)) {
                 result = GREATER;

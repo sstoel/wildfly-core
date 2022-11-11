@@ -1,0 +1,19 @@
+<?xml version="1.0" ?>
+
+<config xmlns="urn:jboss:galleon:config:1.0" name="standalone.xml" model="standalone">
+    <layers>
+        <include name="management"/> 
+        <include name="elytron"/> 
+        <include name="jmx-remoting"/> 
+        <include name="logging"/>
+        <include name="core-management"/>
+        <include name="request-controller"/>
+        <include name="security-manager"/>
+        <include name="discovery"/>
+        <include name="core-tools"/>
+    </layers>
+    <!-- package included in case configuration is provisioned without inheriting all modules -->
+    <packages>
+        <package name="org.jboss.as.patching.cli"/>
+    </packages>
+</config>

@@ -63,6 +63,7 @@ public class StandaloneDeploymentTableModel extends AbstractTableModel {
             if (deploymentsQuery.get("outcome").asString().equals("failed")) return;
         } catch (Exception e) {
             e.printStackTrace();
+            return;
         }
 
         for (ModelNode node : deploymentsQuery.get("result").asList()) {
@@ -82,7 +83,7 @@ public class StandaloneDeploymentTableModel extends AbstractTableModel {
             if (enabled.isDefined()) deployment[2] = deploymentNode.get("enabled").asString();
         }
 
-        if (data.size() > 0) {
+        if (!data.isEmpty()) {
             JRadioButton first = (JRadioButton)data.get(0)[0];
             first.setSelected(true);
         }

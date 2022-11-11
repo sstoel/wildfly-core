@@ -28,6 +28,8 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REA
 import static org.jboss.as.controller.operations.global.EnhancedSyntaxSupport.containsEnhancedSyntax;
 import static org.jboss.as.controller.operations.global.EnhancedSyntaxSupport.extractAttributeName;
 
+import java.util.logging.Level;
+
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.ExpressionResolver;
 import org.jboss.as.controller.OperationContext;
@@ -263,16 +265,39 @@ public class ReadAttributeHandler extends GlobalOperationHandlers.AbstractMultiT
 
         @Override
         public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
-            ModelNode result = context.hasResult() ? context.getResult().clone() : new ModelNode();
-            // For now, don't use the context to resolve, as we don't want to support vault resolution
-            // from a remote management client. The purpose of the vault is to require someone to have
-            // access to both the config (i.e. the expression) and to the vault itself in order to read, and
+            ModelNode unresolvedResult = context.hasResult() ? context.getResult().clone() : new ModelNode();
+            // Don't use the context to resolve, as we don't want to support secure expression resolution
+            // from a remote management client. The design idea of secure expressions is to require someone to have
+            // access to both the config (i.e. the expression) and to the backing store itself in order to read, and
             // allowing a remote user to use the management API to read defeats the purpose.
-            //ModelNode resolved = context.resolveExpressions(result);
-            // Instead we use a resolver that will not complain about unresolvable stuff (i.e. vault expressions),
+            // Instead we use a resolver that will not complain about unresolvable stuff (i.e. secure expressions),
             // simply returning them unresolved.
-            ModelNode resolved = ExpressionResolver.SIMPLE_LENIENT.resolveExpressions(result);
-            context.getResult().set(resolved);
+            ModelNode simpleAnswer = ExpressionResolver.SIMPLE_LENIENT.resolveExpressions(unresolvedResult);
+            if (!simpleAnswer.equals(unresolvedResult)) {
+                // SIMPLE_LENIENT will not resolve everything the context can, e.g. vault or credential store expressions.
+                // If the normal resolution using the OperationContext differs from what SIMPLE_LENIENT did, that
+                // tells us we're dealing with a secure expression and we should just not resolve in our response and
+                // include a warning to that effect.
+                boolean secureExpression;
+                try {
+                    ModelNode fullyResolved = context.resolveExpressions(unresolvedResult);
+                    secureExpression = !simpleAnswer.equals(fullyResolved);
+                } catch (ExpressionResolver.ExpressionResolutionUserException | ExpressionResolver.ExpressionResolutionServerException e) {
+                    // either of these exceptions indicate a ResolverExtension regarded the expression
+                    // as relevant but failed to resolve it. We don't care about the failure, just the
+                    // fact that the string was relevant to the ResolverExtension.
+                    secureExpression = true;
+                }
+                if (secureExpression) {
+                    context.addResponseWarning(Level.WARNING,
+                            ControllerLogger.MGMT_OP_LOGGER.attributeUnresolvableUsingSimpleResolution(
+                                    operation.get(NAME).asString(),
+                                    context.getCurrentAddress().toCLIStyleString(),
+                                    unresolvedResult));
+                } else {
+                    context.getResult().set(simpleAnswer);
+                }
+            }
         }
     }
 

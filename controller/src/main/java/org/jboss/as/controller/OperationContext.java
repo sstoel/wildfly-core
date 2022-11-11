@@ -28,7 +28,6 @@ import java.util.logging.Level;
 
 import org.jboss.as.controller.access.Action;
 import org.jboss.as.controller.access.AuthorizationResult;
-import org.jboss.as.controller.access.Caller;
 import org.jboss.as.controller.access.Environment;
 import org.jboss.as.controller.access.ResourceAuthorization;
 import org.jboss.as.controller.capability.CapabilityServiceSupport;
@@ -417,6 +416,30 @@ public interface OperationContext extends ExpressionResolver {
      * @throws java.lang.IllegalStateException if {@link #getCurrentAddress()} is the empty address
      */
     String getCurrentAddressValue();
+
+    /**
+     * Get the node with current operation name
+     *
+     * @return operation name node
+     */
+    String getCurrentOperationName();
+
+    /**
+     * Get parameter node by its name
+     *
+     * @param name of desired parameter
+     * @return node for parameter of given name or {@code null} if the operation has no such parameter
+     */
+    ModelNode getCurrentOperationParameter(String name);
+
+    /**
+     * Get parameter node by its name
+     *
+     * @param name of desired parameter
+     * @param nullable whether the return value can be null if the operation has no parameter with the given name
+     * @return node for the parameter of the given name, or {@code null} if {@code nullable} is {@code true} and the operation has no parameter with the given name
+     */
+    ModelNode getCurrentOperationParameter(String name, boolean nullable);
 
     /**
      * Get a read only view of the managed resource registration.  The registration is relative to the operation address.
@@ -810,15 +833,6 @@ public interface OperationContext extends ExpressionResolver {
     AuthorizationResult authorizeOperation(ModelNode operation);
 
     /**
-     * Obtain the {@link Caller} for the current request.
-     *
-     * @return The current caller.
-     * @deprecated Use {@link #getSecurityIdentity()} instead.
-     */
-    @Deprecated
-    Caller getCaller();
-
-    /**
      * Obtain the {@link SecurityIdentity} for the current request.
      *
      * @return The current {@code SecurityIdentity}.
@@ -1013,7 +1027,7 @@ public interface OperationContext extends ExpressionResolver {
     /**
      * Gets the name of a service associated with a given capability, if there is one.
      * @param capabilityName the name of the capability. Cannot be {@code null}
-     * @param serviceType class of the java type that exposes by the service. Cannot be {@code null}
+     * @param serviceType class of the java type that exposes by the service. Can be null.
      * @return the name of the service. Will not return {@code null}
      *
      * @throws java.lang.IllegalStateException if {@link #getCurrentStage() the current stage} is {@link Stage#MODEL}. The
@@ -1029,7 +1043,7 @@ public interface OperationContext extends ExpressionResolver {
      *
      * @param capabilityBaseName the base name of the capability. Cannot be {@code null}
      * @param dynamicPart the dynamic part of the capability name. Cannot be {@code null}
-     * @param serviceType class of the java type that exposes by the service. Cannot be {@code null}
+     * @param serviceType class of the java type that exposes by the service. Can be null.
      * @return the name of the service. Will not return {@code null}
      *
      * @throws java.lang.IllegalStateException if {@link #getCurrentStage() the current stage} is {@link Stage#MODEL}. The
@@ -1045,7 +1059,7 @@ public interface OperationContext extends ExpressionResolver {
      * capability, if there is one.
      *
      * @param capabilityBaseName the base name of the capability. Cannot be {@code null}
-     * @param serviceType class of the java type that exposes by the service. Cannot be {@code null}
+     * @param serviceType class of the java type that exposes by the service. Can be null.
      * @param dynamicParts the dynamic parts of the capability name. Cannot be {@code null}
      * @return the name of the service. Will not return {@code null}
      *

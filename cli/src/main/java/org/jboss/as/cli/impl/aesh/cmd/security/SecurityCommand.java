@@ -81,6 +81,7 @@ public class SecurityCommand implements GroupCommand<CLICommandInvocation> {
     public static final String OPT_GROUP_PROPERTIES_FILE = "group-properties-file";
     public static final String OPT_PROPERTIES_REALM_NAME = "properties-realm-name";
     public static final String OPT_RELATIVE_TO = "relative-to";
+    public static final String OPT_PLAIN_TEXT = "plain-text";
     public static final String OPT_NO_RELOAD = "no-reload";
     public static final String OPT_EXPOSED_REALM = "exposed-realm";
     public static final String OPT_NEW_SECURITY_DOMAIN_NAME = "new-security-domain-name";
@@ -89,6 +90,8 @@ public class SecurityCommand implements GroupCommand<CLICommandInvocation> {
     public static final String OPT_MECHANISMS_ORDER = "mechanisms-order";
     public static final String OPT_MECHANISM = "mechanism";
     public static final String OPT_SUPER_USER = "super-user";
+    public static final String OPT_LETS_ENCRYPT = "lets-encrypt";
+    public static final String OPT_CA_ACCOUNT = "ca-account";
 
     public static final String OPT_ROLES = "roles";
 
@@ -121,6 +124,14 @@ public class SecurityCommand implements GroupCommand<CLICommandInvocation> {
     public static final String OPT_NO_OVERRIDE_SECURITY_REALM = "no-override-security-realm";
     public static final String OPT_SECURITY_DOMAIN = "security-domain";
     public static final String OPT_REFERENCED_SECURITY_DOMAIN = "referenced-security-domain";
+
+    public static final String OPT_OVERRIDE_SSL_CONTEXT = "override-ssl-context";
+    public static final String OPT_ADD_HTTPS_LISTENER = "add-https-listener";
+    public static final String OPT_HTTPS_LISTENER_NAME = "https-listener-name";
+    public static final String OPT_HTTPS_LISTENER_SOCKET_BINDING_NAME = "https-listener-socket-binding-name";
+
+    public static final String OPT_REMOVE_HTTPS_LISTENER = "remove-https-listener";
+    public static final String OPT_DEFAULT_SERVER_SSL_CONTEXT = "default-server-ssl-context";
 
     private final CommandContext ctx;
     private final AtomicReference<EmbeddedProcessLaunch> embeddedServerRef;
@@ -181,6 +192,37 @@ public class SecurityCommand implements GroupCommand<CLICommandInvocation> {
             @Override
             protected List<String> getItems(CLICompleterInvocation completerInvocation) {
                 return Util.getUndertowServerNames(completerInvocation.getCommandContext().getModelControllerClient());
+            }
+        }
+
+         public static class HTTPSListenerCompleter extends AbstractCompleter {
+
+            @Override
+            protected List<String> getItems(CLICompleterInvocation completerInvocation) {
+                HTTPServerDisableSSLCommand cmd = (HTTPServerDisableSSLCommand) completerInvocation.getCommand();
+                String serverName = cmd.getServerName(completerInvocation.getCommandContext());
+                return Util.getUndertowHTTSListeners(completerInvocation.getCommandContext().getModelControllerClient(), serverName);
+            }
+        }
+
+         public static class NewHTTPSListenerCompleter extends AbstractCompleter {
+
+            @Override
+            protected List<String> getItems(CLICompleterInvocation completerInvocation) {
+                HTTPServerEnableSSLCommand cmd = (HTTPServerEnableSSLCommand) completerInvocation.getCommand();
+                if (cmd.hasAddHTTPSListener()) {
+                    return Collections.emptyList();
+                }
+                String serverName = cmd.getServerName(completerInvocation.getCommandContext());
+                return Util.getUndertowHTTSListeners(completerInvocation.getCommandContext().getModelControllerClient(), serverName);
+            }
+        }
+
+        public static class SocketBindingCompleter extends AbstractCompleter {
+
+            @Override
+            protected List<String> getItems(CLICompleterInvocation completerInvocation) {
+                return Util.getStandardSocketBindings(completerInvocation.getCommandContext().getModelControllerClient());
             }
         }
 
@@ -294,6 +336,15 @@ public class SecurityCommand implements GroupCommand<CLICommandInvocation> {
                 } catch (Exception ex) {
                     return Collections.emptyList();
                 }
+            }
+        }
+
+        public static class CaAccountNameCompleter extends AbstractCompleter {
+
+            @Override
+            protected List<String> getItems(CLICompleterInvocation completerInvocation) {
+                return ElytronUtil.getCaAccountNames(completerInvocation.getCommandContext().
+                        getModelControllerClient());
             }
         }
     }

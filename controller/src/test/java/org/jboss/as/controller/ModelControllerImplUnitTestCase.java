@@ -126,8 +126,7 @@ public class ModelControllerImplUnitTestCase {
         container = ServiceContainer.Factory.create("test");
         ServiceTarget target = container.subTarget();
         ModelControllerService svc = new ModelControllerService();
-        ServiceBuilder<ModelController> builder = target.addService(ServiceName.of("ModelController"), svc);
-        builder.install();
+        target.addService(ServiceName.of("ModelController")).setInstance(svc).install();
         sharedState = svc.getSharedState();
         svc.awaitStartup(30, TimeUnit.SECONDS);
         controller = svc.getValue();
@@ -456,11 +455,31 @@ public class ModelControllerImplUnitTestCase {
         notificationHandler.validate(0);
 
         operation = new ModelNode();
+        operation.get(OP).set(READ_CHILDREN_NAMES_OPERATION);
+        operation.get(OP_ADDR).setEmptyList();
+        operation.get(CHILD_TYPE).set("runtime-child");
+
+        result = controller.execute(operation, null, null, null).get("result");
+        assertTrue(result.asList().isEmpty());
+        notificationHandler.validate(0);
+
+        operation = new ModelNode();
+        operation.get(OP).set(READ_CHILDREN_NAMES_OPERATION);
+        operation.get(OP_ADDR).setEmptyList();
+        operation.get(CHILD_TYPE).set("deployment");
+
+        result = controller.execute(operation, null, null, null).get("result");
+        assertEquals("runtime", result.get(0).asString());
+        notificationHandler.validate(0);
+
+        operation = new ModelNode();
         operation.get(OP).set(READ_CHILDREN_TYPES_OPERATION);
         operation.get(OP_ADDR).setEmptyList();
 
         result = controller.execute(operation, null, null, null).get("result");
         assertEquals("child", result.get(0).asString());
+        assertEquals("deployment", result.get(1).asString());
+        assertEquals("runtime-child", result.get(2).asString());
         notificationHandler.validate(0);
 
         operation = new ModelNode();
@@ -856,11 +875,21 @@ public class ModelControllerImplUnitTestCase {
 
             SimpleResourceDefinition childResource = new SimpleResourceDefinition(
                     PathElement.pathElement("child"),
-                    new NonResolvingResourceDescriptionResolver()
+                    NonResolvingResourceDescriptionResolver.INSTANCE
             );
             ManagementResourceRegistration childRegistration = rootRegistration.registerSubModel(childResource);
             childRegistration.registerReadOnlyAttribute(TestUtils.createNillableAttribute("attribute1", ModelType.INT), null);
             childRegistration.registerReadOnlyAttribute(TestUtils.createNillableAttribute("attribute2", ModelType.INT, true), null);
+            SimpleResourceDefinition runtimeChildResource = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(
+                    PathElement.pathElement("runtime-child"),
+                    NonResolvingResourceDescriptionResolver.INSTANCE
+            ).setRuntime(true));
+            rootRegistration.registerSubModel(runtimeChildResource);
+            SimpleResourceDefinition deploymentResource = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(
+                    PathElement.pathElement("deployment"),
+                    NonResolvingResourceDescriptionResolver.INSTANCE
+            ).setRuntime(true));
+            rootRegistration.registerSubModel(deploymentResource);
         }
 
     }
@@ -884,6 +913,9 @@ public class ModelControllerImplUnitTestCase {
 
             context.createResource(CHILD_ONE).getModel().set(child1);
             context.createResource(CHILD_TWO).getModel().set(child2);
+            final ModelNode deployment = new ModelNode();
+            deployment.get("attribute1").set(5);
+            context.createResource(PathAddress.pathAddress("deployment", "runtime")).getModel().set(deployment);
         }
     }
 
@@ -1043,7 +1075,7 @@ public class ModelControllerImplUnitTestCase {
 
                     context.getResult().set(current);
                     final ServiceName svcName =  ServiceName.JBOSS.append("good-service");
-                    context.getServiceTarget().addService(svcName, Service.NULL).install();
+                    context.getServiceTarget().addService(svcName).install();
 
                     context.completeStep(new OperationContext.RollbackHandler() {
                         @Override
@@ -1076,7 +1108,7 @@ public class ModelControllerImplUnitTestCase {
                     context.getResult().set(current);
 
                     final ServiceName svcName = ServiceName.JBOSS.append("missing-service");
-                    final ServiceBuilder sb = context.getServiceTarget().addService(svcName, Service.NULL);
+                    final ServiceBuilder sb = context.getServiceTarget().addService(svcName);
                     sb.requires(ServiceName.JBOSS.append("missing"));
                     sb.install();
 
@@ -1128,7 +1160,7 @@ public class ModelControllerImplUnitTestCase {
 
                     };
                     final ServiceName svcName = ServiceName.JBOSS.append("bad-service");
-                    context.getServiceTarget().addService(svcName, bad)
+                    context.getServiceTarget().addService(svcName).setInstance(bad)
                             .install();
 
                     context.completeStep(new OperationContext.RollbackHandler() {
@@ -1235,10 +1267,9 @@ public class ModelControllerImplUnitTestCase {
 
                     context.getResult().set(current);
                     final ServiceName dependedSvcName = ServiceName.JBOSS.append("depended-service");
-                    context.getServiceTarget().addService(dependedSvcName, Service.NULL)
-                            .install();
+                    context.getServiceTarget().addService(dependedSvcName).install();
                     final ServiceName dependentSvcName = ServiceName.JBOSS.append("dependent-service");
-                    final ServiceBuilder sb = context.getServiceTarget().addService(dependentSvcName, Service.NULL);
+                    final ServiceBuilder sb = context.getServiceTarget().addService(dependentSvcName);
                     sb.requires(dependedSvcName);
                     sb.install();
 
@@ -1277,8 +1308,7 @@ public class ModelControllerImplUnitTestCase {
                     context.completeStep(new OperationContext.RollbackHandler() {
                         @Override
                         public void handleRollback(OperationContext context, ModelNode operation) {
-                        context.getServiceTarget().addService(dependedSvcName, Service.NULL)
-                                .install();
+                        context.getServiceTarget().addService(dependedSvcName).install();
                         }
                     });
                 }
@@ -1307,15 +1337,14 @@ public class ModelControllerImplUnitTestCase {
                 public void execute(final OperationContext context, ModelNode operation) {
                     final ServiceName svcName = ServiceName.JBOSS.append("good-service");
                     context.removeService(svcName);
-                    final ServiceBuilder sb = context.getServiceTarget().addService(svcName, Service.NULL);
+                    final ServiceBuilder sb = context.getServiceTarget().addService(svcName);
                     sb.requires(ServiceName.JBOSS.append("missing"));
                     sb.install();
 
                     context.completeStep(new OperationContext.RollbackHandler() {
                         @Override
                         public void handleRollback(OperationContext context, ModelNode operation) {
-                            context.getServiceTarget().addService(svcName, Service.NULL)
-                            .install();
+                            context.getServiceTarget().addService(svcName).install();
                         }
                     });
                 }

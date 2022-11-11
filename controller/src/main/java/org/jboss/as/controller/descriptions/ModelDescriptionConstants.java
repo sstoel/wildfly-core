@@ -118,12 +118,16 @@ public class ModelDescriptionConstants {
     public static final String CONNECTION = "connection";
     public static final String CONNECTIONS = "connections";
     public static final String CONSOLE_ENABLED = "console-enabled";
+    public static final String CONSTANT_HEADERS = "constant-headers";
     public static final String CONTENT = "content";
+    public static final String CONTENT_LENGTH = "content-length";
+    public static final String CONTENT_TYPE = "content-type";
     public static final String CORE = "core";
     public static final String CORE_SERVICE = "core-service";
     public static final String CPU_AFFINITY = "cpu-affinity";
     public static final String CRITERIA = "criteria";
     public static final String CUSTOM_DISCOVERY = "custom-discovery";
+    public static final String DATE = "date";
     public static final String DATE_FORMAT = "date-format";
     public static final String DATE_SEPARATOR = "date-separator";
     public static final String DEFAULT = "default";
@@ -214,6 +218,7 @@ public class ModelDescriptionConstants {
     public static final String FULL_REPLACE_DEPLOYMENT = "full-replace-deployment";
     public static final String GENERATE_SELF_SIGNED_CERTIFICATE_HOST = "generate-self-signed-certificate-host";
     public static final String GRACEFUL_SHUTDOWN_TIMEOUT = "graceful-shutdown-timeout";
+    public static final String GRACEFUL_STARTUP = "graceful-startup";
     public static final String GROUP = "group";
     public static final String GROUP_ATTRIBUTE = "group-attribute";
     public static final String GROUP_DN_ATTRIBUTE = "group-dn-attribute";
@@ -225,6 +230,9 @@ public class ModelDescriptionConstants {
     public static final String HANDLER = "handler";
     public static final String HASH = "hash";
     public static final String HEAD_COMMENT_ALLOWED = "head-comment-allowed";
+    public static final String HEADER_MAPPING = "header-mapping";
+    public static final String HEADER_PAIR = "header-pair";
+    public static final String HEADERS = "headers";
     public static final String HOST = "host";
     public static final String HOSTS = "hosts";
     public static final String HOST_CONFIG = "host-config";
@@ -301,7 +309,6 @@ public class ModelDescriptionConstants {
     public static final String MANAGEMENT_SUBSYSTEM_ENDPOINT = "management-subsystem-endpoint";
     public static final String MAP_GROUPS_TO_ROLES = "map-groups-to-roles";
     public static final String MASK = "mask";
-    public static final String MASTER = "master";
     public static final String MAX = "max";
     public static final String MAX_BACKUP_INDEX = "max-backup-index";
     public static final String MAX_FAILED_SERVERS = "max-failed-servers";
@@ -566,6 +573,7 @@ public class ModelDescriptionConstants {
     public static final String TLS = "tls";
     public static final String TO_PROFILE = "to-profile";
     public static final String TO_REPLACE = "to-replace";
+    public static final String TRANSFER_ENCODING = "transfer-encoding";
     public static final String TRUNCATE = "truncate";
     public static final String TRUST_MANAGER_ALGORITHM = "trust-manager-algorithm";
     public static final String TRUSTSTORE = "truststore";
@@ -617,6 +625,8 @@ public class ModelDescriptionConstants {
     public static final String WRITE = "write";
     public static final String WRITE_ATTRIBUTE_OPERATION = "write-attribute";
     public static final String XML_NAMESPACES = "xml-namespaces";
+    public static final String GIT_MASTER_BRANCH = "master";
+    public static final String PRIMARY = "primary";
 
     private ModelDescriptionConstants() {
     }

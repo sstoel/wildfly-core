@@ -42,9 +42,6 @@ import org.apache.directory.server.ldap.LdapServer;
 import org.jboss.as.controller.client.helpers.domain.DomainClient;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ADD;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FAILURE_DESCRIPTION;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OUTCOME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESULT;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUCCESS;
@@ -75,13 +72,13 @@ public class OutboundLdapConnectionTestCase {
     private static final String USER_PASSWORD = "theduke";
 
     private static DomainTestSupport testSupport;
-    private static DomainLifecycleUtil domainMasterLifecycleUtil;
+    private static DomainLifecycleUtil domainPrimaryLifecycleUtil;
     private static URL managementInterfaceUrl;
 
     private static DirectoryService directoryService;
     private static LdapServer ldapServer;
 
-    private DomainClient masterClient;
+    private DomainClient primaryClient;
 
 
     @Test
@@ -118,7 +115,7 @@ public class OutboundLdapConnectionTestCase {
 
     private void addLdapOutboundConnection() throws IOException, MgmtOperationException {
         final ModelNode addLdapOutboundConnection = ModelUtil.createOpNode(
-                "host=master/core-service=management/ldap-connection=ldapConnection", ADD);
+                "host=primary/core-service=management/ldap-connection=ldapConnection", ADD);
         addLdapOutboundConnection.get("url").set("ldap://localhost:10389");
         addLdapOutboundConnection.get("search-dn").set("uid=admin,ou=system");
         addLdapOutboundConnection.get("search-credential").set("secret");
@@ -127,13 +124,13 @@ public class OutboundLdapConnectionTestCase {
 
     private void addTestRealm() throws IOException, MgmtOperationException {
         final ModelNode addTestRealm = ModelUtil.createOpNode(
-                "host=master/core-service=management/security-realm=TestRealm", ADD);
+                "host=primary/core-service=management/security-realm=TestRealm", ADD);
         executeOperation(addTestRealm);
     }
 
     private void addTestRealmLdapAuthentication() throws IOException, MgmtOperationException {
         final ModelNode addTestRealmLdapAuthentication = ModelUtil.createOpNode(
-                "host=master/core-service=management/security-realm=TestRealm/authentication=ldap", ADD);
+                "host=primary/core-service=management/security-realm=TestRealm/authentication=ldap", ADD);
         addTestRealmLdapAuthentication.get("connection").set("ldapConnection");
         addTestRealmLdapAuthentication.get("base-dn").set("ou=People,dc=wildfly,dc=org");
         addTestRealmLdapAuthentication.get("username-attribute").set("uid");
@@ -142,7 +139,7 @@ public class OutboundLdapConnectionTestCase {
 
     private void changeHttpInterfaceSecurityRealm() throws IOException, MgmtOperationException {
         final ModelNode changeHttpInterface = ModelUtil.createOpNode(
-                "host=master/core-service=management/management-interface=http-interface", WRITE_ATTRIBUTE_OPERATION);
+                "host=primary/core-service=management/management-interface=http-interface", WRITE_ATTRIBUTE_OPERATION);
         changeHttpInterface.get("name").set("security-realm");
         changeHttpInterface.get("value").set("TestRealm");
         executeOperation(changeHttpInterface);
@@ -150,14 +147,14 @@ public class OutboundLdapConnectionTestCase {
 
     private void changeLdapConnectionSearchDnAttribute(String value) throws IOException, MgmtOperationException {
         final ModelNode changeLdapSearchDn = ModelUtil.createOpNode(
-                "host=master/core-service=management/ldap-connection=ldapConnection", WRITE_ATTRIBUTE_OPERATION);
+                "host=primary/core-service=management/ldap-connection=ldapConnection", WRITE_ATTRIBUTE_OPERATION);
         changeLdapSearchDn.get("name").set("search-dn");
         changeLdapSearchDn.get("value").set(value);
         executeOperation(changeLdapSearchDn);
     }
 
     private ModelNode executeOperation(ModelNode operation) throws IOException, MgmtOperationException {
-        final ModelNode ret = this.masterClient.execute(operation);
+        final ModelNode ret = this.primaryClient.execute(operation);
 
         if (!SUCCESS.equals(ret.get(OUTCOME).asString())) {
             throw new MgmtOperationException("Management operation failed: " + ret.get(FAILURE_DESCRIPTION), operation, ret);
@@ -166,14 +163,7 @@ public class OutboundLdapConnectionTestCase {
     }
 
     private void reload() throws IOException, TimeoutException, InterruptedException {
-        ModelNode reload = new ModelNode();
-        reload.get(OP_ADDR).add(HOST, "master");
-        reload.get(OP).set("reload");
-        reload.get("admin-only").set(false);
-        domainMasterLifecycleUtil.executeAwaitConnectionClosed(reload);
-
-        domainMasterLifecycleUtil.connect();
-        domainMasterLifecycleUtil.awaitHostController(System.currentTimeMillis());
+        domainPrimaryLifecycleUtil.reload("primary", null, false);
     }
 
 
@@ -215,20 +205,20 @@ public class OutboundLdapConnectionTestCase {
 
         testSupport = DomainTestSupport.create(config);
         testSupport.start();
-        domainMasterLifecycleUtil = testSupport.getDomainMasterLifecycleUtil();
-        managementInterfaceUrl = new URL("http://" + TestSuiteEnvironment.formatPossibleIpv6Address(DomainTestSupport.masterAddress) + ":9990/management");
+        domainPrimaryLifecycleUtil = testSupport.getDomainPrimaryLifecycleUtil();
+        managementInterfaceUrl = new URL("http://" + TestSuiteEnvironment.formatPossibleIpv6Address(DomainTestSupport.primaryAddress) + ":9990/management");
     }
 
     @AfterClass
     public static void tearDownDomain() throws Exception {
         testSupport.close();
-        domainMasterLifecycleUtil = null;
+        domainPrimaryLifecycleUtil = null;
         testSupport = null;
     }
 
 
     @Before
     public void setup() throws Exception {
-        this.masterClient = domainMasterLifecycleUtil.getDomainClient();
+        this.primaryClient = domainPrimaryLifecycleUtil.getDomainClient();
     }
 }

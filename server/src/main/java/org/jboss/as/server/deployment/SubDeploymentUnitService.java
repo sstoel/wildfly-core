@@ -30,21 +30,23 @@ import org.jboss.as.controller.services.path.PathManager;
 import org.jboss.as.server.deployment.module.ModuleSpecification;
 import org.jboss.as.server.deployment.module.ResourceRoot;
 import org.jboss.as.server.logging.ServerLogger;
-import org.jboss.as.server.services.security.AbstractVaultReader;
 import org.jboss.msc.service.ServiceRegistry;
+
+import java.util.function.Consumer;
 
 /**
  * Service responsible for installing the correct services to install a {@link DeploymentUnit}.
  *
  * @author John Bailey
+ * @author <a href="mailto:ropalka@redhat.com">Richard Opalka</a>
  */
-public class SubDeploymentUnitService extends AbstractDeploymentUnitService {
+final class SubDeploymentUnitService extends AbstractDeploymentUnitService {
     private final ResourceRoot deploymentRoot;
     private final DeploymentUnit parent;
     private final PathManager pathManager;
 
-    public SubDeploymentUnitService(ResourceRoot deploymentRoot, DeploymentUnit parent, ImmutableManagementResourceRegistration registration, final ManagementResourceRegistration mutableRegistration, Resource resource, CapabilityServiceSupport capabilityServiceSupport, final AbstractVaultReader vaultReader, PathManager pathManager) {
-        super(registration, mutableRegistration, resource, capabilityServiceSupport, vaultReader);
+    public SubDeploymentUnitService(final Consumer<DeploymentUnit> deploymentUnitConsumer, ResourceRoot deploymentRoot, DeploymentUnit parent, ImmutableManagementResourceRegistration registration, final ManagementResourceRegistration mutableRegistration, Resource resource, CapabilityServiceSupport capabilityServiceSupport, PathManager pathManager) {
+        super(deploymentUnitConsumer, registration, mutableRegistration, resource, capabilityServiceSupport);
         this.pathManager = pathManager;
         if (deploymentRoot == null) throw ServerLogger.ROOT_LOGGER.deploymentRootRequired();
         this.deploymentRoot = deploymentRoot;
@@ -62,8 +64,8 @@ public class SubDeploymentUnitService extends AbstractDeploymentUnitService {
         deploymentUnit.putAttachment(DeploymentResourceSupport.DEPLOYMENT_RESOURCE, resource);
         deploymentUnit.putAttachment(Attachments.DEPLOYMENT_RESOURCE_SUPPORT, new DeploymentResourceSupport(deploymentUnit));
         deploymentUnit.putAttachment(Attachments.CAPABILITY_SERVICE_SUPPORT, capabilityServiceSupport);
-        deploymentUnit.putAttachment(Attachments.VAULT_READER_ATTACHMENT_KEY, vaultReader);
         deploymentUnit.putAttachment(Attachments.DEPLOYMENT_OVERLAY_INDEX, parent.getAttachment(Attachments.DEPLOYMENT_OVERLAY_INDEX));
+        deploymentUnit.putAttachment(Attachments.ANNOTATION_INDEX_SUPPORT, parent.getAttachment(Attachments.ANNOTATION_INDEX_SUPPORT));
         deploymentUnit.putAttachment(Attachments.PATH_MANAGER, pathManager);
         return deploymentUnit;
     }

@@ -1,12 +1,22 @@
 <!-- for needs of RealmsTestCase -->
-<subsystem xmlns="urn:wildfly:elytron:8.0" initial-providers="elytron">
+<subsystem xmlns="urn:wildfly:elytron:16.0" initial-providers="elytron">
     <providers>
         <provider-loader name="elytron" class-names="org.wildfly.security.WildFlyElytronProvider" />
     </providers>
     <security-realms>
+        <aggregate-realm name="AggregateRealmOne" authentication-realm="FilesystemRealm" authorization-realm="FilesystemRealm2"/>
+        <aggregate-realm name="AggregateRealmTwo" authentication-realm="FilesystemRealm" authorization-realm="FilesystemRealm2" principal-transformer ="RegexOne"/>
 
         <properties-realm name="HashedPropertyRealm">
             <users-properties path="target/test-classes/org/wildfly/extension/elytron/users-hashed.properties" digest-realm-name="Hashed" />
+        </properties-realm>
+
+        <properties-realm name="HashedPropertyRealmBase64Encoded" hash-encoding="base64">
+            <users-properties path="target/test-classes/org/wildfly/extension/elytron/users-hashedbase64.properties" digest-realm-name="ManagementRealm" />
+        </properties-realm>
+
+        <properties-realm name="HashedPropertyRealmBase64EncodedCharset" hash-encoding="base64" hash-charset="GB2312">
+            <users-properties path="target/test-classes/org/wildfly/extension/elytron/users-hashedbase64charset.properties" digest-realm-name="ManagementRealm" />
         </properties-realm>
 
         <properties-realm name="ClearPropertyRealm" groups-attribute="groupAttr">
@@ -16,6 +26,38 @@
 
         <filesystem-realm name="FilesystemRealm" levels="2" encoded="false">
             <file path="filesystem-realm" relative-to="jboss.server.config.dir" />
+        </filesystem-realm>
+
+        <filesystem-realm name="FilesystemRealm2" levels="2" encoded="false">
+            <file path="filesystem-realm-2" relative-to="jboss.server.config.dir" />
+        </filesystem-realm>
+
+        <filesystem-realm name="FilesystemRealm3" levels="1" encoded="true" hash-encoding="hex">
+            <file path="filesystem-realm-3" relative-to="jboss.server.config.dir" />
+        </filesystem-realm>
+
+        <filesystem-realm name="FilesystemRealm4" levels="1" encoded="true" hash-encoding="hex" hash-charset="GB2312">
+            <file path="filesystem-realm-4" relative-to="jboss.server.config.dir"/>
+        </filesystem-realm>
+
+        <filesystem-realm name="FilesystemRealm5" levels="1" encoded="false" credential-store="secretkeycredentialstore" secret-key="key">
+            <file path="filesystem-realm-5" relative-to="jboss.server.config.dir"/>
+        </filesystem-realm>
+
+        <filesystem-realm name="FilesystemRealm6" levels="1" encoded="false" credential-store="secretkeycredstore" secret-key="key">
+            <file path="filesystem-realm-6" relative-to="jboss.server.config.dir"/>
+        </filesystem-realm>
+
+        <filesystem-realm name="FilesystemRealmExpression" levels="1" encoded="false" credential-store="${exp.credential-store:secretkeycredstore}" secret-key="${exp.secret-key:key}" key-store="${exp.key-store:keystore}" key-store-alias="${exp.key-store-alias:localhost}">
+            <file path="filesystem-realm-expression" relative-to="jboss.server.config.dir"/>
+        </filesystem-realm>
+
+        <filesystem-realm name="FilesystemRealmIntegrity" levels="1" encoded="true" key-store="keystore" key-store-alias="localhost">
+            <file path="filesystem-realm-integrity" relative-to="jboss.server.config.dir"/>
+        </filesystem-realm>
+
+        <filesystem-realm name="FilesystemRealmIntegrityAndEncryption" levels="1" encoded="true" key-store="keystore" key-store-alias="localhost" credential-store="secretkeycredentialstore" secret-key="key">
+            <file path="filesystem-realm-integrity-encryption" relative-to="jboss.server.config.dir"/>
         </filesystem-realm>
 
         <token-realm name="JwtRealm" principal-claim="sub">
@@ -33,7 +75,16 @@
         <token-realm name="OAuth2Realm" principal-claim="sub">
             <oauth2-introspection client-id="a" client-secret="b" introspection-url="https://localhost/token/introspect" client-ssl-context="ClientCaSslContext" host-name-verification-policy="ANY" />
         </token-realm>
+
+        <jaas-realm name="myJaasRealm"  entry="${jaas.realm.login.context.entry:Entry1}" >
+            <file path="${path.to.jaas.config.file:target/test-classes/org/wildfly/extension/elytron/jaas-login.config}"/>
+        </jaas-realm>
+
     </security-realms>
+
+    <mappers>
+        <regex-principal-transformer name="RegexOne" pattern="first" replacement="second" />
+    </mappers>
 
     <tls><!-- required by OAuth2Realm when HTTPS in introspection-url used -->
         <key-stores>
@@ -41,6 +92,11 @@
                 <credential-reference clear-text="Elytron"/>
                 <implementation type="JKS" />
                 <file path="target/test-classes/org/wildfly/extension/elytron/ca.truststore"/>
+            </key-store>
+            <key-store name="keystore">
+                <credential-reference clear-text="secret"/>
+                <implementation type="JKS"/>
+                <file path="target/test-classes/org/wildfly/extension/elytron/keystore"/>
             </key-store>
         </key-stores>
         <trust-managers>
@@ -50,4 +106,9 @@
             <client-ssl-context name="ClientCaSslContext" trust-manager="CaTrustManager" />
         </client-ssl-contexts>
     </tls>
+
+    <credential-stores>
+        <secret-key-credential-store name="secretkeycredentialstore" path="target/test-classes/org/wildfly/extension/elytron/mycredstore.cs" />
+        <secret-key-credential-store name="secretkeycredstore" path="target/test-classes/org/wildfly/extension/elytron/mysecretkeycredstore.cs" create="true" populate="true" />
+    </credential-stores>
 </subsystem>

@@ -1,19 +1,17 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<host xmlns="urn:jboss:domain:10.0">
+<host xmlns="urn:jboss:domain:20.0">
 
-    <!--  The native interface is always required by the parser -->
+    <!--  An interface is always required by the parser -->
     <management>
         <management-interfaces>
-            <native-interface security-realm="ManagementRealm">
-                <socket interface="management" port="${jboss.management.native.port:9999}"/>
-            </native-interface>
+            <http-interface>
+                <http-upgrade enabled="true"/>
+                <socket interface="management" port="${jboss.management.http.port:9990}"/>
+            </http-interface>
         </management-interfaces>
     </management>
 
     <interfaces>
-        <interface name="loopback">
-            <inet-address value="127.0.0.1"/>
-        </interface>
         <interface name="external">
             <any-address/>
         </interface>
@@ -32,14 +30,14 @@
                 <loopback/>
             </not>
         </interface>
+        <interface name="loopback">
+            <inet-address value="127.0.0.1"/>
+        </interface>
     </interfaces>
     
     <servers>
         <server name="server-one" group="main-server-group">
 		    <interfaces>
-		        <interface name="loopback">
-		            <inet-address value="127.0.0.1"/>
-		        </interface>
 		        <interface name="external">
 		            <any-address/>
 		        </interface>
@@ -58,6 +56,9 @@
 		                <loopback/>
 		            </not>
 		        </interface>
+                <interface name="loopback">
+                    <inet-address value="127.0.0.1"/>
+                </interface>
 		    </interfaces>        
         </server>
     </servers>

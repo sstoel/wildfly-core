@@ -97,28 +97,28 @@ public class ManagementReadsTestCase {
     private static final String PATH_SEPARATOR = System.getProperty("file.separator");
 
     private static DomainTestSupport testSupport;
-    private static DomainLifecycleUtil domainMasterLifecycleUtil;
-    private static DomainLifecycleUtil domainSlaveLifecycleUtil;
+    private static DomainLifecycleUtil domainPrimaryLifecycleUtil;
+    private static DomainLifecycleUtil domainSecondaryLifecycleUtil;
 
     @BeforeClass
     public static void setupDomain() throws Exception {
         testSupport = DomainTestSuite.createSupport(ManagementReadsTestCase.class.getSimpleName());
 
-        domainMasterLifecycleUtil = testSupport.getDomainMasterLifecycleUtil();
-        domainSlaveLifecycleUtil = testSupport.getDomainSlaveLifecycleUtil();
+        domainPrimaryLifecycleUtil = testSupport.getDomainPrimaryLifecycleUtil();
+        domainSecondaryLifecycleUtil = testSupport.getDomainSecondaryLifecycleUtil();
     }
 
     @AfterClass
     public static void tearDownDomain() throws Exception {
         DomainTestSuite.stopSupport();
         testSupport = null;
-        domainMasterLifecycleUtil = null;
-        domainSlaveLifecycleUtil = null;
+        domainPrimaryLifecycleUtil = null;
+        domainSecondaryLifecycleUtil = null;
     }
 
     @Test
     public void testDomainReadResource() throws IOException {
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         final ModelNode domainOp = new ModelNode();
         domainOp.get(OP).set(READ_RESOURCE_OPERATION);
         domainOp.get(OP_ADDR).setEmptyList();
@@ -134,10 +134,10 @@ public class ManagementReadsTestCase {
 
     @Test
     public void testHostReadResource() throws IOException {
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         final ModelNode hostOp = new ModelNode();
         hostOp.get(OP).set(READ_RESOURCE_OPERATION);
-        hostOp.get(OP_ADDR).setEmptyList().add(HOST, "master");
+        hostOp.get(OP_ADDR).setEmptyList().add(HOST, "primary");
         hostOp.get(RECURSIVE).set(true);
         hostOp.get(INCLUDE_RUNTIME).set(true);
         hostOp.get(PROXIES).set(false);
@@ -146,18 +146,18 @@ public class ManagementReadsTestCase {
         validateResponse(response);
         // TODO make some more assertions about result content
 
-        hostOp.get(OP_ADDR).setEmptyList().add(HOST, "slave");
+        hostOp.get(OP_ADDR).setEmptyList().add(HOST, "secondary");
         response = domainClient.execute(hostOp);
         validateResponse(response);
         // TODO make some more assertions about result content
     }
 
     @Test
-    public void testHostReadResourceViaSlave() throws IOException {
-        DomainClient domainClient = domainSlaveLifecycleUtil.getDomainClient();
+    public void testHostReadResourceViaSecondary() throws IOException {
+        DomainClient domainClient = domainSecondaryLifecycleUtil.getDomainClient();
         final ModelNode hostOp = new ModelNode();
         hostOp.get(OP).set(READ_RESOURCE_OPERATION);
-        hostOp.get(OP_ADDR).setEmptyList().add(HOST, "slave");
+        hostOp.get(OP_ADDR).setEmptyList().add(HOST, "secondary");
         hostOp.get(RECURSIVE).set(true);
         hostOp.get(INCLUDE_RUNTIME).set(true);
         hostOp.get(PROXIES).set(false);
@@ -169,11 +169,11 @@ public class ManagementReadsTestCase {
 
     @Test
     public void testServerReadResource() throws IOException {
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         final ModelNode serverOp = new ModelNode();
         serverOp.get(OP).set(READ_RESOURCE_OPERATION);
         ModelNode address = serverOp.get(OP_ADDR);
-        address.add(HOST, "master");
+        address.add(HOST, "primary");
         address.add(SERVER, "main-one");
         serverOp.get(RECURSIVE).set(true);
         serverOp.get(INCLUDE_RUNTIME).set(true);
@@ -187,7 +187,7 @@ public class ManagementReadsTestCase {
         Assert.assertTrue(result.hasDefined(PROFILE_NAME));
 
         address.setEmptyList();
-        address.add(HOST, "slave");
+        address.add(HOST, "secondary");
         address.add(SERVER, "main-three");
         response = domainClient.execute(serverOp);
         validateResponse(response);
@@ -198,12 +198,12 @@ public class ManagementReadsTestCase {
     }
 
     @Test
-    public void testServerReadResourceViaSlave() throws IOException {
-        DomainClient domainClient = domainSlaveLifecycleUtil.getDomainClient();
+    public void testServerReadResourceViaSecondary() throws IOException {
+        DomainClient domainClient = domainSecondaryLifecycleUtil.getDomainClient();
         final ModelNode serverOp = new ModelNode();
         serverOp.get(OP).set(READ_RESOURCE_OPERATION);
         ModelNode address = serverOp.get(OP_ADDR);
-        address.add(HOST, "slave");
+        address.add(HOST, "secondary");
         address.add(SERVER, "main-three");
         serverOp.get(RECURSIVE).set(true);
         serverOp.get(INCLUDE_RUNTIME).set(true);
@@ -216,10 +216,10 @@ public class ManagementReadsTestCase {
 
     @Test
     public void testServerPathOverride() throws IOException {
-        final DomainClient client = domainMasterLifecycleUtil.getDomainClient();
+        final DomainClient client = domainPrimaryLifecycleUtil.getDomainClient();
 
         final ModelNode address = new ModelNode();
-        address.add(HOST, "master");
+        address.add(HOST, "primary");
         address.add(SERVER, "main-one");
         address.add(PATH, "domainTestPath");
 
@@ -237,10 +237,10 @@ public class ManagementReadsTestCase {
 
     @Test
     public void testHostPathOverride() throws IOException {
-        final DomainClient client = domainSlaveLifecycleUtil.getDomainClient();
+        final DomainClient client = domainSecondaryLifecycleUtil.getDomainClient();
 
         final ModelNode address = new ModelNode();
-        address.add(HOST, "slave");
+        address.add(HOST, "secondary");
         address.add(SERVER, "main-three");
         address.add(PATH, "domainTestPath");
 
@@ -258,7 +258,7 @@ public class ManagementReadsTestCase {
 
     @Test
     public void testCompositeOperation() throws IOException {
-        final DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        final DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         final ModelNode request = new ModelNode();
         request.get(OP).set(READ_RESOURCE_OPERATION);
         request.get(OP_ADDR).add("profile", "*");
@@ -276,7 +276,7 @@ public class ManagementReadsTestCase {
     @Test
     public void testDomainReadResourceDescription() throws IOException {
 
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode request = new ModelNode();
         request.get(OP).set("read-resource-description");
         request.get(OP_ADDR).setEmptyList();
@@ -292,7 +292,7 @@ public class ManagementReadsTestCase {
     @Test
     public void testDomainReadFeatureDescription() throws IOException {
 
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode request = new ModelNode();
         request.get(OP).set("read-feature-description");
         request.get(OP_ADDR).setEmptyList();
@@ -308,10 +308,10 @@ public class ManagementReadsTestCase {
     @Test
     public void testHostReadResourceDescription() throws IOException {
 
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode request = new ModelNode();
         request.get(OP).set("read-resource-description");
-        request.get(OP_ADDR).setEmptyList().add(HOST, "master");
+        request.get(OP_ADDR).setEmptyList().add(HOST, "primary");
         request.get(RECURSIVE).set(true);
         request.get(OPERATIONS).set(true);
 
@@ -320,7 +320,7 @@ public class ManagementReadsTestCase {
         validateHostLifecycleOps(response, true);
         // TODO make some more assertions about result content
 
-        request.get(OP_ADDR).setEmptyList().add(HOST, "slave");
+        request.get(OP_ADDR).setEmptyList().add(HOST, "secondary");
         response = domainClient.execute(request);
         validateResponse(response);
         validateHostLifecycleOps(response, false);
@@ -329,10 +329,10 @@ public class ManagementReadsTestCase {
     @Test
     public void testHostReadFeatureDescription() throws IOException {
 
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode request = new ModelNode();
         request.get(OP).set("read-feature-description");
-        request.get(OP_ADDR).add(HOST, "master");
+        request.get(OP_ADDR).add(HOST, "primary");
         request.get(RECURSIVE).set(true);
 
         ModelNode response = domainClient.execute(request);
@@ -344,11 +344,11 @@ public class ManagementReadsTestCase {
     @Test
     public void testServerReadResourceDescription() throws IOException {
 
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode request = new ModelNode();
         request.get(OP).set("read-resource-description");
         ModelNode address = request.get(OP_ADDR);
-        address.add(HOST, "master");
+        address.add(HOST, "primary");
         address.add(SERVER, "main-one");
         request.get(RECURSIVE).set(true);
         request.get(OPERATIONS).set(true);
@@ -359,7 +359,7 @@ public class ManagementReadsTestCase {
         // TODO make some more assertions about result content
 
         address.setEmptyList();
-        address.add(HOST, "slave");
+        address.add(HOST, "secondary");
         address.add(SERVER, "main-three");
         response = domainClient.execute(request);
         validateResponse(response);
@@ -370,11 +370,11 @@ public class ManagementReadsTestCase {
     @Test
     public void testStoppedServerReadResourceDescription() throws IOException {
 
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode request = new ModelNode();
         request.get(OP).set("read-resource-description");
         ModelNode address = request.get(OP_ADDR);
-        address.add(HOST, "master");
+        address.add(HOST, "primary");
         address.add(RUNNING_SERVER, "reload-one");
         request.get(RECURSIVE).set(true);
         request.get(OPERATIONS).set(true);
@@ -387,7 +387,7 @@ public class ManagementReadsTestCase {
     @Test
     public void testDomainReadConfigAsXml() throws IOException {
 
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode request = new ModelNode();
         request.get(OP).set("read-config-as-xml");
         request.get(OP_ADDR).setEmptyList();
@@ -400,16 +400,16 @@ public class ManagementReadsTestCase {
     @Test
     public void testHostReadConfigAsXml() throws IOException {
 
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode request = new ModelNode();
         request.get(OP).set("read-config-as-xml");
-        request.get(OP_ADDR).setEmptyList().add(HOST, "master");
+        request.get(OP_ADDR).setEmptyList().add(HOST, "primary");
 
         ModelNode response = domainClient.execute(request);
         validateResponse(response);
         // TODO make some more assertions about result content
 
-        request.get(OP_ADDR).setEmptyList().add(HOST, "slave");
+        request.get(OP_ADDR).setEmptyList().add(HOST, "secondary");
         response = domainClient.execute(request);
         validateResponse(response);
     }
@@ -417,11 +417,11 @@ public class ManagementReadsTestCase {
     @Test
     public void testServerReadConfigAsXml() throws IOException {
 
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode request = new ModelNode();
         request.get(OP).set("read-config-as-xml");
         ModelNode address = request.get(OP_ADDR);
-        address.add(HOST, "master");
+        address.add(HOST, "primary");
         address.add(SERVER, "main-one");
 
         ModelNode response = domainClient.execute(request);
@@ -429,7 +429,7 @@ public class ManagementReadsTestCase {
         // TODO make some more assertions about result content
 
         address.setEmptyList();
-        address.add(HOST, "slave");
+        address.add(HOST, "secondary");
         address.add(SERVER, "main-three");
         response = domainClient.execute(request);
         validateResponse(response);
@@ -441,77 +441,77 @@ public class ManagementReadsTestCase {
         ModelNode op = testSupport.createOperationNode(null, "resolve-expression-on-domain");
         op.get("expression").set("${file.separator}");
 
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode response = domainClient.execute(op);
         validateResponse(response);
-        validateResolveExpressionOnMaster(response);
-        validateResolveExpressionOnSlave(response);
+        validateResolveExpressionOnPrimary(response);
+        validateResolveExpressionOnSecondary(response);
     }
 
     @Test
-    public void testResolveExpressionOnMasterHost() throws Exception  {
-        ModelNode op = testSupport.createOperationNode("host=master", "resolve-expression-on-domain");
+    public void testResolveExpressionOnPrimaryHost() throws Exception  {
+        ModelNode op = testSupport.createOperationNode("host=primary", "resolve-expression-on-domain");
         op.get("expression").set("${file.separator}");
 
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode response = domainClient.execute(op);
         validateResponse(response);
-        validateResolveExpressionOnMaster(response);
+        validateResolveExpressionOnPrimary(response);
     }
 
     @Test
-    public void testResolveExpressionOnSlaveHost() throws Exception  {
-        resolveExpressionOnSlaveHostTest(domainMasterLifecycleUtil.getDomainClient());
+    public void testResolveExpressionOnSecondaryHost() throws Exception  {
+        resolveExpressionOnSecondaryHostTest(domainPrimaryLifecycleUtil.getDomainClient());
     }
 
     @Test
-    public void testResolveExpressionOnSlaveHostDirect() throws Exception  {
-        resolveExpressionOnSlaveHostTest(domainSlaveLifecycleUtil.getDomainClient());
+    public void testResolveExpressionOnSecondaryHostDirect() throws Exception  {
+        resolveExpressionOnSecondaryHostTest(domainSecondaryLifecycleUtil.getDomainClient());
     }
 
     @Test
-    public void testReadMasterHostState() throws Exception {
-        readHostState("master");
+    public void testReadPrimaryHostState() throws Exception {
+        readHostState("primary");
     }
 
     @Test
-    public void testReadSlaveHostState() throws Exception {
-        readHostState("slave");
+    public void testReadSecondaryHostState() throws Exception {
+        readHostState("secondary");
     }
 
     private void readHostState(String host) throws Exception {
         ModelNode op = testSupport.createOperationNode("host=" + host, READ_RESOURCE_OPERATION);
         op.get(INCLUDE_RUNTIME).set(true);
-        DomainClient client = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient client = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode response = client.execute(op);
         ModelNode result = validateResponse(response);
         Assert.assertTrue(result.hasDefined(HOST_STATE));
         Assert.assertEquals("running", result.get(HOST_STATE).asString());
     }
 
-    private void resolveExpressionOnSlaveHostTest(ModelControllerClient domainClient) throws Exception {
-        ModelNode op = testSupport.createOperationNode("host=slave", "resolve-expression-on-domain");
+    private void resolveExpressionOnSecondaryHostTest(ModelControllerClient domainClient) throws Exception {
+        ModelNode op = testSupport.createOperationNode("host=secondary", "resolve-expression-on-domain");
         op.get("expression").set("${file.separator}");
         System.out.println(op);
         ModelNode response = domainClient.execute(op);
         validateResponse(response);
-        validateResolveExpressionOnSlave(response);
+        validateResolveExpressionOnSecondary(response);
     }
 
-    private static void validateResolveExpressionOnMaster(final ModelNode result) {
+    private static void validateResolveExpressionOnPrimary(final ModelNode result) {
         System.out.println(result);
-        ModelNode serverResult = result.get("server-groups", "main-server-group", "host", "master", "main-one");
+        ModelNode serverResult = result.get("server-groups", "main-server-group", "host", "primary", "main-one");
         Assert.assertTrue(serverResult.isDefined());
         validateResolveExpressionOnServer(serverResult);
     }
 
-    private static void validateResolveExpressionOnSlave(final ModelNode result) {
+    private static void validateResolveExpressionOnSecondary(final ModelNode result) {
         System.out.println(result);
-        ModelNode serverResult = result.get("server-groups", "main-server-group", "host", "slave", "main-three");
+        ModelNode serverResult = result.get("server-groups", "main-server-group", "host", "secondary", "main-three");
         Assert.assertTrue(serverResult.isDefined());
         validateResolveExpressionOnServer(serverResult);
 
-        serverResult = result.get("server-groups", "other-server-group", "host", "slave", "other-two");
+        serverResult = result.get("server-groups", "other-server-group", "host", "secondary", "other-two");
         Assert.assertTrue(serverResult.isDefined());
         validateResolveExpressionOnServer(serverResult);
     }
@@ -593,9 +593,9 @@ public class ManagementReadsTestCase {
         validateOperation(operations, SUSPEND_SERVERS,  null, TIMEOUT, SUSPEND_TIMEOUT);
     }
 
-    private static void validateHostLifecycleOps(ModelNode response, boolean isMaster) {
+    private static void validateHostLifecycleOps(ModelNode response, boolean isPrimary) {
         ModelNode operations = response.get(RESULT, OPERATIONS);
-        if (isMaster) {
+        if (isPrimary) {
             validateOperation(operations, RELOAD, null, ADMIN_ONLY, RESTART_SERVERS, USE_CURRENT_DOMAIN_CONFIG, USE_CURRENT_HOST_CONFIG, DOMAIN_CONFIG, HOST_CONFIG);
         } else {
             validateOperation(operations, RELOAD, null, ADMIN_ONLY, RESTART_SERVERS, USE_CURRENT_HOST_CONFIG, HOST_CONFIG);

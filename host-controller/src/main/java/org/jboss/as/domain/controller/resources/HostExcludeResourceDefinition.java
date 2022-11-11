@@ -17,6 +17,7 @@ limitations under the License.
 package org.jboss.as.domain.controller.resources;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST_EXCLUDE;
+import static org.wildfly.common.Assert.checkNotNullParam;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -48,8 +49,8 @@ import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 
 /**
- * {@link org.jboss.as.host.controller.ignored.IgnoredDomainResourceRegistry.ResourceDefinition} for
- * the {@code host-ignores} resources in the domain wide model.
+ * {@link org.jboss.as.controller.ResourceDefinition} for
+ * the {@code host-exclude} resources in the domain wide model.
  *
  * @author Brian Stansberry
  */
@@ -64,14 +65,27 @@ public class HostExcludeResourceDefinition extends SimpleResourceDefinition {
         EAP70("EAP7.0", KernelAPIVersion.VERSION_4_1),
         EAP71("EAP7.1", KernelAPIVersion.VERSION_5_0),
         EAP72("EAP7.2", KernelAPIVersion.VERSION_8_0),
+        EAP73("EAP7.3", KernelAPIVersion.VERSION_10_0),
+        EAP74("EAP7.4", KernelAPIVersion.VERSION_16_0),
         WILDFLY10("WildFly10.0", KernelAPIVersion.VERSION_4_0),
         WILDFLY10_1("WildFly10.1", KernelAPIVersion.VERSION_4_2),
         WILDFLY11("WildFly11.0", KernelAPIVersion.VERSION_5_0),
         WILDFLY12("WildFly12.0", KernelAPIVersion.VERSION_6_0),
         WILDFLY13("WildFly13.0", KernelAPIVersion.VERSION_7_0),
         WILDFLY14("WildFly14.0", KernelAPIVersion.VERSION_8_0),
-        WILDFLY15("WildFly15.0", KernelAPIVersion.VERSION_9_0);
-
+        WILDFLY15("WildFly15.0", KernelAPIVersion.VERSION_9_0),
+        WILDFLY16("WildFly16.0", KernelAPIVersion.VERSION_10_0),
+        WILDFLY17("WildFly17.0", KernelAPIVersion.VERSION_10_0),
+        WILDFLY18("WildFly18.0", KernelAPIVersion.VERSION_10_0),
+        WILDFLY19("WildFly19.0", KernelAPIVersion.VERSION_12_0),
+        WILDFLY20("WildFly20.0", KernelAPIVersion.VERSION_13_0),
+        WILDFLY21("WildFly21.0", KernelAPIVersion.VERSION_14_0),
+        WILDFLY22("WildFly22.0", KernelAPIVersion.VERSION_15_0),
+        WILDFLY23("WildFly23.0", KernelAPIVersion.VERSION_16_0),
+        WILDFLY24("WildFly24.0", KernelAPIVersion.VERSION_17_0),
+        WILDFLY25("WildFly25.0", KernelAPIVersion.VERSION_18_0),
+        WILDFLY26("WildFly26.0", KernelAPIVersion.VERSION_19_0),
+        WILDFLY27("WildFly27.0", KernelAPIVersion.VERSION_20_0);
 
         private static final Map<String, KnownRelease> map = new HashMap<>();
         static {
@@ -81,11 +95,8 @@ public class HostExcludeResourceDefinition extends SimpleResourceDefinition {
         }
 
         private static KnownRelease fromName(String name) {
-            KnownRelease kr = map.get(name.toUpperCase(Locale.ENGLISH));
-            if (kr == null) {
-                throw new IllegalArgumentException(name);
-            }
-            return kr;
+            checkNotNullParam("name", name);
+            return checkNotNullParam(name, map.get(name.toUpperCase(Locale.ENGLISH)));
         }
 
         private final String name;
@@ -106,7 +117,7 @@ public class HostExcludeResourceDefinition extends SimpleResourceDefinition {
             SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.HOST_RELEASE, ModelType.STRING, false)
                     .setXmlName("id")
                     .setAlternatives(ModelDescriptionConstants.MANAGEMENT_MAJOR_VERSION)
-                    .setValidator(EnumValidator.create(KnownRelease.class, false, false))
+                    .setValidator(EnumValidator.create(KnownRelease.class))
                     .build();
 
     public static final SimpleAttributeDefinition MANAGEMENT_MAJOR_VERSION =

@@ -24,8 +24,10 @@ package org.jboss.as.controller;
 
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
+import java.util.function.Consumer;
 
 import org.jboss.msc.service.Service;
+import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceTarget;
@@ -38,19 +40,28 @@ import org.jboss.msc.service.StopContext;
  * to it.
  *
  * @author Brian Stansberry (c) 2011 Red Hat Inc.
+ * @author <a href="mailto:ropalka@redhat.com">Richard Opalka</a>
  */
-public class ControlledProcessStateService implements Service<ControlledProcessStateService> {
+public class ControlledProcessStateService implements Service<ControlledProcessStateService>, ProcessStateNotifier {
 
+    /** @deprecated use the 'org.wildfly.management.process-state-notifier' capability to obtain a {@link ProcessStateNotifier}*/
+    @Deprecated
     public static final ServiceName SERVICE_NAME = ServiceName.JBOSS.append("controlled-process-state");
+    /** Only for use within the WildFly Core kernel; may change or be removed at any time */
+    public static final ServiceName INTERNAL_SERVICE_NAME = AbstractControllerService.PROCESS_STATE_NOTIFIER_CAPABILITY.getCapabilityServiceName();
 
-    public static ServiceController<ControlledProcessStateService> addService(ServiceTarget target,
-                                                                              ControlledProcessState processState) {
-        ControlledProcessStateService service = processState.getService();
-        return target.addService(SERVICE_NAME, service).install();
+    @SuppressWarnings("unchecked")
+    public static ServiceController<ControlledProcessStateService> addService(ServiceTarget target, ControlledProcessState processState) {
+        final ControlledProcessStateService service = processState.getService();
+        final ServiceBuilder<?> sb = target.addService(INTERNAL_SERVICE_NAME);
+        service.serviceConsumer = sb.provides(INTERNAL_SERVICE_NAME, SERVICE_NAME);
+        sb.setInstance(service);
+        return (ServiceController<ControlledProcessStateService>) sb.install();
     }
 
     private ControlledProcessState.State processState;
     private final PropertyChangeSupport changeSupport;
+    private volatile Consumer<ControlledProcessStateService> serviceConsumer;
 
     ControlledProcessStateService(ControlledProcessState.State initialState) {
         this.processState = initialState;
@@ -58,11 +69,13 @@ public class ControlledProcessStateService implements Service<ControlledProcessS
     }
 
     @Override
-    public void start(StartContext context) throws StartException {
+    public void start(final StartContext context) throws StartException {
+        serviceConsumer.accept(this);
     }
 
     @Override
-    public void stop(StopContext context) {
+    public void stop(final StopContext context) {
+        serviceConsumer.accept(null);
     }
 
     @Override
@@ -75,6 +88,7 @@ public class ControlledProcessStateService implements Service<ControlledProcessS
      *
      * @return  the current state
      */
+    @Override
     public ControlledProcessState.State getCurrentState() {
         return processState;
     }
@@ -84,6 +98,7 @@ public class ControlledProcessStateService implements Service<ControlledProcessS
      *
      * @param listener the listener
      */
+    @Override
     public void addPropertyChangeListener(
             PropertyChangeListener listener) {
         changeSupport.addPropertyChangeListener(listener);
@@ -94,6 +109,7 @@ public class ControlledProcessStateService implements Service<ControlledProcessS
      *
      * @param listener the listener
      */
+    @Override
     public void removePropertyChangeListener(
             PropertyChangeListener listener) {
         changeSupport.removePropertyChangeListener(listener);

@@ -45,8 +45,6 @@ import org.jboss.as.controller.RunningMode;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.remote.TransactionalProtocolClient;
 import org.jboss.as.domain.controller.SlaveRegistrationException;
-import org.jboss.as.domain.management.CallbackHandlerFactory;
-import org.jboss.as.domain.management.SecurityRealm;
 import org.jboss.as.host.controller.discovery.DiscoveryOption;
 import org.jboss.as.host.controller.discovery.RemoteDomainControllerConnectionConfiguration;
 import org.jboss.as.host.controller.logging.HostControllerLogger;
@@ -103,8 +101,6 @@ class RemoteDomainConnection extends FutureManagementChannel {
     }
     private final String localHostName;
     private final AuthenticationContext authenticationContext;
-    private final String username;
-    private final SecurityRealm realm;
 
     private final RemoteDomainConnection.HostRegistrationCallback callback;
     private final ProtocolConnectionManager connectionManager;
@@ -118,7 +114,7 @@ class RemoteDomainConnection extends FutureManagementChannel {
     private URI uri;
 
     RemoteDomainConnection(final String localHostName, final ProtocolConnectionConfiguration configuration, final AuthenticationContext authenticationContext,
-                           final SecurityRealm realm,  final String username, final List<DiscoveryOption> discoveryOptions,
+                           final List<DiscoveryOption> discoveryOptions,
                            final ExecutorService executorService,
                            final ScheduledExecutorService scheduledExecutorService,
                            final HostRegistrationCallback callback,
@@ -127,8 +123,6 @@ class RemoteDomainConnection extends FutureManagementChannel {
         this.localHostName = localHostName;
         this.configuration = configuration;
         this.authenticationContext = authenticationContext;
-        this.username = username;
-        this.realm = realm;
         this.discoveryOptions = discoveryOptions;
         this.executorService = executorService;
         this.channelHandler = new ManagementChannelHandler(this, executorService);
@@ -203,15 +197,9 @@ class RemoteDomainConnection extends FutureManagementChannel {
         // Perhaps this can just be done once?
         CallbackHandler callbackHandler = null;
         SSLContext sslContext = null;
-        if (realm != null) {
-            sslContext = realm.getSSLContext();
-            CallbackHandlerFactory handlerFactory = realm.getSecretCallbackHandlerFactory();
-            if (handlerFactory != null) {
-                String username = this.username != null ? this.username : localHostName;
-                callbackHandler = handlerFactory.getCallbackHandler(username);
-            }
-        }
+
         final ProtocolConnectionConfiguration config = ProtocolConnectionConfiguration.copy(configuration);
+        // TODO this needs cleaning up.
         config.setCallbackHandler(callbackHandler);
         config.setSslContext(sslContext);
         config.setUri(uri);
@@ -280,6 +268,8 @@ class RemoteDomainConnection extends FutureManagementChannel {
                                 } catch (IOException ioe) {
                                     // If the cause is one of the irrecoverable ones, unwrap and throw it on
                                     RemoteDomainConnectionService.rethrowIrrecoverableConnectionFailures(ioe);
+                                    // If we get here it's not irrecoverable, but we should note it
+                                    HostControllerLogger.ROOT_LOGGER.debugf("Failed connecting to DomainController -- %s", ioe);
                                 }
                             }
                         } catch (Exception e) {

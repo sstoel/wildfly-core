@@ -26,7 +26,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -34,7 +36,15 @@ import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.jboss.as.test.shared.TimeoutUtil;
+import org.w3c.dom.Document;
 import org.wildfly.core.launcher.StandaloneCommandBuilder;
+import org.xml.sax.SAXException;
 
 /**
  *
@@ -127,12 +137,6 @@ public class LayersTest {
         if (exception != null) {
             throw exception;
         }
-        Boolean delete = Boolean.getBoolean("layers.delete.installations");
-        if(delete) {
-            for(File f : installations) {
-                recursiveDelete(f.toPath());
-            }
-        }
     }
 
     /**
@@ -205,7 +209,7 @@ public class LayersTest {
             }
         };
         try {
-            executor.submit(r).get(1, TimeUnit.MINUTES);
+            executor.submit(r).get(TimeoutUtil.adjust(1), TimeUnit.MINUTES);
         } catch (Exception ex) {
             throw new Exception("Exception checking " + installation.getFileName().toString()
                     + "\n Server log \n" + str.toString(), ex);
@@ -315,5 +319,49 @@ public class LayersTest {
 
         builder.append("\n");
         return deltaModules;
+    }
+
+    /**
+     * Walks the modules directory of each installation getting as result the list of banned modules found.
+     *
+     * @param root             The root path of the installations.
+     * @param bannedModuleConf A HashMap with the banned module as a key and an optional list with the installation names
+     *                         that should be ignored if contains the banned module name.
+     *
+     * @return An empty Hash map if no banned modules were found or a hash map containing as keys the path where the
+     * banned module was found and as values the banned module name.
+     * @throws ParserConfigurationException if a DocumentBuilder cannot be created.
+     * @throws IOException                  if an I/O error occurs or if the module.xml cannot be parsed.
+     */
+    public static HashMap<String, String> checkBannedModules(String root, HashMap<String, List<String>> bannedModuleConf) throws ParserConfigurationException, IOException {
+        DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+        DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+
+        HashMap<String, String> results = new HashMap<>();
+        File[] installations = new File(root).listFiles(File::isDirectory);
+        for (File installation : installations) {
+            Files.walkFileTree(installation.toPath().resolve("modules"), new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    if (file.getFileName().toString().equals("module.xml")) {
+                        Document doc;
+                        try {
+                            doc = dBuilder.parse(file.toFile());
+                            doc.getDocumentElement().normalize();
+                            String moduleName = doc.getDocumentElement().getAttribute("name");
+                            List<String> ignoredInstallations = bannedModuleConf.get(moduleName);
+                            if (ignoredInstallations != null && !ignoredInstallations.contains(installation.getName())) {
+                                results.put(file.toString(), moduleName);
+                            }
+                        } catch (SAXException e) {
+                            throw new IOException(e);
+                        }
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        }
+
+        return results;
     }
 }

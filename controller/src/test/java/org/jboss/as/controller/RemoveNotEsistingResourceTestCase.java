@@ -30,7 +30,6 @@ import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
-import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceContainer;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceTarget;
@@ -81,8 +80,7 @@ public class RemoveNotEsistingResourceTestCase {
         container = ServiceContainer.Factory.create("test");
         ServiceTarget target = container.subTarget();
         TestModelControllerService svc = new InterleavedSubsystemModelControllerService();
-        ServiceBuilder<ModelController> builder = target.addService(ServiceName.of("ModelController"), svc);
-        builder.install();
+        target.addService(ServiceName.of("ModelController")).setInstance(svc).install();
         svc.awaitStartup(30, TimeUnit.SECONDS);
         ModelController controller = svc.getValue();
 
@@ -99,8 +97,7 @@ public class RemoveNotEsistingResourceTestCase {
         container = ServiceContainer.Factory.create("test");
         ServiceTarget target = container.subTarget();
         TestModelControllerService svc = new InterleavedSubsystemModelControllerService();
-        ServiceBuilder<ModelController> builder = target.addService(ServiceName.of("ModelController"), svc);
-        builder.install();
+        target.addService(ServiceName.of("ModelController")).setInstance(svc).install();
         svc.awaitStartup(30, TimeUnit.SECONDS);
         ModelController controller = svc.getValue();
 
@@ -137,7 +134,7 @@ public class RemoveNotEsistingResourceTestCase {
 
             SimpleResourceDefinition subsystemResource = new SimpleResourceDefinition(
                     PathElement.pathElement(EXTENSION),
-                    new NonResolvingResourceDescriptionResolver(),
+                    NonResolvingResourceDescriptionResolver.INSTANCE,
                     new FakeExtensionAddHandler(rootRegistration, getMutableRootResourceRegistrationProvider()),
                     ReloadRequiredRemoveStepHandler.INSTANCE
             ){
@@ -171,7 +168,7 @@ public class RemoveNotEsistingResourceTestCase {
 
             SimpleResourceDefinition subsystemResource = new SimpleResourceDefinition(
                     PathElement.pathElement(SUBSYSTEM, module),
-                    new NonResolvingResourceDescriptionResolver(),
+                    NonResolvingResourceDescriptionResolver.INSTANCE,
                     new AbstractAddStepHandler(),
                     ReloadRequiredRemoveStepHandler.INSTANCE
             ){
@@ -190,7 +187,7 @@ public class RemoveNotEsistingResourceTestCase {
 
         public FakeSubmodelChild() {
             super(PathElement.pathElement(SUBMODEL_NAME),
-                    new NonResolvingResourceDescriptionResolver(),
+                    NonResolvingResourceDescriptionResolver.INSTANCE,
                     new AbstractAddStepHandler(),
                     new RestartParentResourceRemoveHandler("attr") {
 

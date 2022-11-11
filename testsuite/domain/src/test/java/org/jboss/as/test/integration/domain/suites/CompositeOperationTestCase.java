@@ -25,7 +25,10 @@ package org.jboss.as.test.integration.domain.suites;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ACCESS_CONTROL;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ATTRIBUTES;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.COMPOSITE;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.CONTENT;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.DEPLOYMENT;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.DIRECTORY_GROUPING;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ENABLED;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.EXCEPTIONS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MANAGEMENT_MAJOR_VERSION;
@@ -33,37 +36,61 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NAM
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OUTCOME;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.READ_CHILDREN_RESOURCES_OPERATION;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.READ_CHILDREN_TYPES_OPERATION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.READ_RESOURCE_DESCRIPTION_OPERATION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.READ_RESOURCE_OPERATION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESULT;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RUNNING_SERVER;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SERVER_GROUP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SERVER_GROUPS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.STEPS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUCCESS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SYSTEM_PROPERTY;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.URL;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.VALUE;
+import static org.jboss.as.test.shared.PermissionUtils.createPermissionsXmlAsset;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.PropertyPermission;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
+import org.jboss.as.controller.client.helpers.domain.DomainClient;
 import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.controller.operations.global.ReadResourceDescriptionHandler;
 import org.jboss.as.test.integration.domain.management.util.DomainLifecycleUtil;
 import org.jboss.as.test.integration.domain.management.util.DomainTestSupport;
+import org.jboss.as.test.integration.domain.management.util.DomainTestUtils;
 import org.jboss.as.test.integration.management.util.MgmtOperationException;
+import org.jboss.as.test.shared.TimeoutUtil;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.dmr.Property;
+import org.jboss.msc.service.ServiceActivator;
+import org.jboss.shrinkwrap.api.ShrinkWrap;
+import org.jboss.shrinkwrap.api.asset.StringAsset;
+import org.jboss.shrinkwrap.api.exporter.ZipExporter;
+import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -74,9 +101,12 @@ import org.junit.Test;
  * @author Brian Stansberry (c) 2015 Red Hat Inc.
  */
 public class CompositeOperationTestCase {
+    private static String DEPLOYMENT_NAME = "deployment.jar";
+    private static final PathElement DEPLOYMENT_PATH = PathElement.pathElement(DEPLOYMENT, DEPLOYMENT_NAME);
+    protected static final PathAddress SERVER_GROUP_MAIN_SERVER_GROUP = PathAddress.pathAddress(SERVER_GROUP, "main-server-group");
 
-    private static final PathElement HOST_MASTER = PathElement.pathElement(HOST, "master");
-    private static final PathElement HOST_SLAVE = PathElement.pathElement(HOST, "slave");
+    private static final PathElement HOST_PRIMARY = PathElement.pathElement(HOST, "primary");
+    private static final PathElement HOST_SECONDARY = PathElement.pathElement(HOST, "secondary");
     private static final PathElement SERVER_ONE = PathElement.pathElement(RUNNING_SERVER, "main-one");
     private static final PathElement SERVER_TWO = PathElement.pathElement(RUNNING_SERVER, "main-two");
     private static final PathElement SERVER_THREE = PathElement.pathElement(RUNNING_SERVER, "main-three");
@@ -85,20 +115,24 @@ public class CompositeOperationTestCase {
     private static final PathElement HOST_SYS_PROP_ELEMENT = PathElement.pathElement(SYSTEM_PROPERTY, "composite-op-host");
 
     private static DomainTestSupport testSupport;
-    private static DomainLifecycleUtil domainMasterLifecycleUtil;
+    private static DomainLifecycleUtil domainPrimaryLifecycleUtil;
+    private static DomainClient primaryClient;
 
     private int sysPropVal = 0;
+    private static File tmpDir;
+    private static File deployment;
 
     @BeforeClass
     public static void setupDomain() throws Exception {
         testSupport = DomainTestSuite.createSupport(CompositeOperationTestCase.class.getSimpleName());
-        domainMasterLifecycleUtil = testSupport.getDomainMasterLifecycleUtil();
+        domainPrimaryLifecycleUtil = testSupport.getDomainPrimaryLifecycleUtil();
+        primaryClient = domainPrimaryLifecycleUtil.getDomainClient();
     }
 
     @AfterClass
     public static void tearDownDomain() throws Exception {
         testSupport = null;
-        domainMasterLifecycleUtil = null;
+        domainPrimaryLifecycleUtil = null;
         DomainTestSuite.stopSupport();
     }
 
@@ -107,13 +141,13 @@ public class CompositeOperationTestCase {
         sysPropVal = 0;
         ModelNode op = Util.createAddOperation(PathAddress.pathAddress(SYS_PROP_ELEMENT));
         op.get(VALUE).set(sysPropVal);
-        domainMasterLifecycleUtil.getDomainClient().execute(op);
-        op = Util.createAddOperation(PathAddress.pathAddress(HOST_MASTER, HOST_SYS_PROP_ELEMENT));
+        domainPrimaryLifecycleUtil.getDomainClient().execute(op);
+        op = Util.createAddOperation(PathAddress.pathAddress(HOST_PRIMARY, HOST_SYS_PROP_ELEMENT));
         op.get(VALUE).set(sysPropVal);
-        domainMasterLifecycleUtil.getDomainClient().execute(op);
-        op = Util.createAddOperation(PathAddress.pathAddress(HOST_SLAVE, HOST_SYS_PROP_ELEMENT));
+        domainPrimaryLifecycleUtil.getDomainClient().execute(op);
+        op = Util.createAddOperation(PathAddress.pathAddress(HOST_SECONDARY, HOST_SYS_PROP_ELEMENT));
         op.get(VALUE).set(sysPropVal);
-        domainMasterLifecycleUtil.getDomainClient().execute(op);
+        domainPrimaryLifecycleUtil.getDomainClient().execute(op);
     }
 
 
@@ -121,14 +155,14 @@ public class CompositeOperationTestCase {
     public void tearDown() throws IOException {
         try {
             ModelNode op = Util.createRemoveOperation(PathAddress.pathAddress(SYS_PROP_ELEMENT));
-            domainMasterLifecycleUtil.getDomainClient().execute(op);
+            domainPrimaryLifecycleUtil.getDomainClient().execute(op);
         } finally {
             try {
-                ModelNode op = Util.createRemoveOperation(PathAddress.pathAddress(HOST_MASTER, HOST_SYS_PROP_ELEMENT));
-                domainMasterLifecycleUtil.getDomainClient().execute(op);
+                ModelNode op = Util.createRemoveOperation(PathAddress.pathAddress(HOST_PRIMARY, HOST_SYS_PROP_ELEMENT));
+                domainPrimaryLifecycleUtil.getDomainClient().execute(op);
             } finally {
-                ModelNode op = Util.createRemoveOperation(PathAddress.pathAddress(HOST_SLAVE, HOST_SYS_PROP_ELEMENT));
-                domainMasterLifecycleUtil.getDomainClient().execute(op);
+                ModelNode op = Util.createRemoveOperation(PathAddress.pathAddress(HOST_SECONDARY, HOST_SYS_PROP_ELEMENT));
+                domainPrimaryLifecycleUtil.getDomainClient().execute(op);
             }
         }
     }
@@ -149,30 +183,30 @@ public class CompositeOperationTestCase {
         final ModelNode address = new ModelNode();
         address.setEmptyList();
 
-        // host=slave
-        address.add(HOST, "slave");
+        // host=secondary
+        address.add(HOST, "secondary");
         steps.add().set(createReadResourceOperation(address));
 
-        // host=slave,server=main-three
+        // host=secondary,server=main-three
         address.add(RUNNING_SERVER, "main-three");
         steps.add().set(createReadResourceOperation(address));
 
-        // host=slave,server=main-three,subsystem=io
+        // host=secondary,server=main-three,subsystem=io
         address.add(SUBSYSTEM, "io");
         steps.add().set(createReadResourceOperation(address));
 
         // add steps involving a different host
         address.setEmptyList();
 
-        // host=master
-        address.add(HOST, "master");
+        // host=primary
+        address.add(HOST, "primary");
         steps.add().set(createReadResourceOperation(address));
 
-        // host=master,server=main-one
+        // host=primary,server=main-one
         address.add(RUNNING_SERVER, "main-one");
         steps.add().set(createReadResourceOperation(address));
 
-        // host=master,server=main-one,subsystem=io
+        // host=primary,server=main-one,subsystem=io
         address.add(SUBSYSTEM, "io");
         steps.add().set(createReadResourceOperation(address));
 
@@ -184,34 +218,34 @@ public class CompositeOperationTestCase {
 
         address.setEmptyList();
 
-        // host=slave
-        address.add(HOST, "slave");
+        // host=secondary
+        address.add(HOST, "secondary");
         nestedSteps.add().set(createReadResourceOperation(address));
 
-        // host=slave,server=main-three
+        // host=secondary,server=main-three
         address.add(RUNNING_SERVER, "main-three");
         nestedSteps.add().set(createReadResourceOperation(address));
 
-        // host=slave,server=main-three,subsystem=io
+        // host=secondary,server=main-three,subsystem=io
         address.add(SUBSYSTEM, "io");
         nestedSteps.add().set(createReadResourceOperation(address));
 
         // add steps involving a different host
         address.setEmptyList();
 
-        // host=master
-        address.add(HOST, "master");
+        // host=primary
+        address.add(HOST, "primary");
         nestedSteps.add().set(createReadResourceOperation(address));
 
-        // host=master,server=main-one
+        // host=primary,server=main-one
         address.add(RUNNING_SERVER, "main-one");
         nestedSteps.add().set(createReadResourceOperation(address));
 
-        // host=master,server=main-one,subsystem=io
+        // host=primary,server=main-one,subsystem=io
         address.add(SUBSYSTEM, "io");
         nestedSteps.add().set(createReadResourceOperation(address));
 
-        final ModelNode response = domainMasterLifecycleUtil.getDomainClient().execute(composite);
+        final ModelNode response = domainPrimaryLifecycleUtil.getDomainClient().execute(composite);
 
         assertEquals(response.toString(), SUCCESS, response.get(OUTCOME).asString());
         assertTrue(response.toString(), response.hasDefined(RESULT));
@@ -236,13 +270,13 @@ public class CompositeOperationTestCase {
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(MANAGEMENT_MAJOR_VERSION));
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(RUNNING_SERVER));
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(DIRECTORY_GROUPING));
-                    assertEquals(property.getName() + " result " + itemResult, "slave", itemResult.get(NAME).asString());
+                    assertEquals(property.getName() + " result " + itemResult, "secondary", itemResult.get(NAME).asString());
                     break;
                 case 2:
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(MANAGEMENT_MAJOR_VERSION));
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(SUBSYSTEM));
                     assertEquals(property.getName() + " result " + itemResult, "main-three", itemResult.get(NAME).asString());
-                    assertEquals(property.getName() + " result " + itemResult, "slave", itemResult.get(HOST).asString());
+                    assertEquals(property.getName() + " result " + itemResult, "secondary", itemResult.get(HOST).asString());
                     break;
                 case 3:
                 case 6:
@@ -252,13 +286,13 @@ public class CompositeOperationTestCase {
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(MANAGEMENT_MAJOR_VERSION));
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(RUNNING_SERVER));
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(DIRECTORY_GROUPING));
-                    assertEquals(property.getName() + " result " + itemResult, "master", itemResult.get(NAME).asString());
+                    assertEquals(property.getName() + " result " + itemResult, "primary", itemResult.get(NAME).asString());
                     break;
                 case 5:
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(MANAGEMENT_MAJOR_VERSION));
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(SUBSYSTEM));
                     assertEquals(property.getName() + " result " + itemResult, "main-one", itemResult.get(NAME).asString());
-                    assertEquals(property.getName() + " result " + itemResult, "master", itemResult.get(HOST).asString());
+                    assertEquals(property.getName() + " result " + itemResult, "primary", itemResult.get(HOST).asString());
                     break;
                 case 7:
                     if (allowNested) {
@@ -285,25 +319,25 @@ public class CompositeOperationTestCase {
         // Modify the domain-wide prop
         steps.add().set(Util.getWriteAttributeOperation(PathAddress.pathAddress(SYS_PROP_ELEMENT), VALUE, ++sysPropVal));
 
-        steps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_MASTER, SERVER_ONE, SYS_PROP_ELEMENT), VALUE));
+        steps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_PRIMARY, SERVER_ONE, SYS_PROP_ELEMENT), VALUE));
 
-        steps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_SLAVE, SERVER_THREE, SYS_PROP_ELEMENT), VALUE));
+        steps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_SECONDARY, SERVER_THREE, SYS_PROP_ELEMENT), VALUE));
 
-        // Modify the host=master prop
+        // Modify the host=primary prop
 
-        steps.add().set(Util.getWriteAttributeOperation(PathAddress.pathAddress(HOST_MASTER, HOST_SYS_PROP_ELEMENT), VALUE, ++sysPropVal));
+        steps.add().set(Util.getWriteAttributeOperation(PathAddress.pathAddress(HOST_PRIMARY, HOST_SYS_PROP_ELEMENT), VALUE, ++sysPropVal));
 
-        steps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_MASTER, SERVER_ONE, HOST_SYS_PROP_ELEMENT), VALUE));
+        steps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_PRIMARY, SERVER_ONE, HOST_SYS_PROP_ELEMENT), VALUE));
 
-        steps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_SLAVE, SERVER_THREE, HOST_SYS_PROP_ELEMENT), VALUE));
+        steps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_SECONDARY, SERVER_THREE, HOST_SYS_PROP_ELEMENT), VALUE));
 
-        // Modify the host=slave prop
+        // Modify the host=secondary prop
 
-        steps.add().set(Util.getWriteAttributeOperation(PathAddress.pathAddress(HOST_SLAVE, HOST_SYS_PROP_ELEMENT), VALUE, ++sysPropVal));
+        steps.add().set(Util.getWriteAttributeOperation(PathAddress.pathAddress(HOST_SECONDARY, HOST_SYS_PROP_ELEMENT), VALUE, ++sysPropVal));
 
-        steps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_MASTER, SERVER_ONE, HOST_SYS_PROP_ELEMENT), VALUE));
+        steps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_PRIMARY, SERVER_ONE, HOST_SYS_PROP_ELEMENT), VALUE));
 
-        steps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_SLAVE, SERVER_THREE, HOST_SYS_PROP_ELEMENT), VALUE));
+        steps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_SECONDARY, SERVER_THREE, HOST_SYS_PROP_ELEMENT), VALUE));
 
         // Now repeat the whole thing, but nested
 
@@ -314,27 +348,27 @@ public class CompositeOperationTestCase {
         // Domain wide
         nestedSteps.add().set(Util.getWriteAttributeOperation(PathAddress.pathAddress(SYS_PROP_ELEMENT), VALUE, ++sysPropVal));
 
-        nestedSteps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_MASTER, SERVER_ONE, SYS_PROP_ELEMENT), VALUE));
+        nestedSteps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_PRIMARY, SERVER_ONE, SYS_PROP_ELEMENT), VALUE));
 
-        nestedSteps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_SLAVE, SERVER_THREE, SYS_PROP_ELEMENT), VALUE));
+        nestedSteps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_SECONDARY, SERVER_THREE, SYS_PROP_ELEMENT), VALUE));
 
-        // host=master
+        // host=primary
 
-        nestedSteps.add().set(Util.getWriteAttributeOperation(PathAddress.pathAddress(HOST_MASTER, HOST_SYS_PROP_ELEMENT), VALUE, ++sysPropVal));
+        nestedSteps.add().set(Util.getWriteAttributeOperation(PathAddress.pathAddress(HOST_PRIMARY, HOST_SYS_PROP_ELEMENT), VALUE, ++sysPropVal));
 
-        nestedSteps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_MASTER, SERVER_ONE, HOST_SYS_PROP_ELEMENT), VALUE));
+        nestedSteps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_PRIMARY, SERVER_ONE, HOST_SYS_PROP_ELEMENT), VALUE));
 
-        nestedSteps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_SLAVE, SERVER_THREE, HOST_SYS_PROP_ELEMENT), VALUE));
+        nestedSteps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_SECONDARY, SERVER_THREE, HOST_SYS_PROP_ELEMENT), VALUE));
 
-        // host=slave
+        // host=secondary
 
-        nestedSteps.add().set(Util.getWriteAttributeOperation(PathAddress.pathAddress(HOST_SLAVE, HOST_SYS_PROP_ELEMENT), VALUE, ++sysPropVal));
+        nestedSteps.add().set(Util.getWriteAttributeOperation(PathAddress.pathAddress(HOST_SECONDARY, HOST_SYS_PROP_ELEMENT), VALUE, ++sysPropVal));
 
-        nestedSteps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_MASTER, SERVER_ONE, HOST_SYS_PROP_ELEMENT), VALUE));
+        nestedSteps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_PRIMARY, SERVER_ONE, HOST_SYS_PROP_ELEMENT), VALUE));
 
-        nestedSteps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_SLAVE, SERVER_THREE, HOST_SYS_PROP_ELEMENT), VALUE));
+        nestedSteps.add().set(Util.getReadAttributeOperation(PathAddress.pathAddress(HOST_SECONDARY, SERVER_THREE, HOST_SYS_PROP_ELEMENT), VALUE));
 
-        final ModelNode response = domainMasterLifecycleUtil.getDomainClient().execute(composite);
+        final ModelNode response = domainPrimaryLifecycleUtil.getDomainClient().execute(composite);
 
         assertEquals(response.toString(), SUCCESS, response.get(OUTCOME).asString());
         assertTrue(response.toString(), response.hasDefined(RESULT));
@@ -342,14 +376,14 @@ public class CompositeOperationTestCase {
 
         validateCompositeReadWriteResponse(response, true);
 
-        assertTrue(response.toString(), response.hasDefined(SERVER_GROUPS, "main-server-group", HOST, "master", "main-one", "response"));
-        ModelNode serverResp = response.get(SERVER_GROUPS, "main-server-group", HOST, "master", "main-one", "response");
+        assertTrue(response.toString(), response.hasDefined(SERVER_GROUPS, "main-server-group", HOST, "primary", "main-one", "response"));
+        ModelNode serverResp = response.get(SERVER_GROUPS, "main-server-group", HOST, "primary", "main-one", "response");
         validateBasicServerResponse(serverResp, null, 1, null, 2, 2, -1, null, 4, null, 5, 5);
-        assertTrue(response.toString(), response.hasDefined(SERVER_GROUPS, "main-server-group", HOST, "slave", "main-three", "response"));
-        serverResp = response.get(SERVER_GROUPS, "main-server-group", HOST, "slave", "main-three", "response");
+        assertTrue(response.toString(), response.hasDefined(SERVER_GROUPS, "main-server-group", HOST, "secondary", "main-three", "response"));
+        serverResp = response.get(SERVER_GROUPS, "main-server-group", HOST, "secondary", "main-three", "response");
         validateBasicServerResponse(serverResp, null, 1, 0, null, 3, -1, null, 4, 3, null, 6);
-        assertTrue(response.toString(), response.hasDefined(SERVER_GROUPS, "other-server-group", HOST, "slave", "other-two", "response"));
-        serverResp = response.get(SERVER_GROUPS, "other-server-group", HOST, "slave", "other-two", "response");
+        assertTrue(response.toString(), response.hasDefined(SERVER_GROUPS, "other-server-group", HOST, "secondary", "other-two", "response"));
+        serverResp = response.get(SERVER_GROUPS, "other-server-group", HOST, "secondary", "other-two", "response");
         validateBasicServerResponse(serverResp, null, null, -1, null, null);
 
     }
@@ -448,35 +482,35 @@ public class CompositeOperationTestCase {
         final ModelNode steps = composite.get(STEPS);
 
         // First an operation that just has a single step calling r-r-d on the stopped server resource
-        ModelNode step = Util.createEmptyOperation(READ_RESOURCE_DESCRIPTION_OPERATION, PathAddress.pathAddress(HOST_SLAVE, SERVER_FOUR));
+        ModelNode step = Util.createEmptyOperation(READ_RESOURCE_DESCRIPTION_OPERATION, PathAddress.pathAddress(HOST_SECONDARY, SERVER_FOUR));
         step.get(ACCESS_CONTROL).set(ReadResourceDescriptionHandler.AccessControl.COMBINED_DESCRIPTIONS.toString());
 
         steps.add(step);
 
-        ModelNode response = domainMasterLifecycleUtil.getDomainClient().execute(composite);
+        ModelNode response = domainPrimaryLifecycleUtil.getDomainClient().execute(composite);
 
         validateRRDResponse(response, 1);
 
-        // Now include a step reading a stopped server on master
-        step = Util.createEmptyOperation(READ_RESOURCE_DESCRIPTION_OPERATION, PathAddress.pathAddress(HOST_MASTER, SERVER_TWO));
+        // Now include a step reading a stopped server on primary
+        step = Util.createEmptyOperation(READ_RESOURCE_DESCRIPTION_OPERATION, PathAddress.pathAddress(HOST_PRIMARY, SERVER_TWO));
         step.get(ACCESS_CONTROL).set(ReadResourceDescriptionHandler.AccessControl.COMBINED_DESCRIPTIONS.toString());
 
         steps.add(step);
 
-        response = domainMasterLifecycleUtil.getDomainClient().execute(composite);
+        response = domainPrimaryLifecycleUtil.getDomainClient().execute(composite);
 
         validateRRDResponse(response, 2);
 
 
         // Now add steps for some running servers too
-        step = Util.createEmptyOperation(READ_RESOURCE_DESCRIPTION_OPERATION, PathAddress.pathAddress(HOST_MASTER, SERVER_ONE));
+        step = Util.createEmptyOperation(READ_RESOURCE_DESCRIPTION_OPERATION, PathAddress.pathAddress(HOST_PRIMARY, SERVER_ONE));
         step.get(ACCESS_CONTROL).set(ReadResourceDescriptionHandler.AccessControl.COMBINED_DESCRIPTIONS.toString());
         steps.add(step);
-        step = Util.createEmptyOperation(READ_RESOURCE_DESCRIPTION_OPERATION, PathAddress.pathAddress(HOST_SLAVE, SERVER_THREE));
+        step = Util.createEmptyOperation(READ_RESOURCE_DESCRIPTION_OPERATION, PathAddress.pathAddress(HOST_SECONDARY, SERVER_THREE));
         step.get(ACCESS_CONTROL).set(ReadResourceDescriptionHandler.AccessControl.COMBINED_DESCRIPTIONS.toString());
         steps.add(step);
 
-        response = domainMasterLifecycleUtil.getDomainClient().execute(composite);
+        response = domainPrimaryLifecycleUtil.getDomainClient().execute(composite);
 
         validateRRDResponse(response, 4);
     }
@@ -531,5 +565,162 @@ public class CompositeOperationTestCase {
         operation.get(OP).set(READ_RESOURCE_OPERATION);
         operation.get(OP_ADDR).set(address);
         return operation;
+    }
+
+    /**
+     * Tests reads in composite operations when the DC exclusive lock is acquired by another operation.
+     */
+    @Test
+    public void testCompositeOperationsWriteLockAcquired() throws Exception {
+        ModelNode result, op;
+
+        op = Util.createEmptyOperation(READ_CHILDREN_TYPES_OPERATION, PathAddress.pathAddress(HOST_SECONDARY));
+        result = DomainTestUtils.executeForResult(op, primaryClient);
+        final List<String> secondaryChildrenTypes = result.asList().stream().map(m -> m.asString()).collect(Collectors.toList());
+
+        op = Util.createEmptyOperation(READ_CHILDREN_TYPES_OPERATION, PathAddress.EMPTY_ADDRESS);
+        result = DomainTestUtils.executeForResult(op, primaryClient);
+        final List<String> emptyAddressChildrenTypes = result.asList().stream().map(m -> m.asString()).collect(Collectors.toList());
+
+        createDeployment();
+
+        final ExecutorService executorService = Executors.newFixedThreadPool(1);
+
+        try {
+            Future<ModelNode> deploymentFuture = executorService.submit(new Callable<ModelNode>() {
+                @Override
+                public ModelNode call() throws Exception {
+                    // Take the DC write lock
+                    final ModelNode op = getDeploymentCompositeOp();
+                    DomainClient client = domainPrimaryLifecycleUtil.createDomainClient();
+                    return DomainTestUtils.executeForResult(op, client);
+                }
+            });
+
+            // verify reads in a composite operations
+            List<ModelNode> steps;
+
+            // it could ensure we have acquired the lock by the deployment operation executed before
+            TimeUnit.SECONDS.sleep(TimeoutUtil.adjust(1));
+
+            steps = prepareReadCompositeOperations(PathAddress.pathAddress(HOST_SECONDARY), secondaryChildrenTypes);
+            op = createComposite(steps);
+            DomainTestUtils.executeForResult(op, primaryClient);
+
+            steps = prepareReadCompositeOperations(PathAddress.EMPTY_ADDRESS, emptyAddressChildrenTypes);
+            op = createComposite(steps);
+            DomainTestUtils.executeForResult(op, primaryClient);
+
+            steps = prepareReadCompositeOperations(PathAddress.pathAddress(HOST_SECONDARY), secondaryChildrenTypes);
+            steps.addAll(prepareReadCompositeOperations(PathAddress.EMPTY_ADDRESS, emptyAddressChildrenTypes));
+            op = createComposite(steps);
+            DomainTestUtils.executeForResult(op, primaryClient);
+
+            Assert.assertEquals("It is expected deployment operation is still in progress", false, deploymentFuture.isDone());
+
+            // keep the timeout in sync with SlowServiceActivator timeout
+            deploymentFuture.get(TimeoutUtil.adjust(60), TimeUnit.SECONDS);
+
+        } finally {
+            try {
+                cleanDeploymentFromServerGroup();
+            } catch (MgmtOperationException e) {
+                // ignored
+            } finally {
+                try {
+                    cleanDeployment();
+                } catch (MgmtOperationException e) {
+                    // ignored
+                }
+            }
+            executorService.shutdown();
+        }
+    }
+
+    private ModelNode getDeploymentCompositeOp() throws Exception {
+        ModelNode op = new ModelNode();
+        op.get(OP).set(COMPOSITE);
+        ModelNode steps = op.get(STEPS);
+
+        ModelNode depAdd = Util.createAddOperation(PathAddress.pathAddress(DEPLOYMENT_PATH));
+        ModelNode content = new ModelNode();
+        content.get(URL).set(deployment.toURI().toURL().toString());
+        depAdd.get(CONTENT).add(content);
+
+        steps.add(depAdd);
+
+        ModelNode sgAdd = Util.createAddOperation(PathAddress.pathAddress(SERVER_GROUP_MAIN_SERVER_GROUP, DEPLOYMENT_PATH));
+        sgAdd.get(ENABLED).set(true);
+        steps.add(sgAdd);
+        return op;
+    }
+
+    private static void createDeployment() throws Exception {
+        File tmpRoot = new File(System.getProperty("java.io.tmpdir"));
+        tmpDir = new File(tmpRoot, CompositeOperationTestCase.class.getSimpleName() + System.currentTimeMillis());
+        Files.createDirectory(tmpDir.toPath());
+        deployment = new File(tmpDir, DEPLOYMENT_NAME);
+
+        final JavaArchive archive = ShrinkWrap.create(JavaArchive.class, DEPLOYMENT_NAME)
+                .addClasses(SlowServiceActivator.class, TimeoutUtil.class)
+                .addAsManifestResource(new StringAsset("Dependencies: org.wildfly.security.elytron-private\n"), "MANIFEST.MF")
+                .addAsServiceProvider(ServiceActivator.class, SlowServiceActivator.class)
+                .addAsManifestResource(createPermissionsXmlAsset(new PropertyPermission("ts.timeout.factor", "read")), "permissions.xml");
+
+        archive.as(ZipExporter.class).exportTo(deployment);
+    }
+
+    private void cleanDeploymentFromServerGroup() throws IOException, MgmtOperationException {
+        ModelNode op = Util.createRemoveOperation(PathAddress.pathAddress(SERVER_GROUP_MAIN_SERVER_GROUP, DEPLOYMENT_PATH));
+        op.get(ENABLED).set(true);
+        DomainTestUtils.executeForResult(op, primaryClient);
+    }
+
+    private void cleanDeployment() throws IOException, MgmtOperationException {
+        ModelNode op = Util.createRemoveOperation(PathAddress.pathAddress(DEPLOYMENT_PATH));
+        DomainTestUtils.executeForResult(op, primaryClient);
+    }
+
+    private ModelNode createComposite(List<ModelNode> steps) {
+        ModelNode composite = Util.createEmptyOperation(COMPOSITE, PathAddress.EMPTY_ADDRESS);
+        ModelNode stepsNode = composite.get(STEPS);
+        for (ModelNode step : steps) {
+            stepsNode.add(step);
+        }
+        return composite;
+    }
+
+    private List<ModelNode> prepareReadCompositeOperations(PathAddress address, List<String> childTypes) {
+        final List<ModelNode> steps = new ArrayList<>();
+        ModelNode step;
+
+        step = Util.createEmptyOperation(READ_RESOURCE_OPERATION, address);
+        addCommonReadOperationAttributes(step);
+        steps.add(step);
+
+        for(String childType : childTypes) {
+            step = Util.createEmptyOperation(READ_CHILDREN_RESOURCES_OPERATION, address);
+            addCommonReadOperationAttributes(step);
+            step.get("child-type").set(childType);
+            steps.add(step);
+        }
+
+        return steps;
+    }
+
+    private void addCommonReadOperationAttributes(ModelNode op) {
+        String operation = op.get(OP).asString();
+        switch (operation) {
+            case READ_RESOURCE_OPERATION: {
+                op.get("include-aliases").set(true);
+                op.get("include-undefined-metric-values").set(true);
+            }
+            case READ_CHILDREN_RESOURCES_OPERATION: {
+                op.get("include-runtime").set(true);
+                op.get("recursive").set(true);
+                op.get("include-defaults").set(true);
+                op.get("proxies").set(true);
+            }
+        }
     }
 }

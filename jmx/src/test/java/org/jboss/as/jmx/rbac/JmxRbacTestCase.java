@@ -282,7 +282,7 @@ public abstract class JmxRbacTestCase extends AbstractControllerTestBase {
         if (sensitiveMBeans) {
             ModelNode sensitiveMBeansOp = Util.getWriteAttributeOperation(
                     PathAddress.pathAddress(ModelDescriptionConstants.SUBSYSTEM, JMXExtension.SUBSYSTEM_NAME),
-                    JMXSubsystemRootResource.CORE_MBEAN_SENSITIVITY.getName(),
+                    JMXSubsystemRootResource.NON_CORE_MBEAN_SENSITIVITY.getName(),
                     new ModelNode(sensitiveMBeans));
             executeForResult(sensitiveMBeansOp);
         }
@@ -355,16 +355,16 @@ public abstract class JmxRbacTestCase extends AbstractControllerTestBase {
                         }
                     }
                     if (canWrite) {
-                        server.setAttribute(OBJECT_NAME, new Attribute("Attr", new Integer(10)));
-                        server.setAttributes(OBJECT_NAME, new AttributeList(Collections.singletonList(new Attribute("Attr", new Integer(10)))));
+                        server.setAttribute(OBJECT_NAME, new Attribute("Attr", 10));
+                        server.setAttributes(OBJECT_NAME, new AttributeList(Collections.singletonList(new Attribute("Attr", 10))));
                     } else {
                         try {
-                            server.setAttribute(OBJECT_NAME, new Attribute("Attr", new Integer(10)));
+                            server.setAttribute(OBJECT_NAME, new Attribute("Attr", 10));
                             Assert.fail();
                         } catch (JMRuntimeException expected) {
                         }
                         try {
-                            server.setAttributes(OBJECT_NAME, new AttributeList(Collections.singletonList(new Attribute("Attr", new Integer(10)))));
+                            server.setAttributes(OBJECT_NAME, new AttributeList(Collections.singletonList(new Attribute("Attr", 10))));
                             Assert.fail();
                         } catch (JMRuntimeException expected) {
                         }
@@ -620,9 +620,7 @@ public abstract class JmxRbacTestCase extends AbstractControllerTestBase {
         });
 
         StabilityMonitor monitor = new StabilityMonitor();
-        getContainer().addService(AbstractControllerService.PATH_MANAGER_CAPABILITY.getCapabilityServiceName(), pathManagerService)
-                .addMonitor(monitor)
-                .install();
+        monitor.addController(getContainer().addService(AbstractControllerService.PATH_MANAGER_CAPABILITY.getCapabilityServiceName(), pathManagerService).install());
 
         try {
             monitor.awaitStability(10, TimeUnit.SECONDS);

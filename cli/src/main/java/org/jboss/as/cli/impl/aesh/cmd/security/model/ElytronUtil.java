@@ -29,6 +29,7 @@ import org.jboss.as.cli.operation.OperationFormatException;
 import org.jboss.as.cli.operation.impl.DefaultOperationRequestBuilder;
 import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.dmr.ModelNode;
+import org.wildfly.security.x500.cert.acme.CertificateAuthority;
 
 /**
  * Utility class to interact with Elytron subsystem.
@@ -477,12 +478,19 @@ public abstract class ElytronUtil {
         return null;
     }
 
+    public static boolean hasServerSSLContext(CommandContext context, String sslContextName) {
+        return getChildResource(sslContextName, Util.SERVER_SSL_CONTEXT, context) != null;
+    }
+
     public static ServerSSLContext getServerSSLContext(CommandContext context, String sslContextName) {
         ModelNode sslContext = getChildResource(sslContextName, Util.SERVER_SSL_CONTEXT, context);
         ServerSSLContext ctx = null;
         if (sslContext != null) {
             String kmName = sslContext.get(Util.KEY_MANAGER).asString();
             ModelNode km = getChildResource(kmName, Util.KEY_MANAGER, context);
+            if (km == null) {
+                throw new IllegalArgumentException("The ServerSSLContext " + sslContextName + " references the KeyManager " + kmName + " that doesn't exist.");
+            }
             String ksName = km.get(Util.KEY_STORE).asString();
             KeyStore keyStore = new KeyStore(ksName, null, true);
             KeyManager keyManager = new KeyManager(kmName, keyStore, true);
@@ -606,7 +614,7 @@ public abstract class ElytronUtil {
                 for (String ksName : res.keys()) {
                     ModelNode ks = res.get(ksName);
                     AuthFactory fact = getAuthFactory(ks, ksName, spec, ctx);
-                    List<AuthMechanism> mecs = fact.getMechanisms();
+                    List<AuthMechanism> mecs = fact != null ? fact.getMechanisms() : Collections.emptyList();
                     if (mecs.isEmpty() || mecs.size() > 1) {
                         continue;
                     }
@@ -748,6 +756,9 @@ public abstract class ElytronUtil {
             mn.get(Util.RELATIVE_TO).set(config.getRelativeTo());
         }
         mn.get(Util.DIGEST_REALM_NAME).set(config.getExposedRealmName());
+        if (config.getPlainText()) {
+            mn.get(Util.PLAIN_TEXT).set(config.getPlainText());
+        }
         return mn;
     }
 
@@ -1222,5 +1233,75 @@ public abstract class ElytronUtil {
         builder.addNode(Util.SUBSYSTEM, Util.ELYTRON);
         builder.addNode(Util.CONSTANT_ROLE_MAPPER, name);
         return Util.isSuccess(ctx.getModelControllerClient().execute(builder.buildRequest()));
+    }
+
+    public static ModelNode addCertificateAuthority(CertificateAuthority certificateAuthority) throws Exception {
+        DefaultOperationRequestBuilder builder = new DefaultOperationRequestBuilder();
+        builder.setOperationName(Util.ADD);
+        builder.addNode(Util.SUBSYSTEM, Util.ELYTRON);
+        builder.addNode(Util.CERTIFICATE_AUTHORITY, certificateAuthority.getName());
+        builder.addProperty(Util.URL, certificateAuthority.getUrl());
+        return builder.buildRequest();
+    }
+
+    public static ModelNode addCertificateAuthorityAccount(String name, String password, String alias, String keyStoreName, List<String> contactUrls, CertificateAuthority customCertificateAuthority) throws Exception {
+        DefaultOperationRequestBuilder builder = new DefaultOperationRequestBuilder();
+        builder.setOperationName(Util.ADD);
+        builder.addNode(Util.SUBSYSTEM, Util.ELYTRON);
+        builder.addNode(Util.CERTIFICATE_AUTHORITY_ACCOUNT, name);
+        if(!contactUrls.isEmpty()) {
+            builder.getModelNode().get(Util.CONTACT_URLS).set(createModelNodes(contactUrls));
+        }
+        builder.addProperty(Util.KEY_STORE, keyStoreName);
+        builder.addProperty(Util.ALIAS, alias);
+        if (customCertificateAuthority != null) {
+            builder.addProperty(Util.CERTIFICATE_AUTHORITY, customCertificateAuthority.getName());
+        }
+        builder.getModelNode().get(Util.CREDENTIAL_REFERENCE).set(buildCredentialReferences(password));
+        return builder.buildRequest();
+    }
+
+    private static List<ModelNode> createModelNodes(List<String> items) {
+        List<ModelNode> modelNodes = new ArrayList<>();
+        for (String item : items) {
+            if(!item.isEmpty()) {
+                modelNodes.add(new ModelNode(item));
+            }
+        }
+        return modelNodes;
+    }
+
+    public static ModelNode removeCertificateAuthorityAccount(String name) throws Exception {
+        DefaultOperationRequestBuilder builder = new DefaultOperationRequestBuilder();
+        builder.setOperationName(Util.REMOVE);
+        builder.addNode(Util.SUBSYSTEM, Util.ELYTRON);
+        builder.addNode(Util.CERTIFICATE_AUTHORITY_ACCOUNT, name);
+        return builder.buildRequest();
+    }
+
+    public static ModelNode obtainCertificateRequest(String keyStoreName,
+                                                     String alias,
+                                                     String password,
+                                                     List<String> domainNames,
+                                                     String certificateAuthorityAccount,
+                                                     boolean agreedToTOS,
+                                                     int key_size,
+                                                     String key_algorithm) throws Exception {
+        DefaultOperationRequestBuilder builder = new DefaultOperationRequestBuilder();
+        builder.setOperationName(Util.OBTAIN_CERTIFICATE);
+        builder.addNode(Util.SUBSYSTEM, Util.ELYTRON);
+        builder.addNode(Util.KEY_STORE, keyStoreName);
+        builder.addProperty(Util.ALIAS, alias);
+        builder.getModelNode().get(Util.DOMAIN_NAMES).set(createModelNodes(domainNames));
+        builder.addProperty(Util.CERTIFICATE_AUTHORITY_ACCOUNT, certificateAuthorityAccount);
+        builder.addProperty(Util.AGREE_TO_TERMS_OF_SERVICE, String.valueOf(agreedToTOS));
+        builder.getModelNode().get(Util.CREDENTIAL_REFERENCE).set(buildCredentialReferences(password));
+        builder.addProperty(Util.ALGORITHM, key_algorithm);
+        builder.addProperty(Util.KEY_SIZE, String.valueOf(key_size));
+        return builder.buildRequest();
+    }
+
+    public static List<String> getCaAccountNames(ModelControllerClient client) {
+        return getNames(client, Util.CERTIFICATE_AUTHORITY_ACCOUNT);
     }
 }

@@ -22,14 +22,16 @@
 
 package org.jboss.as.server.deployment;
 
+import java.lang.ref.Reference;
 import java.security.PermissionCollection;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.jar.Manifest;
 
 import org.jboss.as.controller.capability.CapabilityServiceSupport;
 import org.jboss.as.controller.services.path.PathManager;
+import org.jboss.as.server.deployment.annotation.AnnotationIndexSupport;
 import org.jboss.as.server.deployment.annotation.CompositeIndex;
 import org.jboss.as.server.deployment.module.AdditionalModuleSpecification;
 import org.jboss.as.server.deployment.module.ExtensionInfo;
@@ -40,9 +42,8 @@ import org.jboss.as.server.deployment.module.ResourceRoot;
 import org.jboss.as.server.deployment.reflect.DeploymentReflectionIndex;
 import org.jboss.as.server.deployment.reflect.ProxyMetadataSource;
 import org.jboss.as.server.deploymentoverlay.DeploymentOverlayIndex;
-import org.jboss.as.server.moduleservice.ExternalModuleService;
+import org.jboss.as.server.moduleservice.ExternalModule;
 import org.jboss.as.server.moduleservice.ServiceModuleLoader;
-import org.jboss.as.server.services.security.AbstractVaultReader;
 import org.jboss.jandex.Index;
 import org.jboss.modules.Module;
 import org.jboss.modules.ModuleIdentifier;
@@ -80,14 +81,6 @@ public final class Attachments {
     public static final AttachmentKey<Set<String>> REGISTERED_SUBSYSTEMS = AttachmentKey.create(Set.class);
 
     /**
-     * The deployments runtime name
-     *
-     * @deprecated use {@link org.jboss.as.server.deployment.DeploymentUnit#getName()}
-     */
-    @Deprecated
-    public static final AttachmentKey<String> RUNTIME_NAME = AttachmentKey.create(String.class);
-
-    /**
      * The name that uniquely identifies the deployment to the management layer across the domain.
      */
     public static final AttachmentKey<String> MANAGEMENT_NAME = AttachmentKey.create(String.class);
@@ -98,15 +91,26 @@ public final class Attachments {
     public static final AttachmentKey<VirtualFile> DEPLOYMENT_CONTENTS = AttachmentKey.create(VirtualFile.class);
 
     /**
-     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
-     */
-    @Deprecated
-    public static final AttachmentKey<Boolean> ALLOW_PHASE_RESTART = AttachmentKey.create(Boolean.class);
-
-    /**
      * A builder used to install a deployment phase
      */
     public static final AttachmentKey<DeploymentUnitPhaseBuilder> DEPLOYMENT_UNIT_PHASE_BUILDER = AttachmentKey.create(DeploymentUnitPhaseBuilder.class);
+
+    /**
+     * A function which will be used to expand expressions within spec descriptors
+     */
+    public static final AttachmentKey<Function<String, String>> SPEC_DESCRIPTOR_EXPR_EXPAND_FUNCTION = AttachmentKey.create(Function.class);
+
+    /**
+     * A function which will be used to expand expressions within JBoss/WildFly (vendor specific) descriptors
+     */
+    public static final AttachmentKey<Function<String, String>> WFLY_DESCRIPTOR_EXPR_EXPAND_FUNCTION = AttachmentKey.create(Function.class);
+
+    /**
+     * Functions that can be used to resolve expressions found in deployment resources.
+     * Functions that cannot resolve a particular input must return null.
+     */
+    public static final AttachmentKey<AttachmentList<Function<String, String>>>
+            DEPLOYMENT_EXPRESSION_RESOLVERS = AttachmentKey.createList(Function.class);
 
     //
     // STRUCTURE
@@ -131,12 +135,6 @@ public final class Attachments {
      * The MANIFEST.MF of the deployment unit.
      */
     public static final AttachmentKey<Manifest> MANIFEST = AttachmentKey.create(Manifest.class);
-
-    /**
-     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
-     */
-    @Deprecated
-    public static final AttachmentKey<Manifest> OSGI_MANIFEST = AttachmentKey.create(Manifest.class);
 
     /**
      * Module identifiers for Class-Path information
@@ -170,6 +168,13 @@ public final class Attachments {
      * the annotations
      */
     public static final AttachmentKey<Index> ANNOTATION_INDEX = AttachmentKey.create(Index.class);
+
+    /**
+     * A reference to a support utility object for processing annotation indices. This is attached to the {@link DeploymentUnit} for
+     * a top-level deployment and any subdeployments. A {@link Reference} holds the support object so it can be
+     * garbage collected once the management operation that created it completes.
+     */
+    public static final AttachmentKey<Reference<AnnotationIndexSupport>> ANNOTATION_INDEX_SUPPORT = AttachmentKey.create(Reference.class);
 
     /**
      * The composite annotation index for this deployment.
@@ -234,17 +239,9 @@ public final class Attachments {
     // PARSE
     //
 
-    public static final AttachmentKey<AbstractVaultReader> VAULT_READER_ATTACHMENT_KEY = AttachmentKey.create(AbstractVaultReader.class);
-
     //
     // REGISTER
     //
-
-    /**
-     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
-     */
-    @Deprecated
-    public static final AttachmentKey<BundleState> BUNDLE_STATE_KEY = AttachmentKey.create(BundleState.class);
 
     //
     // DEPENDENCIES
@@ -258,18 +255,6 @@ public final class Attachments {
      * The module identifier.
      */
     public static final AttachmentKey<ModuleIdentifier> MODULE_IDENTIFIER = AttachmentKey.create(ModuleIdentifier.class);
-
-    /**
-     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
-     */
-    @Deprecated
-    public static final AttachmentKey<AttachmentList<String>> DEFERRED_MODULES = AttachmentKey.createList(String.class);
-
-    /**
-     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
-     */
-    @Deprecated
-    public static final AttachmentKey<AtomicInteger> DEFERRED_ACTIVATION_COUNT = AttachmentKey.create(AtomicInteger.class);
 
     //
     // MODULARIZE
@@ -288,7 +273,7 @@ public final class Attachments {
     /**
      * The external module service
      */
-    public static final AttachmentKey<ExternalModuleService> EXTERNAL_MODULE_SERVICE  = AttachmentKey.create(ExternalModuleService.class);
+    public static final AttachmentKey<ExternalModule> EXTERNAL_MODULE_SERVICE  = AttachmentKey.create(ExternalModule.class);
 
     /**
      * An index of {@link java.util.ServiceLoader}-type services in this deployment unit
@@ -346,12 +331,6 @@ public final class Attachments {
     public static final AttachmentKey<AttachmentList<SetupAction>> SETUP_ACTIONS = AttachmentKey.createList(SetupAction.class);
 
     /**
-     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
-     */
-    @Deprecated
-    public static final AttachmentKey<AttachmentList<ServiceName>> BUNDLE_ACTIVE_DEPENDENCIES = AttachmentKey.createList(ServiceName.class);
-
-    /**
      * List of services that need to be up before we consider this deployment 'done'. This is used to manage initialize-in-order,
      * and inter deployment dependencies.
      *
@@ -364,16 +343,5 @@ public final class Attachments {
     //
 
     private Attachments() {
-    }
-
-    /**
-     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
-     */
-    @Deprecated
-    public static enum BundleState {
-        INSTALLED,
-        RESOLVED,
-        ACTIVE,
-        UNINSTALLED
     }
 }

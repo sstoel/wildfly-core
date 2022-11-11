@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import org.jboss.as.cli.CliInitializationException;
 import org.jboss.as.cli.CommandArgument;
 import org.jboss.as.cli.CommandContext;
@@ -45,12 +45,13 @@ import org.jboss.as.test.integration.management.extension.EmptySubsystemParser;
 import org.jboss.as.test.integration.management.extension.ExtensionUtils;
 import org.jboss.as.test.integration.management.extension.blocker.BlockerExtension;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
+import org.jboss.as.test.shared.TimeoutUtil;
 import org.jboss.dmr.ModelNode;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.Before;
 import org.junit.runner.RunWith;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 import static org.junit.Assert.assertEquals;
 import org.wildfly.core.testrunner.ServerControl;
 import org.wildfly.core.testrunner.ServerController;
@@ -59,7 +60,7 @@ import org.wildfly.core.testrunner.ServerController;
  *
  * @author jdenise@redhat.com
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
 public class CommandTimeoutHandlerTestCase {
 
@@ -466,7 +467,8 @@ public class CommandTimeoutHandlerTestCase {
                 TimeoutCommandContext tc = (TimeoutCommandContext) context;
                 tc.setLastHandlerTask(null);
                 try {
-                    Thread.sleep(200);
+                    long sleep = TimeoutUtil.adjust(1000);
+                    Thread.sleep(sleep);
                     holder.add(null);
                 } catch (InterruptedException ex) {
                     holder.add(ex);

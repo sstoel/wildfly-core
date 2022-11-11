@@ -52,9 +52,11 @@ local-repo-eap
 .DS_Store
 testsuite-core/standalone/cli_output
 
-# Zanata files
-**/.zanata-cache/
 /testsuite/domain/target1/
 
 # ignore the build metadata created by the build metadata plugin
 build.metadata
+
+# shaded jars
+**/dependency-reduced-pom.xml
+

@@ -31,6 +31,7 @@ import static org.jboss.as.controller.operations.global.EnhancedSyntaxSupport.ex
 import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.NAME;
 import static org.jboss.as.controller.operations.global.GlobalOperationAttributes.VALUE;
 
+import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationDefinition;
 import org.jboss.as.controller.OperationFailedException;
@@ -170,18 +171,31 @@ public class WriteAttributeHandler implements OperationStepHandler {
     private void doExecuteInternal(OperationContext context, ModelNode operation, AttributeAccess attributeAccess, String attributeName, ModelNode currentValue, boolean useEnhancedSyntax, String attributeExpression) throws OperationFailedException {
         if (useEnhancedSyntax){
             if (attributeAccess.getStorageType() == AttributeAccess.Storage.CONFIGURATION) {
-                operation = getEnhancedSyntaxResolvedOperation(operation, currentValue, attributeName, attributeExpression);
+                operation = getEnhancedSyntaxResolvedOperation(operation, currentValue, attributeName, attributeExpression,
+                        attributeAccess.getAttributeDefinition());
             } else {
                 assert attributeAccess.getStorageType() == AttributeAccess.Storage.RUNTIME;
 
                 // Resolution must be postponed to RUNTIME stage for Storage.RUNTIME attributes.
 
-                final ModelNode originalOperation = operation; // final vars so they can be accessed from lambda
+                // We have to invoke on the AttributeAccess' write handler in Stage.MODEL but we don't know yet what the value
+                // we want to write. We can't know that until Stage.RUNTIME.
+                // So, for Stage.MODEL we are going to pass to the AttributeAccess' write handler an operation that amounts to
+                // writing the same value as exists now. The Stage.MODEL handling for a Storage.RUNTIME attribute is basically
+                // meaningless, so passing in an operation whose value amounts to a no-op should be ok (although kludgy).
+                // But before calling that handler we will register a Stage.RUNTIME step that will change the 'operation' object to
+                // the properly resolved operation value. The step we add will execute *before* any Stage.RUNTIME step the
+                // write handler adds, so the one the write handler adds will see the operation state that our step will set up.
+
+                final ModelNode originalOperation = operation;
                 final ModelNode resolvedOperation = operation.clone();
+                resolvedOperation.get(ModelDescriptionConstants.NAME).set(attributeName); // replace the current expression with the base attribute name
+                resolvedOperation.get(ModelDescriptionConstants.VALUE).set(currentValue); // just pass in the existing value
                 operation = resolvedOperation;
 
                 context.addStep((context1, operation1) -> {
-                    ModelNode resolved = getEnhancedSyntaxResolvedOperation(originalOperation, currentValue, attributeName, attributeExpression);
+                    ModelNode resolved = getEnhancedSyntaxResolvedOperation(originalOperation, currentValue, attributeName,
+                            attributeExpression, attributeAccess.getAttributeDefinition());
                     resolvedOperation.get(ModelDescriptionConstants.NAME).set(resolved.get(ModelDescriptionConstants.NAME));
                     resolvedOperation.get(ModelDescriptionConstants.VALUE).set(resolved.get(ModelDescriptionConstants.VALUE));
                 }, OperationContext.Stage.RUNTIME);
@@ -209,12 +223,14 @@ public class WriteAttributeHandler implements OperationStepHandler {
         context.emit(notification);
     }
 
-    private ModelNode getEnhancedSyntaxResolvedOperation(ModelNode originalOperation, ModelNode currentModel, String attributeName, String attributeExpression) throws OperationFailedException {
+    private ModelNode getEnhancedSyntaxResolvedOperation(ModelNode originalOperation, ModelNode currentModel,
+                                                         String attributeName, String attributeExpression,
+                                                         AttributeDefinition attributeDefinition) throws OperationFailedException {
         ModelNode writeOp = originalOperation.clone();
         ModelNode diffValue =  originalOperation.get(ModelDescriptionConstants.VALUE);
         ModelNode old = new ModelNode();
         old.get(attributeName).set(currentModel);
-        ModelNode fullValue = EnhancedSyntaxSupport.updateWithEnhancedSyntax(attributeExpression, old, diffValue);
+        ModelNode fullValue = EnhancedSyntaxSupport.updateWithEnhancedSyntax(attributeExpression, old, diffValue, attributeDefinition);
         writeOp.get(ModelDescriptionConstants.NAME).set(attributeName);
         writeOp.get(ModelDescriptionConstants.VALUE).set(fullValue.get(attributeName));
         return writeOp;

@@ -38,7 +38,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
+
+import org.hamcrest.MatcherAssert;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.client.Operation;
@@ -60,13 +62,13 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ManagementClient;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  *
  * @author Emmanuel Hugonnet (c) 2016 Red Hat, inc.
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 public class DeploymentOverlayTestCase {
 
     // Max time to wait for some action to complete, in ms
@@ -179,12 +181,12 @@ public class DeploymentOverlayTestCase {
                     Assert.assertTrue(Operations.isSuccessfulOutcome(response.getResponseNode()));
                     Assert.assertTrue(Operations.readResult(response.getResponseNode()).hasDefined(UUID));
                     List<OperationResponse.StreamEntry> streams = response.getInputStreams();
-                    Assert.assertThat(streams, is(notNullValue()));
-                    Assert.assertThat(streams.size(), is(1));
+                    MatcherAssert.assertThat(streams, is(notNullValue()));
+                    MatcherAssert.assertThat(streams.size(), is(1));
                     try (InputStream in = streams.get(0).getStream()) {
                         Properties content = new Properties();
                         content.load(in);
-                        Assert.assertThat(content.getProperty("service"), is(expectedValue));
+                        MatcherAssert.assertThat(content.getProperty("service"), is(expectedValue));
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();

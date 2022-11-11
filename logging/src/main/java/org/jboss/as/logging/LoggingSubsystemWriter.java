@@ -28,8 +28,7 @@ import static org.jboss.as.logging.CommonAttributes.CLASS;
 import static org.jboss.as.logging.CommonAttributes.ENABLED;
 import static org.jboss.as.logging.CommonAttributes.ENCODING;
 import static org.jboss.as.logging.CommonAttributes.FILE;
-import static org.jboss.as.logging.CommonAttributes.FILTER_SPEC;
-import static org.jboss.as.logging.CommonAttributes.HANDLERS;
+import static org.jboss.as.logging.loggers.LoggerAttributes.HANDLERS;
 import static org.jboss.as.logging.CommonAttributes.HANDLER_NAME;
 import static org.jboss.as.logging.CommonAttributes.LEVEL;
 import static org.jboss.as.logging.CommonAttributes.LOGGING_PROFILE;
@@ -64,6 +63,7 @@ import javax.xml.stream.XMLStreamException;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.persistence.SubsystemMarshallingContext;
+import org.jboss.as.logging.filters.FilterResourceDefinition;
 import org.jboss.as.logging.formatters.CustomFormatterResourceDefinition;
 import org.jboss.as.logging.formatters.JsonFormatterResourceDefinition;
 import org.jboss.as.logging.formatters.PatternFormatterResourceDefinition;
@@ -79,6 +79,7 @@ import org.jboss.as.logging.handlers.PeriodicSizeRotatingHandlerResourceDefiniti
 import org.jboss.as.logging.handlers.SizeRotatingHandlerResourceDefinition;
 import org.jboss.as.logging.handlers.SocketHandlerResourceDefinition;
 import org.jboss.as.logging.handlers.SyslogHandlerResourceDefinition;
+import org.jboss.as.logging.loggers.LoggerAttributes;
 import org.jboss.as.logging.loggers.LoggerResourceDefinition;
 import org.jboss.as.logging.loggers.RootLoggerResourceDefinition;
 import org.jboss.dmr.ModelNode;
@@ -235,18 +236,25 @@ public class LoggingSubsystemWriter implements XMLStreamConstants, XMLElementWri
         writeStructuredFormatters(writer, JsonFormatterResourceDefinition.NAME, model);
         writeStructuredFormatters(writer, XmlFormatterResourceDefinition.NAME, model,
                 XmlFormatterResourceDefinition.PRINT_NAMESPACE, XmlFormatterResourceDefinition.NAMESPACE_URI);
+
+        // Write the filters
+        if (model.hasDefined(FilterResourceDefinition.NAME)) {
+            for (String name : model.get(FilterResourceDefinition.NAME).keys()) {
+                writeFilterElement(writer, model.get(FilterResourceDefinition.NAME, name), name);
+            }
+        }
     }
 
     private void writeCommonLogger(final XMLExtendedStreamWriter writer, final ModelNode model) throws XMLStreamException {
         LEVEL.marshallAsElement(model, writer);
-        FILTER_SPEC.marshallAsElement(model, writer);
+        LoggerAttributes.FILTER_SPEC.marshallAsElement(model, writer);
         HANDLERS.marshallAsElement(model, writer);
     }
 
     private void writeCommonHandler(final XMLExtendedStreamWriter writer, final ModelNode model) throws XMLStreamException {
         LEVEL.marshallAsElement(model, writer);
         ENCODING.marshallAsElement(model, writer);
-        FILTER_SPEC.marshallAsElement(model, writer);
+        AbstractHandlerDefinition.FILTER_SPEC.marshallAsElement(model, writer);
         FORMATTER.marshallAsElement(model, writer);
         NAMED_FORMATTER.marshallAsElement(model, writer);
     }
@@ -342,7 +350,7 @@ public class LoggingSubsystemWriter implements XMLStreamConstants, XMLElementWri
         SocketHandlerResourceDefinition.SSL_CONTEXT.marshallAsAttribute(model, writer);
 
         ENCODING.marshallAsElement(model, writer);
-        FILTER_SPEC.marshallAsElement(model, writer);
+        AbstractHandlerDefinition.FILTER_SPEC.marshallAsElement(model, writer);
         LEVEL.marshallAsElement(model, writer);
         SocketHandlerResourceDefinition.NAMED_FORMATTER.marshallAsElement(model, writer);
         SocketHandlerResourceDefinition.PROTOCOL.marshallAsElement(model, writer);
@@ -378,7 +386,7 @@ public class LoggingSubsystemWriter implements XMLStreamConstants, XMLElementWri
         writer.writeAttribute(HANDLER_NAME.getXmlName(), name);
         ENABLED.marshallAsAttribute(model, false, writer);
         LEVEL.marshallAsElement(model, writer);
-        FILTER_SPEC.marshallAsElement(model, writer);
+        AbstractHandlerDefinition.FILTER_SPEC.marshallAsElement(model, writer);
         FORMATTER.marshallAsElement(model, writer);
         QUEUE_LENGTH.marshallAsElement(model, writer);
         OVERFLOW_ACTION.marshallAsElement(model, writer);
@@ -440,5 +448,15 @@ public class LoggingSubsystemWriter implements XMLStreamConstants, XMLElementWri
                 writer.writeEndElement(); // end formatter
             }
         }
+    }
+
+    private void writeFilterElement(final XMLExtendedStreamWriter writer, final ModelNode model, final String name) throws XMLStreamException {
+        writer.writeStartElement(Element.FILTER.getLocalName());
+        writer.writeAttribute(NAME.getXmlName(), name);
+        CLASS.marshallAsAttribute(model, writer);
+        MODULE.marshallAsAttribute(model, writer);
+        FilterResourceDefinition.CONSTRUCTOR_PROPERTIES.marshallAsElement(model, writer);
+        PROPERTIES.marshallAsElement(model, writer);
+        writer.writeEndElement();
     }
 }

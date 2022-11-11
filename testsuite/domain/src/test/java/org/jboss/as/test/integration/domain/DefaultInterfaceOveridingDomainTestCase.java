@@ -33,6 +33,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Set;
+import org.hamcrest.MatcherAssert;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.client.helpers.Operations;
@@ -64,8 +65,8 @@ public class DefaultInterfaceOveridingDomainTestCase {
     private static final Logger log = Logger.getLogger(DefaultInterfaceOveridingDomainTestCase.class.getName());
 
     private static final String[] SERVERS = new String[] {"main-one", "other-two"};
-    private static final String masterAddress = System.getProperty("jboss.test.host.master.address");
-    private static final String slaveAddress = System.getProperty("jboss.test.host.slave.address");
+    private static final String PrimaryAddress = System.getProperty("jboss.test.host.primary.address");
+    private static final String secondaryAddress = System.getProperty("jboss.test.host.secondary.address");
 
     private static DomainControllerClientConfig domainControllerClientConfig;
     private static DomainLifecycleUtil hostUtils;
@@ -100,8 +101,8 @@ public class DefaultInterfaceOveridingDomainTestCase {
 
         ClassLoader tccl = Thread.currentThread().getContextClassLoader();
         final WildFlyManagedConfiguration hostConfig = new WildFlyManagedConfiguration();
-        hostConfig.setHostControllerManagementAddress(masterAddress);
-        hostConfig.setHostCommandLineProperties("-Djboss.test.host.master.address=" + masterAddress + " -Djboss.test.host.slave.address=" + slaveAddress);
+        hostConfig.setHostControllerManagementAddress(PrimaryAddress);
+        hostConfig.setHostCommandLineProperties("-Djboss.test.host.primary.address=" + PrimaryAddress + " -Djboss.test.host.secondary.address=" + secondaryAddress);
         URL url = tccl.getResource("domain-configs/domain-default-interface.xml");
         assert url != null;
         hostConfig.setDomainConfigFile(new File(url.toURI()).getAbsolutePath());
@@ -111,13 +112,13 @@ public class DefaultInterfaceOveridingDomainTestCase {
         hostConfig.setHostConfigFile(new File(url.toURI()).getAbsolutePath());
         System.out.println(hostConfig.getHostConfigFile());
         hostConfig.setDomainDirectory(hostDir.getAbsolutePath());
-        hostConfig.setHostName("slave");
+        hostConfig.setHostName("secondary");
         hostConfig.setHostControllerManagementPort(9999);
         hostConfig.setStartupTimeoutInSeconds(120);
         hostConfig.setBackupDC(true);
         File usersFile = new File(hostConfigDir, "mgmt-users.properties");
         Files.write(usersFile.toPath(),
-                ("slave=" + new UsernamePasswordHashUtil().generateHashedHexURP("slave", "ManagementRealm", "slave_user_password".toCharArray())+"\n").getBytes(StandardCharsets.UTF_8));
+                ("secondary=" + new UsernamePasswordHashUtil().generateHashedHexURP("secondary", "ManagementRealm", "secondary_user_password".toCharArray())+"\n").getBytes(StandardCharsets.UTF_8));
         return hostConfig;
     }
 
@@ -125,19 +126,19 @@ public class DefaultInterfaceOveridingDomainTestCase {
     public void testInterfaceOverriden() throws Exception {
         // check that the failover-h1 is acting as domain controller and all three servers are registered
         Set<String> hosts = getHosts(hostUtils);
-        Assert.assertTrue(hosts.contains("slave"));
-        Assert.assertThat(getServerDefaultInterface(hostUtils, "main-one"), is("public"));
-        Assert.assertThat(getServerDefaultInterface(hostUtils, "other-two"), is("public-two"));
+        Assert.assertTrue(hosts.contains("secondary"));
+        MatcherAssert.assertThat(getServerDefaultInterface(hostUtils, "main-one"), is("public"));
+        MatcherAssert.assertThat(getServerDefaultInterface(hostUtils, "other-two"), is("public-two"));
     }
 
     private String getServerDefaultInterface(DomainLifecycleUtil hostUtil, String serverName) throws IOException {
-        ModelNode opAdress = PathAddress.pathAddress(PathElement.pathElement(HOST, "slave"), PathElement.pathElement(SERVER, serverName)).toModelNode();
+        ModelNode opAdress = PathAddress.pathAddress(PathElement.pathElement(HOST, "secondary"), PathElement.pathElement(SERVER, serverName)).toModelNode();
         ModelNode readOp = Operations.createReadResourceOperation(opAdress, true);
         ModelNode domain = hostUtil.executeForResult(readOp);
-        Assert.assertThat(domain.get(SOCKET_BINDING_GROUP).isDefined(), is(true));
+        MatcherAssert.assertThat(domain.get(SOCKET_BINDING_GROUP).isDefined(), is(true));
         Property socketBindingGroup = domain.get(SOCKET_BINDING_GROUP).asProperty();
-        Assert.assertThat(socketBindingGroup.getName(), is("standard-sockets"));
-        Assert.assertThat(socketBindingGroup.getValue().hasDefined(DEFAULT_INTERFACE), is(true));
+        MatcherAssert.assertThat(socketBindingGroup.getName(), is("standard-sockets"));
+        MatcherAssert.assertThat(socketBindingGroup.getValue().hasDefined(DEFAULT_INTERFACE), is(true));
         return socketBindingGroup.getValue().get(DEFAULT_INTERFACE).asString();
     }
 

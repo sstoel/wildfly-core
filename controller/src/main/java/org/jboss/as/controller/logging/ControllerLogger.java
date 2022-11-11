@@ -22,6 +22,7 @@
 
 package org.jboss.as.controller.logging;
 
+import static org.jboss.logging.Logger.Level.DEBUG;
 import static org.jboss.logging.Logger.Level.ERROR;
 import static org.jboss.logging.Logger.Level.INFO;
 import static org.jboss.logging.Logger.Level.WARN;
@@ -41,8 +42,10 @@ import java.util.concurrent.CancellationException;
 import javax.xml.namespace.QName;
 import javax.xml.stream.Location;
 import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
 import javax.xml.stream.XMLStreamWriter;
 
+import org.jboss.as.controller.ExpressionResolver;
 import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
@@ -76,6 +79,8 @@ import org.jboss.modules.ModuleLoadException;
 import org.jboss.modules.ModuleNotFoundException;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.StartException;
+import org.yaml.snakeyaml.error.Mark;
+import org.yaml.snakeyaml.nodes.NodeId;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
@@ -192,6 +197,15 @@ public interface ControllerLogger extends BasicLogger {
      */
     @LogMessage(level = ERROR)
     void failedToCloseResource(@Cause Throwable cause, XMLStreamWriter writer);
+
+    /**
+     * Logs an error message indicating to failure to close the resource represented by the {@code reader} parameter.
+     *
+     * @param cause  the cause of the error.
+     * @param reader the resource.
+     */
+    @LogMessage(level = ERROR)
+    void failedToCloseResource(@Cause Throwable cause, XMLStreamReader reader);
 
     /**
      * Logs an error message indicating a failure to persist configuration change.
@@ -345,9 +359,7 @@ public interface ControllerLogger extends BasicLogger {
     void gracefulManagementChannelHandlerShutdownFailed(@Cause Throwable cause);
 
     /**
-     * Logs a warning message indicating graceful shutdown of management request handling of slave HC to master HC
-     * communication failed.
-     *
+     * Logs a warning indicating an invalid value for how long to wait for active management operations to clear before allowing a communication channel close to proceed.
      * @param cause        the the cause of the failure
      * @param propertyName the name of the system property
      * @param propValue    the value provided
@@ -444,7 +456,7 @@ public interface ControllerLogger extends BasicLogger {
     void transformationWarnings(String hostName, Set<String> problems);
 
     @Message(id = 33, value = "Extension '%s' is deprecated and may not be supported in future versions")
-    @LogMessage(level = WARN)
+    @LogMessage(level = INFO)
     void extensionDeprecated(String extensionName);
 
     @Message(id = 34, value = "Subsystems %s provided by legacy extension '%s' are not supported on servers running this version. " +
@@ -1226,35 +1238,35 @@ public interface ControllerLogger extends BasicLogger {
     @Message(id = 106, value = "Invalid value '%s' for attribute '%s'")
     XMLStreamException invalidAttributeValue(String value, QName name, @Param Location location);
 
-    /**
-     * Creates an exception indicating an invalid value, represented by the {@code value} parameter, was found for the
-     * attribute, represented by the {@code name} parameter. The value must be between the {@code minInclusive} and
-     * {@code maxInclusive} values.
-     *
-     * @param value        the invalid value.
-     * @param name         the attribute name.
-     * @param minInclusive the minimum value allowed.
-     * @param maxInclusive the maximum value allowed.
-     * @param location     the location of the error.
-     *
-     * @return a {@link XMLStreamException} for the error.
-     */
-    @Message(id = 107, value = "Illegal value %d for attribute '%s' must be between %d and %d (inclusive)")
-    XMLStreamException invalidAttributeValue(int value, QName name, int minInclusive, int maxInclusive, @Param Location location);
+//    /**
+//     * Creates an exception indicating an invalid value, represented by the {@code value} parameter, was found for the
+//     * attribute, represented by the {@code name} parameter. The value must be between the {@code minInclusive} and
+//     * {@code maxInclusive} values.
+//     *
+//     * @param value        the invalid value.
+//     * @param name         the attribute name.
+//     * @param minInclusive the minimum value allowed.
+//     * @param maxInclusive the maximum value allowed.
+//     * @param location     the location of the error.
+//     *
+//     * @return a {@link XMLStreamException} for the error.
+//     */
+//    @Message(id = 107, value = "Illegal value %d for attribute '%s' must be between %d and %d (inclusive)")
+//    XMLStreamException invalidAttributeValue(int value, QName name, int minInclusive, int maxInclusive, @Param Location location);
 
-    /**
-     * Creates an exception indicating an invalid integer value, represented by the {@code value} parameter, was found
-     * for the attribute, represented by the {@code name} parameter.
-     *
-     * @param cause    the cause of the error.
-     * @param value    the invalid value.
-     * @param name     the attribute name.
-     * @param location the location of the error.
-     *
-     * @return a {@link XMLStreamException} for the error.
-     */
-    @Message(id = 108, value = "Illegal value '%s' for attribute '%s' must be an integer")
-    XMLStreamException invalidAttributeValueInt(@Cause Throwable cause, String value, QName name, @Param Location location);
+//    /**
+//     * Creates an exception indicating an invalid integer value, represented by the {@code value} parameter, was found
+//     * for the attribute, represented by the {@code name} parameter.
+//     *
+//     * @param cause    the cause of the error.
+//     * @param value    the invalid value.
+//     * @param name     the attribute name.
+//     * @param location the location of the error.
+//     *
+//     * @return a {@link XMLStreamException} for the error.
+//     */
+//    @Message(id = 108, value = "Illegal value '%s' for attribute '%s' must be an integer")
+//    XMLStreamException invalidAttributeValueInt(@Cause Throwable cause, String value, QName name, @Param Location location);
 
     /**
      * A message indicating the pattern, represented by the {@code pattern} parameter, for the interface criteria,
@@ -1868,17 +1880,17 @@ public interface ControllerLogger extends BasicLogger {
 //    @Message(id = 163, value = "An operation reply value type description is required but was not implemented for operation %s")
 //    IllegalStateException operationReplyValueTypeRequired(String operationName);
 
-    /**
-     * A message indicating there was a parsing problem.
-     *
-     * @param row the row the problem occurred at.
-     * @param col the column the problem occurred at.
-     * @param msg a message to concatenate.
-     *
-     * @return the message.
-     */
-    @Message(id = 164, value = "Parsing problem at [row,col]:[%d ,%d]%nMessage: %s")
-    String parsingProblem(int row, int col, String msg);
+//    /**
+//     * A message indicating there was a parsing problem.
+//     *
+//     * @param row the row the problem occurred at.
+//     * @param col the column the problem occurred at.
+//     * @param msg a message to concatenate.
+//     *
+//     * @return the message.
+//     */
+//    @Message(id = 164, value = "Parsing problem at [row,col]:[%d ,%d]%nMessage: %s")
+//    String parsingProblem(int row, int col, String msg);
 
     /**
      * Creates an exception indicating no configuration persister was injected.
@@ -2162,7 +2174,7 @@ public interface ControllerLogger extends BasicLogger {
 //    String stepHandlerFailed(OperationStepHandler handler);
 
     /**
-     * A message indicating the step handler for the operation failed handling operation rollback.
+     * A message indicating the step handler for the operation failed.
      *
      * @param handler the handler that failed.
      * @param op      the operation.
@@ -2171,8 +2183,8 @@ public interface ControllerLogger extends BasicLogger {
      *
      * @return the message.
      */
-    @Message(id = 190, value = "Step handler %s for operation %s at address %s failed handling operation rollback -- %s")
-    String stepHandlerFailedRollback(OperationStepHandler handler, String op, PathAddress address, Throwable cause);
+    @Message(id = 190, value = "Step handler %s for operation %s at address %s failed -- %s")
+    String stepHandlerFailed(OperationStepHandler handler, String op, PathAddress address, Throwable cause);
 
     /**
      * A message indicating an interruption awaiting subsystem boot operation execution.
@@ -2384,7 +2396,7 @@ public interface ControllerLogger extends BasicLogger {
      * @return an {@link OperationFailedException} for the caller
      */
     @Message(id = 210, value = "Caught SecurityException attempting to resolve expression '%s' -- %s")
-    String noPermissionToResolveExpression(ModelNode toResolve, SecurityException e);
+    ExpressionResolver.ExpressionResolutionUserException noPermissionToResolveExpression(ModelNode toResolve, SecurityException e);
 
     /**
      * Creates an exception message indicating an expression could not be resolved due to no corresponding system property
@@ -2394,7 +2406,7 @@ public interface ControllerLogger extends BasicLogger {
      * @return an {@link OperationFailedException} for the caller
      */
     @Message(id = 211, value = "Cannot resolve expression '%s'")
-    OperationFailedException cannotResolveExpression(String toResolve);
+    ExpressionResolver.ExpressionResolutionUserException cannotResolveExpression(String toResolve);
 
     /**
      * Creates an exception indicating the resource is a duplicate.
@@ -2424,10 +2436,11 @@ public interface ControllerLogger extends BasicLogger {
      *
      * @return an {@link IllegalStateException} for the error.
      */
-    @Message(id = 214, value = "Could not get main file: %s. Specified files must be relative to the configuration dir: %s")
+    @Message(id = 214, value = "Could not load configuration file: %s. The configuration file argument must specify the path to a file located in the configuration directory. The path must be a relative path, and must be relative to the configuration directory %s.")
     IllegalStateException mainFileNotFound(String name, File configurationDir);
 
-    // 215 free
+    @Message(id = 215, value = "Could not load configuration file: %s. The configuration file argument must specify one of the following: 1) an absolute path to an existing file; 2) a relative path to an existing file, relative to the current working directory; or 3) a relative path to a file located in the configuration directory. In the latter case, it must be a path relative to the configuration directory %s.")
+    IllegalStateException absolutePathMainFileNotFound(String name, File configurationDir);
 
     /**
      * Creates an exception indicating a resource cannot be found.
@@ -3009,7 +3022,7 @@ public interface ControllerLogger extends BasicLogger {
     @Message(id = 306, value = "read only context")
     IllegalStateException readOnlyContext();
 
-    @Message(id = 307, value = "We are trying to read data from the master host controller, which is currently busy executing another set of operations. This is a temporary situation, please retry")
+    @Message(id = 307, value = "We are trying to read data from the domain controller, which is currently busy executing another set of operations. This is a temporary situation, please retry")
     String cannotGetControllerLock();
 
 //    @Message(id = 308, value = "Cannot configure an interface to use 'any-ipv6-address' when system property java.net.preferIPv4Stack is true")
@@ -3229,8 +3242,11 @@ public interface ControllerLogger extends BasicLogger {
     @Message(id = NONE, value = "; There are no known registration points which can provide this capability.")
     String noKnownProviderPoints();
 
+    @Message(id = NONE, value = "; This unresolvable capability likely is due to the use of an expression string in a configuration attribute that does not support expressions.")
+    String unsupportedUsageOfExpression();
+
     @Message(id = 370, value="Incomplete expression: %s")
-    OperationFailedException incompleteExpression(String expression);
+    ExpressionResolver.ExpressionResolutionUserException incompleteExpression(String expression);
 
     @Message(id = 371, value="The element '%s' is no longer supported, please use '%s' instead")
     XMLStreamException unsupportedElement(QName name, @Param Location location, String supportedElement);
@@ -3553,6 +3569,171 @@ public interface ControllerLogger extends BasicLogger {
     ConfigurationPersistenceException snapshotAlreadyExistError(String name);
 
     @LogMessage(level = WARN)
-    @Message(id = 456, value = "System property %s=%s already set. It's being overridden by new value %s")
-    void systemPropertyAlreadyExist(String name, String value, String value2);
+    @Message(id = 456, value = "System property \"%s\" is already set in the <system-properties> section of the configuration file. The value set in the command line will be overridden by that value.")
+    void systemPropertyAlreadyExist(String name);
+
+    @Message(id = 457, value = "Invalid HTTP Header name '%s'")
+    OperationFailedException invalidHeaderName(String value);
+
+    @Message(id = 458, value = "Disallowed HTTP Header name '%s'")
+    OperationFailedException disallowedHeaderName(String value);
+
+    @LogMessage(level = ERROR)
+    @Message(id = 459, value = "Triggering roll back due to missing management services.")
+    void missingManagementServices();
+
+    @Message(id = 460, value = "The system property '%s' can only be used with a standalone or embedded server")
+    IllegalStateException propertyCanOnlyBeUsedWithStandaloneOrEmbeddedServer(String propertyName);
+
+    @Message(id = 461, value = "The system property '%s' can only be used with an admin-only server")
+    IllegalStateException propertyCanOnlyBeUsedWithAdminOnlyModeServer(String propertyName);
+
+    @Message(id = 462, value = "Could not find the directory '%s' specified by the system property '%s'. Please make sure it exists")
+    IllegalStateException couldNotFindDirectorySpecifiedByProperty(String fileName, String propertyName);
+
+    @Message(id = 463, value = "More than one instance of AdditionalBootCliScriptInvoker found. Have: '%s'; found: '%s")
+    IllegalStateException moreThanOneInstanceOfAdditionalBootCliScriptInvokerFound(String name, String name1);
+
+    @Message(id = 464, value = "If using %s=true, when you use -D%s you need to set -D%s")
+    IllegalStateException cliScriptPropertyDefinedWithoutMarkerDirectoryWhenNotSkippingReload(String skipProperty, String scriptProperty, String markerDirectoryProperty);
+
+    @LogMessage(level = INFO)
+    @Message(id = 465, value = "Initialised the additional boot CLI script functionality. The CLI commands will be read from %s. The server will remain running in admin-only mode after these have been executed, and the result of the cli operations will be written to %s")
+    void initialisedAdditionalBootCliScriptSystemKeepingAlive(File additionalBootCliScript, File doneMarker);
+
+    @LogMessage(level = INFO)
+    @Message(id = 466, value = "Initialised the additional boot CLI script functionality. The CLI commands will be read from %s. The server will be rebooted to normal mode after these have been executed")
+    void initialisedAdditionalBootCliScriptSystemNotKeepingAlive(File additionalBootCliScript);
+
+    @LogMessage(level = INFO)
+    @Message(id = 467, value = "Running the additional commands from the CLI script %s against the server which is running in admin-only mode")
+    void executingBootCliScript(File additionalBootCliScript);
+
+    @LogMessage(level = INFO)
+    @Message(id = 468, value = "Completed running the commands from the CLI script")
+    void completedRunningBootCliScript();
+
+    @LogMessage(level = INFO)
+    @Message(id = 469, value = "Restarting the server since the additional commands from the CLI script requires a restart. This will record that the restart has been initiated in the marker file %s since the restart mechanism will preserve all properties pertaining to the additional boot CLI script functionality (%s, %s, %s). The restart maintains the admin-only running mode, so a subsequent reload will happen")
+    void restartingServerAfterBootCliScript(File shutdownInitiated, String cliScriptProperty, String skipReloadProperty, String markerDirectoryProperty);
+
+    @LogMessage(level = INFO)
+    @Message(id = 470, value = "Reloading the server to normal mode after execution of the additional commands from the CLI script. This will clear the properties triggering the additional boot cli script functionality if they were set (%s, %s, %s), and delete the marker file indicating the server was restarted")
+    void reloadingServerToNormalModeAfterAdditionalBootCliScript(String cliScriptProperty, String skipReloadProperty, String markerDirectoryProperty);
+
+    @LogMessage(level = INFO)
+    @Message(id = 471, value = "Reloading the server to normal mode after restart follwoing execution of the additional commands from the CLI script. This will clear the properties triggering the additional boot cli script functionality if they were set (%s, %s, %s)")
+    void reloadingServerToNormalModeAfterRestartAfterAdditionalBootCliScript(String cliScriptProperty, String skipReloadProperty, String markerDirectoryProperty);
+
+    @LogMessage(level = INFO)
+    @Message(id = 472, value = "Checking for presence of marker file indicating that the server has been restarted following execution of the additional commands from the CLI script")
+    void checkingForPresenceOfRestartMarkerFile();
+
+    @LogMessage(level = INFO)
+    @Message(id = 473, value = "Marker file indicating that the server has been restarted following execution of the additional commands from the CLI script found at %s")
+    void foundRestartMarkerFile(File file);
+
+    @LogMessage(level = INFO)
+    @Message(id = 474, value = "No marker file found indicating that the server has been restarted following execution of the additional commands from the CLI script")
+    void noRestartMarkerFile();
+
+    @Message(id = 475, value = "Value for attribute '%s' is invalid.")
+    OperationFailedException invalidAttributeValue(String attributeName);
+
+    @Message(id = 476, value = "Value for attribute '%s' is invalid: either '%s' must be specified on its own or '%s' needs to be specified with at least one of '%s' or '%s'")
+    OperationFailedException invalidCredentialReferenceValue(String attributeName, String clearTextAttributeName, String credentialStoreAttributeName, String clearTextAttributeName1, String alias);
+
+    @Message(id = 477, value = "Parameter name '%s' is invalid.")
+    IllegalArgumentException invalidParameterName(String parameterName);
+
+    @Message(id = 478, value = "Unable to create command based CredentialSource for credential reference.")
+    OperationFailedException unableToBuildCommandCredentialSource(@Cause Throwable throwable);
+
+    @Message(id = 479, value = "Attribute '%s' at resource '%s' with unresolved value '%s' cannot be resolved using the non-security-sensitive sources resolution supported by the 'resolve' parameter. Response will report the unresolved value.")
+    String attributeUnresolvableUsingSimpleResolution(String attribute, String address, ModelNode unresolved);
+
+    @Message(id = 480, value = "Expression '%s' cannot be resolved using the non-security-sensitive sources resolution supported by the '%s' operation. Response will report the unresolved value.")
+    String expressionUnresolvableUsingSimpleResolution(ModelNode unresolved, String opName);
+
+    @LogMessage(level = WARN)
+    @Message(id = 481, value = "The runtime dependency package '%s' is already registered at location '%s'")
+    void runtimePackageDependencyAlreadyRegistered(String pckg, String location);
+
+    @Message(id = 482, value = "Value '%s' is not a legal charset name")
+    OperationFailedException illegalCharsetName(String charset);
+
+    @Message(id = 483, value = "Charset '%s' is not supported in this instance of the Java Virtual Machine")
+    OperationFailedException unsupportedCharset(String charset);
+
+    @Message(id = 484, value = "Attribute definition of attribute '%s' is null")
+    IllegalArgumentException invalidAttributeDefinition(String attributeName);
+
+    @Message(id = 485, value = "Error parsing yaml file %s")
+    IllegalArgumentException failedToParseYamlConfigurationFile(String path, @Cause Throwable throwable);
+
+    @Message(id = 486, value = "Missing yaml file %s")
+    IllegalArgumentException missingYamlFile(String path);
+
+    @LogMessage(level = DEBUG)
+    @Message(id = 487, value = "It took %s ms to load and parse the yaml files")
+    void loadingYamlFiles(long duration);
+
+    @LogMessage(level = WARN)
+    @Message(id = 488, value = "No registration found for address %s - Ignoring the subtree")
+    void noResourceRegistered(String address);
+
+    @Message(id = 489, value = "Can't undefine attribute %s since there is no resource at %s")
+    IllegalArgumentException noResourceForUndefiningAttribute(String attribute, String address);
+
+    @LogMessage(level = WARN)
+    @Message(id = 490, value = "You have defined a resource for address %s without any attributes, doing nothing")
+    void noAttributeSetForAddress(String address);
+
+    @LogMessage(level = WARN)
+    @Message(id = 491, value = "We have an unexpected value %s for address %s and name %s")
+    void unexpectedValueForResource(Object value, String address, String name);
+
+    @LogMessage(level = WARN)
+    @Message(id = 492, value = "Couldn't find a resource registration for address %s with current registration %s")
+    void noResourceRegistered(String address, String registration);
+
+    @Message(id = 493, value = "The attribute %s hasn't a valueType properly defined.")
+    UnsupportedOperationException missingListAttributeValueType(String name);
+
+    @Message(id = 494, value = "Resolution of extension expression '%s' is not allowed at this point.")
+    ExpressionResolver.ExpressionResolutionServerException resolverExtensionExpressionsNotAllowed(String expression);
+
+    @LogMessage(level = INFO)
+    @Message(id = 495, value = "\"fetch-from-master\" is a deprecated value for \"domain-controller.remote.admin-only-policy\", \"fetch-from-domain-controller\" will be used instead.")
+    void adminOnlyPolicyDeprecatedValue();
+
+    @LogMessage(level = WARN)
+    @Message(id = 496, value = "Thread dump:\n"+
+            "*******************************************************************************\n" +
+            "{0}\n===============================================================================\n" +
+            "End Thread dump\n*******************************************************************************\n",
+            format = Message.Format.MESSAGE_FORMAT)
+    void threadDump(String dump);
+
+    @LogMessage(level = WARN)
+    @Message(id = 497, value = "Deadlock detected!\n"+
+            "*******************************************************************************\n" +
+            "{0}\n===============================================================================\n" +
+            "End Deadlock\n*******************************************************************************\n",
+            format = Message.Format.MESSAGE_FORMAT)
+    void deadLock(String dump);
+
+    @LogMessage(level = WARN)
+    @Message(id = 498, value = "Exception thrown during generation of thread dump")
+    void threadDumpException(@Cause Exception cause);
+
+    @Message(id = NONE, value = "While constructing a mapping; %s; expected a mapping for merging, but found %s")
+    String errorConstructingYAMLMapping(Mark mark, NodeId node);
+
+    /**
+     * Instructions for the {@link YamlConfigurationExtension#YAML_CONFIG} command line argument.
+     * @return Instructions for the {@link YamlConfigurationExtension#YAML_CONFIG} command line argument.
+     */
+    @Message(id = Message.NONE, value = "The yaml configuration files for customizing the configuration. Paths can be absolute, relative to the current execution directory or relative to the standalone configuration directory.")
+    String argYaml();
 }

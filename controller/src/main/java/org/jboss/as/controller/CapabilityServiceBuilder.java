@@ -84,22 +84,6 @@ public interface CapabilityServiceBuilder<T> extends ServiceBuilder<T> {
     /**
      * {@inheritDoc}
      * @return this builder
-     * @deprecated Use {@link ServiceBuilder#requires(ServiceName)} instead. This method will be removed in a future release.
-     */
-    @Deprecated
-    <I> CapabilityServiceBuilder<T> addDependency(ServiceName dependency, Class<I> type, Injector<I> target);
-
-    /**
-     * {@inheritDoc}
-     * @return this builder
-     * @deprecated This method will be removed in a future release.
-     */
-    @Deprecated
-    <I> CapabilityServiceBuilder<T> addInjection(Injector<? super I> target, I value);
-
-    /**
-     * {@inheritDoc}
-     * @return this builder
      */
     @Override
     CapabilityServiceBuilder<T> setInitialMode(ServiceController.Mode mode);
@@ -112,13 +96,34 @@ public interface CapabilityServiceBuilder<T> extends ServiceBuilder<T> {
     CapabilityServiceBuilder<T> setInstance(Service service);
 
     /**
-     * Provided capability.
+     * Provide value under given capabilities.
      *
-     * @param capabilities names of capabilities service will provide.
+     * @param capabilities capabilities provided value represent
      * @param <V> consumed value type
      * @return consumer providing value
      */
     <V> Consumer<V> provides(final RuntimeCapability<?>... capabilities);
+
+    /**
+     * Provide value under given capability and aliases.
+     *
+     * @param capability name of capability provided value represent
+     * @param alias alias name of provided value
+     * @param aliases other aliases of provided value
+     * @param <V> consumed value type
+     * @return consumer providing value
+     */
+    <V> Consumer<V> provides(final RuntimeCapability<?> capability, final ServiceName alias, final ServiceName... aliases);
+
+    /**
+     * Provide value under given capabilities and alias names.
+     *
+     * @param capabilities capabilities provided value represent
+     * @param aliases alias names of provided value
+     * @param <V> consumed value type
+     * @return consumer providing value
+     */
+    <V> Consumer<V> provides(final RuntimeCapability<?>[] capabilities, final ServiceName[] aliases);
 
     /**
      * Capability requirement.

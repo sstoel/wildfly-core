@@ -60,15 +60,15 @@ public class RBACSensitivityConstraintUtilizationTestCase extends AbstractRbacTe
     public static void setupDomain() throws Exception {
         // Launch the domain
         testSupport = FullRbacProviderTestSuite.createSupport(RBACSensitivityConstraintUtilizationTestCase.class.getSimpleName());
-        masterClientConfig = testSupport.getDomainMasterConfiguration();
-        DomainClient domainClient = testSupport.getDomainMasterLifecycleUtil().getDomainClient();
+        primaryClientConfig = testSupport.getDomainPrimaryConfiguration();
+        DomainClient domainClient = testSupport.getDomainPrimaryLifecycleUtil().getDomainClient();
         UserRolesMappingServerSetupTask.StandardUsersSetup.INSTANCE.setup(domainClient);
     }
 
     @AfterClass
     public static void tearDownDomain() throws Exception {
         try {
-            UserRolesMappingServerSetupTask.StandardUsersSetup.INSTANCE.tearDown(testSupport.getDomainMasterLifecycleUtil().getDomainClient());
+            UserRolesMappingServerSetupTask.StandardUsersSetup.INSTANCE.tearDown(testSupport.getDomainPrimaryLifecycleUtil().getDomainClient());
         } finally {
             FullRbacProviderTestSuite.stopSupport();
             testSupport = null;
@@ -82,18 +82,18 @@ public class RBACSensitivityConstraintUtilizationTestCase extends AbstractRbacTe
 
     @Test
     public void testConstraintReplication() throws Exception {
-        ModelControllerClient client = testSupport.getDomainMasterLifecycleUtil().getDomainClient();
+        ModelControllerClient client = testSupport.getDomainPrimaryLifecycleUtil().getDomainClient();
         String path = "core-service=management/access=authorization/constraint=sensitivity-classification/type=core/classification=socket-config";
         try {
             checkRequiresRead(path, false, client);
             readSocketBinding(Outcome.SUCCESS, client);
-            ModelControllerClient monitor = getClientForUser(MONITOR_USER, false, masterClientConfig);
+            ModelControllerClient monitor = getClientForUser(MONITOR_USER, false, primaryClientConfig);
             readSocketBinding(Outcome.SUCCESS, monitor);
             setRequiresRead(path, true, client);
             checkRequiresRead(path, true, client);
             readSocketBinding(Outcome.SUCCESS, client);
             readSocketBinding(Outcome.UNAUTHORIZED, monitor);
-            ModelNode op = createOpNode("host=master/server-config=master-a", RESTART);
+            ModelNode op = createOpNode("host=primary/server-config=primary-a", RESTART);
             op.get(BLOCKING).set(true);
             RbacUtil.executeOperation(client, op, Outcome.SUCCESS);
             readSocketBinding(Outcome.SUCCESS, client);
@@ -129,7 +129,7 @@ public class RBACSensitivityConstraintUtilizationTestCase extends AbstractRbacTe
     }
 
     private static void readSocketBinding(Outcome expectedOutcome, ModelControllerClient client) throws IOException {
-        ModelNode operation = createOpNode("host=master/server=master-a/socket-binding-group=sockets-a/socket-binding=http", READ_RESOURCE_OPERATION);
+        ModelNode operation = createOpNode("host=primary/server=primary-a/socket-binding-group=sockets-a/socket-binding=http", READ_RESOURCE_OPERATION);
         RbacUtil.executeOperation(client, operation, expectedOutcome);
     }
 }

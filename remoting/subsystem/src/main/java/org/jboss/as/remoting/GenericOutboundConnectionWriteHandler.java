@@ -26,7 +26,6 @@ import org.jboss.as.controller.AbstractWriteAttributeHandler;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PathAddress;
-import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.dmr.ModelNode;
 import org.jboss.msc.service.ServiceController;
@@ -47,7 +46,7 @@ class GenericOutboundConnectionWriteHandler extends AbstractWriteAttributeHandle
     @Override
     protected boolean applyUpdateToRuntime(OperationContext context, ModelNode operation, String attributeName, ModelNode resolvedValue, ModelNode currentValue, HandbackHolder<Void> voidHandbackHolder) throws OperationFailedException {
         final ModelNode fullModel = Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
-        applyModelToRuntime(context, operation, attributeName, fullModel);
+        applyModelToRuntime(context, attributeName, fullModel);
 
         return false;
 
@@ -57,13 +56,13 @@ class GenericOutboundConnectionWriteHandler extends AbstractWriteAttributeHandle
     protected void revertUpdateToRuntime(OperationContext context, ModelNode operation, String attributeName, ModelNode valueToRestore, ModelNode valueToRevert, Void handback) throws OperationFailedException {
         final ModelNode restored = Resource.Tools.readModel(context.readResource(PathAddress.EMPTY_ADDRESS));
         restored.get(attributeName).set(valueToRestore);
-        applyModelToRuntime(context, operation, attributeName, restored);
+        applyModelToRuntime(context, attributeName, restored);
     }
 
-    private void applyModelToRuntime(OperationContext context, ModelNode operation, String attributeName, ModelNode fullModel) throws OperationFailedException {
+    private void applyModelToRuntime(OperationContext context, String attributeName, ModelNode fullModel) throws OperationFailedException {
 
-        final String connectionName = PathAddress.pathAddress(operation.get(ModelDescriptionConstants.OP_ADDR)).getLastElement().getValue();
-        final ServiceName serviceName = GenericOutboundConnectionService.OUTBOUND_CONNECTION_BASE_SERVICE_NAME.append(connectionName);
+        final String connectionName = context.getCurrentAddressValue();
+        final ServiceName serviceName = GenericOutboundConnectionResourceDefinition.OUTBOUND_CONNECTION_CAPABILITY.getCapabilityServiceName(connectionName);
         final ServiceRegistry registry = context.getServiceRegistry(true);
         ServiceController sc = registry.getService(serviceName);
         if (sc != null && sc.getState() == ServiceController.State.UP) {
@@ -75,7 +74,7 @@ class GenericOutboundConnectionWriteHandler extends AbstractWriteAttributeHandle
             // Service isn't up so we can bounce it
             context.removeService(serviceName); // safe even if the service doesn't exist
             // install the service with new values
-            GenericOutboundConnectionAdd.INSTANCE.installRuntimeService(context, operation, fullModel);
+            GenericOutboundConnectionAdd.INSTANCE.installRuntimeService(context, fullModel);
         }
     }
 }

@@ -21,21 +21,22 @@
  */
 package org.jboss.as.server.moduleservice;
 
-import org.jboss.as.server.logging.ServerLogger;
+import java.io.File;
+import java.util.function.Consumer;
+
 import org.jboss.as.server.Services;
+import org.jboss.as.server.logging.ServerLogger;
 import org.jboss.modules.ModuleIdentifier;
 import org.jboss.msc.service.Service;
 import org.jboss.msc.service.ServiceBuilder;
-import org.jboss.msc.service.ServiceContainer;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceController.Mode;
 import org.jboss.msc.service.ServiceName;
+import org.jboss.msc.service.ServiceRegistry;
 import org.jboss.msc.service.ServiceTarget;
 import org.jboss.msc.service.StartContext;
 import org.jboss.msc.service.StartException;
 import org.jboss.msc.service.StopContext;
-
-import java.io.File;
 
 /**
  * Service that manages external modules.
@@ -49,55 +50,63 @@ import java.io.File;
  * @author Ales Justin
  *
  */
-public class ExternalModuleService implements Service<ExternalModuleService> {
+public class ExternalModuleService implements Service<ExternalModuleService>, ExternalModule {
 
-    public static final String EXTERNAL_MODULE_PREFIX = ServiceModuleLoader.MODULE_PREFIX + "external.";
+    private boolean started;
+    private final Consumer<ExternalModuleService> externalModuleServiceConsumer;
 
-    private volatile ServiceContainer serviceContainer;
-
-    /**
-     * Is external module item valid.
-     * Keep the File impl detail in this class.
-     *
-     * @param externalModule the external module class path item
-     * @return true if valid, false otherwise
-     */
-    public boolean isValid(String externalModule) {
-        return new File(externalModule).exists();
+    private ExternalModuleService(final Consumer<ExternalModuleService> externalModuleServiceConsumer) {
+        this.externalModuleServiceConsumer = externalModuleServiceConsumer;
     }
 
-    public ModuleIdentifier addExternalModule(String externalModule) {
-        ModuleIdentifier identifier = ModuleIdentifier.create(EXTERNAL_MODULE_PREFIX + externalModule);
+    @Override
+    public boolean isValidFile(String path) {
+        File f = new File(path);
+        return f.exists() && !f.isDirectory();
+    }
+
+    @Override
+    public ModuleIdentifier addExternalModule(String moduleName, ServiceRegistry serviceRegistry, ServiceTarget serviceTarget) {
+        return addExternalModule(moduleName, moduleName, serviceRegistry, serviceTarget);
+    }
+
+    @Override
+    public ModuleIdentifier addExternalModule(String moduleName, String path, ServiceRegistry serviceRegistry, ServiceTarget serviceTarget) {
+        ModuleIdentifier identifier = ModuleIdentifier.create(EXTERNAL_MODULE_PREFIX + moduleName);
         ServiceName serviceName = ServiceModuleLoader.moduleSpecServiceName(identifier);
-        ServiceController<?> controller = serviceContainer.getService(serviceName);
+        ServiceController<?> controller = serviceRegistry.getService(serviceName);
         if (controller == null) {
-            ExternalModuleSpecService service = new ExternalModuleSpecService(identifier, new File(externalModule));
-            serviceContainer.addService(serviceName, service).setInitialMode(Mode.ON_DEMAND).install();
+            ExternalModuleSpecService service = new ExternalModuleSpecService(identifier, new File(path));
+            serviceTarget.addService(serviceName)
+                    .setInstance(service)
+                    .setInitialMode(Mode.ON_DEMAND)
+                    .install();
         }
         return identifier;
     }
 
     @Override
-    public void start(StartContext context) throws StartException {
-        if (serviceContainer != null) {
+    public synchronized void start(StartContext context) throws StartException {
+        if (started) {
             throw ServerLogger.ROOT_LOGGER.externalModuleServiceAlreadyStarted();
         }
-        serviceContainer = context.getController().getServiceContainer();
+        this.externalModuleServiceConsumer.accept(this);
+        started = true;
     }
 
     @Override
-    public void stop(StopContext context) {
-        serviceContainer = null;
-    }
+    public void stop(StopContext context) {}
 
     @Override
     public ExternalModuleService getValue() throws IllegalStateException, IllegalArgumentException {
         return this;
     }
 
-    public static void addService(final ServiceTarget serviceTarget) {
-        Service<ExternalModuleService> service = new ExternalModuleService();
-        ServiceBuilder<?> serviceBuilder = serviceTarget.addService(Services.JBOSS_EXTERNAL_MODULE_SERVICE, service);
-        serviceBuilder.install();
+    public static void addService(final ServiceTarget serviceTarget, final ServiceName externalModuleServiceName) {
+        final ServiceBuilder<?> serviceBuilder = serviceTarget.addService(externalModuleServiceName);
+        final Consumer<ExternalModuleService> provides = serviceBuilder.provides(Services.JBOSS_EXTERNAL_MODULE_SERVICE);
+
+        serviceBuilder.setInstance(new ExternalModuleService(provides))
+                .install();
     }
 }

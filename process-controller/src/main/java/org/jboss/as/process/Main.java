@@ -153,7 +153,7 @@ public final class Main {
                         i += pcSocketConfig.getArgIncrement();
                     } else {
                         // Windows batch scripts can't filter out parameters, ignore the -Djava.security.manager system property
-                        if (arg.startsWith("-Djava.security.manager")) {
+                        if (isJavaSecurityManagerConfigured(arg)) {
                             // Turn on the security manager
                             securityManagerEnabled = true;
                         } else {
@@ -260,6 +260,12 @@ public final class Main {
         return processController;
     }
 
+    private static boolean isJavaSecurityManagerConfigured(final String arg) {
+        return arg.startsWith("-Djava.security.manager")
+                && !"-Djava.security.manager=allow".equals(arg)
+                && !"-Djava.security.manager=disallow".equals(arg);
+    }
+
     private static String parseValue(final String arg, final String key) {
         String value = null;
         int splitPos = key.length();
@@ -320,8 +326,8 @@ public final class Main {
             if (bindAddress != null) {
                 return bindAddress;
             } else {
-                boolean v4Stack = Boolean.valueOf(WildFlySecurityManager.getPropertyPrivileged(CommandLineConstants.PREFER_IPV4_STACK, "false"));
-                boolean useV6 = !v4Stack && Boolean.valueOf(WildFlySecurityManager.getPropertyPrivileged(CommandLineConstants.PREFER_IPV6_ADDRESSES, "false"));
+                boolean v4Stack = Boolean.parseBoolean(WildFlySecurityManager.getPropertyPrivileged(CommandLineConstants.PREFER_IPV4_STACK, "false"));
+                boolean useV6 = !v4Stack && Boolean.parseBoolean(WildFlySecurityManager.getPropertyPrivileged(CommandLineConstants.PREFER_IPV6_ADDRESSES, "false"));
                 return useV6 ? "::1" : "127.0.0.1";
             }
         }

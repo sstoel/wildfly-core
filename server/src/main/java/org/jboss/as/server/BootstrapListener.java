@@ -68,7 +68,7 @@ public final class BootstrapListener {
         return monitor;
     }
 
-    public void printBootStatistics() {
+    public void printBootStatistics(String message) {
         final StabilityStatistics statistics = new StabilityStatistics();
         try {
             monitor.awaitStability(statistics);
@@ -78,7 +78,7 @@ public final class BootstrapListener {
         } finally {
             serviceTarget.removeMonitor(monitor);
             final long bootstrapTime = System.currentTimeMillis() - startTime;
-            done(bootstrapTime, statistics);
+            done(bootstrapTime, statistics, message);
             monitor.clear();
         }
     }
@@ -87,15 +87,13 @@ public final class BootstrapListener {
         futureContainer.failed(new Exception(message));
     }
 
-    private void done(final long bootstrapTime, final StabilityStatistics statistics) {
+    private void done(final long bootstrapTime, final StabilityStatistics statistics, String message) {
         futureContainer.done(serviceContainer);
         if (serviceContainer.isShutdown()) {
             // Do not print boot statistics because server
             // received shutdown signal during the boot process.
             return;
         }
-
-        logAdminConsole();
 
         final int active = statistics.getActiveCount();
         final int failed = statistics.getFailedCount();
@@ -106,10 +104,10 @@ public final class BootstrapListener {
         final int problem = statistics.getProblemsCount();
         final int started = statistics.getStartedCount();
         if (failed == 0 && problem == 0) {
-            ServerLogger.AS_ROOT_LOGGER.startedClean(prettyVersion, bootstrapTime, started, active + passive + onDemand + never + lazy, onDemand + passive + lazy);
+            ServerLogger.AS_ROOT_LOGGER.startedClean(prettyVersion, bootstrapTime, started, active + passive + onDemand + never + lazy, onDemand + passive + lazy, message);
             createStartupMarker("success", startTime);
         } else {
-            ServerLogger.AS_ROOT_LOGGER.startedWitErrors(prettyVersion, bootstrapTime, started, active + passive + onDemand + never + lazy, failed + problem, onDemand + passive + lazy);
+            ServerLogger.AS_ROOT_LOGGER.startedWitErrors(prettyVersion, bootstrapTime, started, active + passive + onDemand + never + lazy, failed + problem, onDemand + passive + lazy, message);
             createStartupMarker("error", startTime);
         }
     }
@@ -141,7 +139,7 @@ public final class BootstrapListener {
         }
     }
 
-    private void logAdminConsole() {
+    public void logAdminConsole() {
         ServiceController<?> controller = serviceContainer.getService(UndertowHttpManagementService.SERVICE_NAME);
         if (controller != null) {
             HttpManagement mgmt = (HttpManagement)controller.getValue();

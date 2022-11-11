@@ -25,7 +25,6 @@ package org.jboss.as.server.parsing;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NAMESPACES;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SCHEMA_LOCATIONS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
-import static org.jboss.as.controller.parsing.ExtensionXml.isOrderExtensions;
 import static org.jboss.as.controller.parsing.ParseUtils.invalidAttributeValue;
 
 import java.util.ArrayList;
@@ -261,17 +260,18 @@ public abstract class CommonXml implements XMLElementReader<List<ModelNode>> {
 
         if (profileNode.hasDefined(SUBSYSTEM)) {
             Set<String> subsystemNames = profileNode.get(SUBSYSTEM).keys();
-            if (subsystemNames.size() > 0) {
-                if (isOrderExtensions()) {
-                    Set<String> alphabetical = new TreeSet<>(subsystemNames);
-                    if (alphabetical.contains("logging")) {
-                        subsystemNames = new LinkedHashSet<>();
-                        subsystemNames.add("logging");
-                        subsystemNames.addAll(alphabetical);
-                    } else {
-                        subsystemNames = alphabetical;
-                    }
+            if (!subsystemNames.isEmpty()) {
+                // establish traditional 'logging then alphabetical' ordering
+                // note that logging first is just tradition; it's not necessary technically
+                Set<String> alphabetical = new TreeSet<>(subsystemNames);
+                if (alphabetical.contains("logging")) {
+                    subsystemNames = new LinkedHashSet<>();
+                    subsystemNames.add("logging");
+                    subsystemNames.addAll(alphabetical);
+                } else {
+                    subsystemNames = alphabetical;
                 }
+
                 String defaultNamespace = writer.getNamespaceContext().getNamespaceURI(XMLConstants.DEFAULT_NS_PREFIX);
                 for (String subsystemName : subsystemNames) {
                     try {
@@ -300,10 +300,6 @@ public abstract class CommonXml implements XMLElementReader<List<ModelNode>> {
     protected static void writeContentItem(final XMLExtendedStreamWriter writer, final ModelNode contentItem)
             throws XMLStreamException {
         DeploymentsXml.writeContentItem(writer, contentItem);
-    }
-
-    protected void writeVault(XMLExtendedStreamWriter writer, ModelNode vault) throws XMLStreamException {
-        vaultXml.writeVault(writer, vault);
     }
 
     /**

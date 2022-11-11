@@ -174,7 +174,7 @@ public class ListAttributeDefinitionTestCase {
                 .setAllowExpression(true)
                 .setRequired(true)
                 .build();
-        assertEquals(list.getValueType(), ModelType.STRING);
+        assertEquals(ModelType.STRING, list.getValueAttributeDefinition().getType());
         ModelNode desc = list.getNoTextDescription(false);
         ModelNode expressionNode = desc.get(EXPRESSIONS_ALLOWED);
         assertNotNull("Expression element should be present!", expressionNode);

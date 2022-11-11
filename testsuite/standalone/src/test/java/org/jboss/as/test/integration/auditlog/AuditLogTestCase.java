@@ -23,7 +23,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUC
 
 import java.io.File;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.client.ModelControllerClient;
@@ -36,7 +36,7 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ManagementClient;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  * The actual contents of what is being logged is tested in
@@ -46,7 +46,7 @@ import org.wildfly.core.testrunner.WildflyTestRunner;
  *
  * @author Kabir Khan
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 //@RunAsClient
 public class AuditLogTestCase {
 

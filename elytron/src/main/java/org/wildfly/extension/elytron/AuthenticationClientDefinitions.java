@@ -18,6 +18,8 @@
 
 package org.wildfly.extension.elytron;
 
+import static org.jboss.as.controller.security.CredentialReference.handleCredentialReferenceUpdate;
+import static org.jboss.as.controller.security.CredentialReference.rollbackCredentialStoreUpdate;
 import static org.wildfly.common.Assert.checkNotNullParam;
 import static org.wildfly.extension.elytron.Capabilities.AUTHENTICATION_CONFIGURATION_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.AUTHENTICATION_CONFIGURATION_RUNTIME_CAPABILITY;
@@ -48,6 +50,7 @@ import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.operations.validation.StringAllowedValuesValidator;
 import org.jboss.as.controller.registry.AttributeAccess;
+import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.controller.security.CredentialReference;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
@@ -138,8 +141,7 @@ class AuthenticationClientDefinitions {
             .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
             .build();
 
-    static final PropertiesAttributeDefinition MECHANISM_PROPERTIES = new PropertiesAttributeDefinition.Builder(ElytronDescriptionConstants.PROPERTIES, true)
-            .setName(ElytronDescriptionConstants.MECHANISM_PROPERTIES)
+    static final PropertiesAttributeDefinition MECHANISM_PROPERTIES = new PropertiesAttributeDefinition.Builder(ElytronDescriptionConstants.MECHANISM_PROPERTIES, true)
             .setXmlName(ElytronDescriptionConstants.MECHANISM_PROPERTIES)
             .setRestartAllServices()
             .build();
@@ -154,11 +156,29 @@ class AuthenticationClientDefinitions {
             .setCapabilityReference(SECURITY_FACTORY_CREDENTIAL_CAPABILITY, AUTHENTICATION_CONFIGURATION_RUNTIME_CAPABILITY)
             .build();
 
+
+    static final SimpleAttributeDefinition HTTP_MECHANISM = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.HTTP_MECHANISM, ModelType.STRING, true)
+            .setAllowedValues(new ModelNode("BASIC"))
+            .setValidator(new StringAllowedValuesValidator("BASIC"))
+            .setRequired(false)
+            .build();
+
+    static final SimpleAttributeDefinition WS_SECURITY_TYPE = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.WS_SECURITY_TYPE, ModelType.STRING, true)
+            .setValidator(new StringAllowedValuesValidator("UsernameToken"))
+            .setRequired(false)
+            .build();
+
+    static final ObjectTypeAttributeDefinition WEBSERVICES = new ObjectTypeAttributeDefinition.Builder(ElytronDescriptionConstants.WEBSERVICES, HTTP_MECHANISM, WS_SECURITY_TYPE)
+            .setRequired(false)
+            .setAllowExpression(true)
+            .setRestartAllServices()
+            .build();
+
     static final AttributeDefinition[] AUTHENTICATION_CONFIGURATION_SIMPLE_ATTRIBUTES = new AttributeDefinition[] { CONFIGURATION_EXTENDS, ANONYMOUS, AUTHENTICATION_NAME, AUTHORIZATION_NAME, HOST, PROTOCOL,
             PORT, REALM, SECURITY_DOMAIN, FORWARDING_MODE, SASL_MECHANISM_SELECTOR, KERBEROS_SECURITY_FACTORY };
 
     static final AttributeDefinition[] AUTHENTICATION_CONFIGURATION_ALL_ATTRIBUTES = new AttributeDefinition[] { CONFIGURATION_EXTENDS, ANONYMOUS, AUTHENTICATION_NAME, AUTHORIZATION_NAME, HOST, PROTOCOL,
-            PORT, REALM, SECURITY_DOMAIN, FORWARDING_MODE, KERBEROS_SECURITY_FACTORY, SASL_MECHANISM_SELECTOR, MECHANISM_PROPERTIES, CREDENTIAL_REFERENCE };
+            PORT, REALM, SECURITY_DOMAIN, FORWARDING_MODE, KERBEROS_SECURITY_FACTORY, SASL_MECHANISM_SELECTOR, MECHANISM_PROPERTIES, CREDENTIAL_REFERENCE, WEBSERVICES };
 
     /* *************************************** */
     /* Authentication Context Attributes */
@@ -245,6 +265,12 @@ class AuthenticationClientDefinitions {
 
         TrivialAddHandler<AuthenticationConfiguration> add = new TrivialAddHandler<AuthenticationConfiguration>(AuthenticationConfiguration.class, AUTHENTICATION_CONFIGURATION_ALL_ATTRIBUTES,
                 AUTHENTICATION_CONFIGURATION_RUNTIME_CAPABILITY) {
+
+            @Override
+            protected void populateModel(final OperationContext context, final ModelNode operation, final Resource resource) throws OperationFailedException {
+                super.populateModel(context, operation, resource);
+                handleCredentialReferenceUpdate(context, resource.getModel());
+            }
 
             @Override
             protected ValueSupplier<AuthenticationConfiguration> getValueSupplier(
@@ -350,6 +376,15 @@ class AuthenticationClientDefinitions {
                     });
                 }
 
+                ModelNode webServices = WEBSERVICES.resolveModelAttribute(context, model);
+                if (webServices.isDefined()) {
+                    Map<String, Object> wsMap = new HashMap<String, Object>();
+                    for (String s : webServices.keys()) {
+                        wsMap.put(s, webServices.require(s));
+                    }
+                    configuration = wsMap.isEmpty() ? configuration : configuration.andThen(c -> c.useWebServices(wsMap));
+                }
+
                 final Function<AuthenticationConfiguration, AuthenticationConfiguration> finalConfiguration = configuration;
                 return () -> {
                     try {
@@ -361,6 +396,11 @@ class AuthenticationClientDefinitions {
                         throw ROOT_LOGGER.unableToStartService(e);
                     }
                 };
+            }
+
+            @Override
+            protected void rollbackRuntime(OperationContext context, final ModelNode operation, final Resource resource) {
+                rollbackCredentialStoreUpdate(CREDENTIAL_REFERENCE, context, resource);
             }
 
             private InjectedValue<SecurityDomain> getSecurityDomain(ServiceBuilder<AuthenticationConfiguration> serviceBuilder, OperationContext context, String securityDomain) {

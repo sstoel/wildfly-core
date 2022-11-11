@@ -63,8 +63,6 @@ public class EmbeddedProcessFactory {
             SYSPROP_KEY_JBOSS_DOMAIN_TEMP_DIR, SYSPROP_KEY_JBOSS_DOMAIN_LOG_DIR, SYSPROP_KEY_JBOSS_DOMAIN_CONFIG_DIR
     };
 
-    private static final String JBOSS_MODULES_DIR_NAME = "modules";
-
     private static final String HOST_FACTORY = "org.wildfly.core.embedded.EmbeddedHostControllerFactory";
     private static final String SERVER_FACTORY = "org.wildfly.core.embedded.EmbeddedStandaloneServerFactory";
     /**
@@ -287,7 +285,17 @@ public class EmbeddedProcessFactory {
 
         // Create the server
         Object hostControllerImpl = createManagedProcess(ProcessType.HOST_CONTROLLER, createServerMethod, configuration, useClMethod ? embeddedModuleCL : null);
-        return new EmbeddedManagedProcessImpl(hostControllerClass, hostControllerImpl, context);
+
+        Method methodGetProcessState;
+        EmbeddedManagedProcessImpl embeddedManagedProcess;
+        try {
+            methodGetProcessState = hostControllerClass.getMethod("getProcessState");
+            embeddedManagedProcess = new EmbeddedManagedProcessImpl(hostControllerClass, hostControllerImpl, context, methodGetProcessState);
+        } catch (final NoSuchMethodException nsme) {
+            embeddedManagedProcess = new EmbeddedManagedProcessImpl(hostControllerClass, hostControllerImpl, context);
+        }
+
+        return embeddedManagedProcess;
     }
 
     private static void setupVfsModule(final ModuleLoader moduleLoader) {

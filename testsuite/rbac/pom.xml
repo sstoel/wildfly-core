@@ -15,7 +15,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-testsuite</artifactId>
-        <version>10.0.0.Beta4-SNAPSHOT</version>
+        <version>20.0.0.Beta3-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -36,17 +36,17 @@
 
     <dependencies>
         <dependency>
+            <groupId>jakarta.inject</groupId>
+            <artifactId>jakarta.inject-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.wildfly.core</groupId>
             <artifactId>wildfly-core-test-runner</artifactId>
         </dependency>
         <dependency>
             <groupId>org.wildfly.core</groupId>
             <artifactId>wildfly-core-testsuite-shared</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.wildfly.core</groupId>
-            <artifactId>wildfly-core-vault-test-galleon-pack</artifactId>
-            <type>pom</type>
         </dependency>
         <dependency>
             <groupId>org.apache.directory.server</groupId>
@@ -82,17 +82,10 @@
                                 <jboss-maven-dist/>
                                 <jboss-fork-embedded>${galleon.fork.embedded}</jboss-fork-embedded>
                             </plugin-options>
-                            <resolve-locals>
-                                <resolve-local>
-                                    <groupId>${project.groupId}</groupId>
-                                    <artifactId>wildfly-core-galleon-pack</artifactId>
-                                    <version>${project.version}</version>
-                                </resolve-local>
-                            </resolve-locals>
                             <feature-packs>
                                 <feature-pack>
                                     <groupId>org.wildfly.core</groupId>
-                                    <artifactId>wildfly-core-vault-test-galleon-pack</artifactId>
+                                    <artifactId>wildfly-core-galleon-pack</artifactId>
                                     <version>${project.version}</version>
                                     <inherit-configs>false</inherit-configs>
                                     <included-configs>
@@ -125,7 +118,7 @@
                             <overwrite>true</overwrite>
                             <resources>
                                 <resource>
-                                    <directory>src/test/resources</directory>
+                                    <directory>src/test/resources/wildfly/standalone/configuration</directory>
                                     <includes>
                                         <include>mgmt-groups.properties</include>
                                         <include>mgmt-users.properties</include>
@@ -171,36 +164,6 @@
                                 <fileMapper implementation="org.codehaus.plexus.components.io.filemappers.RegExpFileMapper">
                                     <pattern>^</pattern>
                                     <replacement>properties-role-mapping-</replacement>
-                                </fileMapper>
-                            </fileMappers>
-                        </transformationSet>
-                        <transformationSet>
-                            <dir>${wildfly.standalone.config}</dir>
-                            <skipDefaultExcludes>true</skipDefaultExcludes>
-                            <includes>
-                                <include>properties-role-mapping-standalone*.xml</include>
-                            </includes>
-                            <stylesheet>${local.xslt.dir}/setupRbacLdapAuthG2U.xsl</stylesheet>
-                            <outputDir>${wildfly.standalone.config}</outputDir>
-                            <fileMappers>
-                                <fileMapper implementation="org.codehaus.plexus.components.io.filemappers.RegExpFileMapper">
-                                    <pattern>^properties-role-mapping</pattern>
-                                    <replacement>ldap-role-mapping-g2u</replacement>
-                                </fileMapper>
-                            </fileMappers>
-                        </transformationSet>
-                        <transformationSet>
-                            <dir>${wildfly.standalone.config}</dir>
-                            <skipDefaultExcludes>true</skipDefaultExcludes>
-                            <includes>
-                                <include>properties-role-mapping-standalone*.xml</include>
-                            </includes>
-                            <stylesheet>${local.xslt.dir}/setupRbacLdapAuthU2G.xsl</stylesheet>
-                            <outputDir>${wildfly.standalone.config}</outputDir>
-                            <fileMappers>
-                                <fileMapper implementation="org.codehaus.plexus.components.io.filemappers.RegExpFileMapper">
-                                    <pattern>^properties-role-mapping</pattern>
-                                    <replacement>ldap-role-mapping-u2g</replacement>
                                 </fileMapper>
                             </fileMappers>
                         </transformationSet>
@@ -258,8 +221,6 @@
                             <excludes>
                                 <exclude>**/PropertiesRoleMappingTestCase.java</exclude>
                                 <exclude>**/JmxSensitiveTestCase.java</exclude>
-                                <exclude>**/LdapRoleMappingG2UTestCase.java</exclude>
-                                <exclude>**/LdapRoleMappingU2GTestCase.java</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -275,36 +236,6 @@
                             </includes>
                             <systemPropertyVariables>
                                 <server.config>properties-role-mapping-standalone.xml</server.config>
-                            </systemPropertyVariables>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>access-ldap-role-mapping-g2u</id>
-                        <phase>test</phase>
-                        <goals>
-                            <goal>test</goal>
-                        </goals>
-                        <configuration>
-                            <includes>
-                                <include>org/jboss/as/test/integration/mgmt/access/LdapRoleMappingG2UTestCase.java</include>
-                            </includes>
-                            <systemPropertyVariables>
-                                <server.config>ldap-role-mapping-g2u-standalone.xml</server.config>
-                            </systemPropertyVariables>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>access-ldap-role-mapping-u2g</id>
-                        <phase>test</phase>
-                        <goals>
-                            <goal>test</goal>
-                        </goals>
-                        <configuration>
-                            <includes>
-                                <include>org/jboss/as/test/integration/mgmt/access/LdapRoleMappingU2GTestCase.java</include>
-                            </includes>
-                            <systemPropertyVariables>
-                                <server.config>ldap-role-mapping-u2g-standalone.xml</server.config>
                             </systemPropertyVariables>
                         </configuration>
                     </execution>
@@ -340,6 +271,246 @@
             <properties>
                 <ts.debug>true</ts.debug>
             </properties>
+        </profile>
+
+        <!-- Test against slimmed servers provisioned by Galleon -->
+        <profile>
+            <id>layers.profile</id>
+            <activation>
+                <property>
+                    <name>ts.layers</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jboss.galleon</groupId>
+                        <artifactId>galleon-maven-plugin</artifactId>
+                        <executions>
+                            <!-- Disable the default provisioning -->
+                            <execution>
+                                <id>server-provisioning</id>
+                                <goals>
+                                    <goal>provisioning</goal>
+                                </goals>
+                                <phase>none</phase>
+                            </execution>
+                            <!-- Provision a server with the core functionality we will provide in OpenShift images -->
+                            <execution>
+                                <id>slimmed-server-provisioning</id>
+                                <goals>
+                                    <goal>provision</goal>
+                                </goals>
+                                <phase>compile</phase>
+                                <configuration>
+                                    <install-dir>${project.build.directory}/${server.output.dir.prefix}</install-dir>
+                                    <record-state>false</record-state>
+                                    <log-time>${galleon.log.time}</log-time>
+                                    <offline>true</offline>
+                                    <plugin-options>
+                                        <jboss-maven-dist/>
+                                        <jboss-fork-embedded>${galleon.fork.embedded}</jboss-fork-embedded>
+                                        <optional-packages>passive+</optional-packages>
+                                    </plugin-options>
+                                    <feature-packs>
+                                        <feature-pack>
+                                            <groupId>org.wildfly.core</groupId>
+                                            <artifactId>wildfly-core-galleon-pack</artifactId>
+                                            <!--<artifactId>wildfly-core-galleon-pack</artifactId>-->
+                                            <version>${project.version}</version>
+                                            <inherit-configs>false</inherit-configs>
+                                            <inherit-packages>false</inherit-packages>
+                                            <!-- Specifically include patching -->
+                                            <included-packages>
+                                                <name>org.jboss.as.patching.cli</name>
+                                            </included-packages>
+                                            <excluded-packages>
+                                                <name>product.conf</name>
+                                            </excluded-packages>
+                                        </feature-pack>
+                                    </feature-packs>
+                                    <configurations>
+                                        <config>
+                                            <model>standalone</model>
+                                            <name>standalone.xml</name>
+                                            <layers>
+                                                <layer>core-server</layer>
+                                                <layer>core-tools</layer>
+                                                <layer>deployment-scanner</layer>
+                                            </layers>
+                                        </config>
+                                    </configurations>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                </plugins>
+            </build>
+        </profile>
+         <!-- Test against bootable jar -->
+        <profile>
+            <id>bootablejar.profile</id>
+            <activation>
+                <property>
+                    <name>ts.bootable</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jboss.galleon</groupId>
+                        <artifactId>galleon-maven-plugin</artifactId>   
+                        <executions>
+                            <!-- Disable the default provisioning, TODO, to provision multiple bootable-jars-->
+                            <execution>
+                                <id>server-provisioning</id>
+                                <goals>
+                                    <goal>provisioning</goal>
+                                </goals>
+                                <phase>none</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>xml-maven-plugin</artifactId>
+                        <executions>
+                            <!-- Disable the default provisioning, TODO, to provision multiple bootable-jars-->
+                            <execution>
+                                <id>adjust-default-server-configuration-for-basic-tests</id>
+                                <goals>
+                                    <goal>transform</goal>
+                                </goals>
+                                <phase>none</phase>
+                            </execution>
+                            <execution>
+                                <id>ts.config-as.ip</id>
+                                <goals>
+                                    <goal>transform</goal>
+                                </goals>
+                                <phase>none</phase>
+                            </execution>
+                            <execution>
+                                <id>ts.config-as.trace-logging</id>
+                                <goals>
+                                    <goal>transform</goal>
+                                </goals>
+                                <phase>none</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>mgmt.config</id>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <phase>none</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.wildfly.plugins</groupId>
+                        <artifactId>wildfly-jar-maven-plugin</artifactId>
+                        <executions>
+                            <!-- Provision a server with the core functionality we will provide in OpenShift images -->
+                            <execution>
+                                <id>bootable-jar-packaging</id>
+                                <goals>
+                                    <goal>package</goal>
+                                </goals>
+                                <phase>compile</phase>
+                                <configuration>
+                                    <output-file-name>test-wildfly.jar</output-file-name>
+                                    <hollowJar>true</hollowJar>
+                                    <record-state>false</record-state>
+                                    <log-time>${galleon.log.time}</log-time>
+                                    <offline>true</offline>
+                                    <cli-sessions>
+                                        <cli-session>
+                                            <script-files>
+                                                <script>${project.basedir}/enable-rbac.cli</script>
+                                            </script-files>
+                                        </cli-session>
+                                    </cli-sessions>
+                                    <extra-server-content-dirs>
+                                        <dir>${project.basedir}/src/test/resources/wildfly</dir>
+                                    </extra-server-content-dirs>
+                                    <plugin-options>
+                                        <jboss-maven-dist/>
+                                        <jboss-fork-embedded>${galleon.fork.embedded}</jboss-fork-embedded>
+                                    </plugin-options>
+                                    <feature-packs>
+                                        <feature-pack>
+                                            <groupId>org.wildfly.core</groupId>
+                                            <artifactId>wildfly-core-galleon-pack</artifactId>
+                                            <!--<artifactId>wildfly-core-galleon-pack</artifactId>-->
+                                            <version>${project.version}</version>
+                                            <!-- Specifically include patching -->
+                                            <included-packages>
+                                                <name>org.jboss.as.patching.cli</name>
+                                            </included-packages>
+                                            <excluded-packages>
+                                                <name>product.conf</name>
+                                            </excluded-packages>
+                                        </feature-pack>
+                                    </feature-packs>
+                                    <layers>
+                                        <layer>core-server</layer>
+                                        <layer>core-tools</layer>
+                                        <layer>deployment-scanner</layer>
+                                    </layers>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <systemProperties>
+                                <property>
+                                    <name>wildfly.bootable.jar</name>
+                                    <value>true</value>
+                                </property>
+                                <property>
+                                    <name>wildfly.bootable.jar.jar</name>
+                                    <value>${project.build.directory}/test-wildfly.jar</value>
+                                </property>
+                                <property>
+                                    <name>wildfly.bootable.jar.install.dir</name>
+                                    <value>${project.build.directory}/${server.output.dir.prefix}</value>
+                                </property>
+                            </systemProperties>
+                            <excludes>
+                                <exclude>org.jboss.as.test.integration.mgmt.access.LegacyConfigurationChangesHistoryTestCase</exclude>
+                            </excludes>
+                        </configuration>
+                        <executions>
+                            <!-- for now disable the alternative executions that would require multiple bootable jar packaging -->
+                            <execution>
+                                <id>access-properties-role-mapping</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <phase>none</phase>
+                            </execution>
+                            <execution>
+                                <id>access-integration-jmx-sensitivity</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <phase>none</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
         </profile>
     </profiles>
 </project>

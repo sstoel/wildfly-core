@@ -26,6 +26,7 @@ import static org.jboss.dmr.ModelType.STRING;
 
 import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.OperationContext;
+import org.jboss.as.controller.OperationContext.Stage;
 import org.jboss.as.controller.OperationDefinition;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
@@ -33,9 +34,9 @@ import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleOperationDefinitionBuilder;
-import org.jboss.as.controller.OperationContext.Stage;
 import org.jboss.as.controller.access.management.SensitiveTargetAccessConstraintDefinition;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
+import org.jboss.as.controller.logging.ControllerLogger;
 import org.jboss.as.controller.operations.validation.EnumValidator;
 import org.jboss.as.controller.operations.validation.IntRangeValidator;
 import org.jboss.as.controller.operations.validation.StringLengthValidator;
@@ -75,7 +76,7 @@ public class RemoteDomainControllerAddHandler implements OperationStepHandler {
     public static final SimpleAttributeDefinition PROTOCOL = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.PROTOCOL, ModelType.STRING)
             .setRequired(false)
             .setAllowExpression(true)
-            .setValidator(EnumValidator.create(Protocol.class, true, true))
+            .setValidator(EnumValidator.create(Protocol.class))
             .setDefaultValue(Protocol.REMOTE.toModelNode())
             .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
             .setRequires(ModelDescriptionConstants.HOST, ModelDescriptionConstants.PORT)
@@ -94,11 +95,6 @@ public class RemoteDomainControllerAddHandler implements OperationStepHandler {
             .setDeprecated(ModelVersion.create(5))
             .build();
 
-    public static final SimpleAttributeDefinition SECURITY_REALM = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.SECURITY_REALM, STRING, true)
-            .setValidator(new StringLengthValidator(1, true))
-            .setDeprecated(ModelVersion.create(5))
-            .build();
-
     public static final SimpleAttributeDefinition IGNORE_UNUSED_CONFIG = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.IGNORE_UNUSED_CONFIG, ModelType.BOOLEAN, true)
             .setRequired(false)
             .setAllowExpression(true)
@@ -108,12 +104,13 @@ public class RemoteDomainControllerAddHandler implements OperationStepHandler {
     public static final SimpleAttributeDefinition ADMIN_ONLY_POLICY = new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.ADMIN_ONLY_POLICY, ModelType.STRING, true)
             .setAllowExpression(true)
             .setFlags(AttributeAccess.Flag.RESTART_JVM)
-            .setValidator(new EnumValidator<>(AdminOnlyDomainConfigPolicy.class, true, true))
+            .setValidator(EnumValidator.create(AdminOnlyDomainConfigPolicy.class))
+            .setAllowedValues(AdminOnlyDomainConfigPolicy.ALLOW_NO_CONFIG.toString(), AdminOnlyDomainConfigPolicy.FETCH_FROM_DOMAIN_CONTROLLER.toString(), AdminOnlyDomainConfigPolicy.REQUIRE_LOCAL_CONFIG.toString())
             .setDefaultValue(new ModelNode(AdminOnlyDomainConfigPolicy.ALLOW_NO_CONFIG.toString()))
             .build();
 
     public static final OperationDefinition DEFINITION = new SimpleOperationDefinitionBuilder(OPERATION_NAME, HostResolver.getResolver("host"))
-            .setParameters(PROTOCOL, PORT, HOST, AUTHENTICATION_CONTEXT, USERNAME, SECURITY_REALM, IGNORE_UNUSED_CONFIG, ADMIN_ONLY_POLICY)
+            .setParameters(PROTOCOL, PORT, HOST, AUTHENTICATION_CONTEXT, USERNAME, IGNORE_UNUSED_CONFIG, ADMIN_ONLY_POLICY)
             .addAccessConstraint(SensitiveTargetAccessConstraintDefinition.DOMAIN_CONTROLLER)
             .setDeprecated(ModelVersion.create(5, 0, 0))
             .build();
@@ -140,6 +137,14 @@ public class RemoteDomainControllerAddHandler implements OperationStepHandler {
         IGNORE_UNUSED_CONFIG.validateAndSet(operation, remoteDC);
         ADMIN_ONLY_POLICY.validateAndSet(operation, remoteDC);
 
+        if (remoteDC.hasDefined(ADMIN_ONLY_POLICY.getName())) {
+            ModelNode current = ADMIN_ONLY_POLICY.resolveModelAttribute(context, remoteDC);
+            if (current.asString().equals(AdminOnlyDomainConfigPolicy.LEGACY_FETCH_FROM_DOMAIN_CONTROLLER.toString())) {
+                ControllerLogger.ROOT_LOGGER.adminOnlyPolicyDeprecatedValue();
+                remoteDC.get(ADMIN_ONLY_POLICY.getName()).set(AdminOnlyDomainConfigPolicy.FETCH_FROM_DOMAIN_CONTROLLER.toString());
+            }
+        }
+
         if (operation.has(AUTHENTICATION_CONTEXT.getName())) {
             AUTHENTICATION_CONTEXT.validateAndSet(operation, remoteDC);
             final String authenticationContext = AUTHENTICATION_CONTEXT.resolveModelAttribute(context, operation).asString();
@@ -153,13 +158,6 @@ public class RemoteDomainControllerAddHandler implements OperationStepHandler {
             }, Stage.RUNTIME);
         } else {
             remoteDC.get(AUTHENTICATION_CONTEXT.getName()).clear();
-        }
-
-        if (operation.has(SECURITY_REALM.getName())) {
-            SECURITY_REALM.validateAndSet(operation, remoteDC);
-            hostControllerInfo.setRemoteDomainControllerSecurityRealm(SECURITY_REALM.resolveModelAttribute(context, operation).asString());
-        } else {
-            remoteDC.get(SECURITY_REALM.getName()).clear();
         }
 
         if (dc.has(LOCAL)) {

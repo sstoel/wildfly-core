@@ -29,13 +29,13 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  * Test generic command features of CLI.
  * @author Dominik Pospisil <dpospisi@redhat.com>
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 public class GenericCommandTestCase extends AbstractCliTestBase {
 
     @BeforeClass
@@ -74,5 +74,59 @@ public class GenericCommandTestCase extends AbstractCliTestBase {
         assertFalse(cli.isValidPath("socket-binding-group", "standard-sockets", "socket-binding", "cli-test"));
 
         cli.sendLine("command remove --command-name=socket-binding");
+    }
+
+    @Test
+    public void testNodeChild() throws Exception {
+
+        // add generic authorization command
+        cli.sendLine("command add --node-child=/core-service=management/access=authorization --command-name=authorization");
+
+        // test read-resource
+        cli.sendLine("authorization read-resource");
+
+        final String readOutput = cli.readOutput();
+        assertTrue(readOutput.contains("use-identity-roles=false"));
+        assertTrue(readOutput.contains("permission-combination-policy=permissive"));
+
+        // test write attributes
+        try {
+            cli.sendLine("authorization --use-identity-roles=true --permission-combination-policy=rejecting");
+
+            // test read-resource
+            cli.sendLine("authorization read-resource");
+
+            final String readOutput2 = cli.readOutput();
+            assertTrue(readOutput2.contains("use-identity-roles=true"));
+            assertTrue(readOutput2.contains("permission-combination-policy=rejecting"));
+        } finally {
+            cli.sendLine("/core-service=management/access=authorization:write-attribute(name=use-identity-roles, value=false");
+            cli.sendLine("/core-service=management/access=authorization:write-attribute(name=permission-combination-policy, value=permissive");
+            cli.sendLine("command remove --command-name=authorization");
+        }
+    }
+
+    @Test
+    public void testNoNodeChild() throws Exception {
+
+        // Attempt to add a command for non existing resource.
+        boolean success = cli.sendLine("command add --node-child=/system-property=foo --command-name=foo", true);
+        assertFalse(success);
+
+        // Attempt to add a child command for a type
+        success = cli.sendLine("command add --node-child=/system-property --command-name=foo", true);
+        assertFalse(success);
+
+        cli.sendLine("/system-property=foo:add(value=foo");
+        try {
+            cli.sendLine("command add --node-child=/system-property=foo --command-name=foo");
+            cli.sendLine("foo read-resource");
+            final String readOutput = cli.readOutput();
+            assertTrue(readOutput.contains("value=foo"));
+        } finally {
+            cli.sendLine("/system-property=foo:remove");
+            cli.sendLine("command remove --command-name=foo");
+        }
+
     }
 }

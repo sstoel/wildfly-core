@@ -30,7 +30,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>10.0.0.Beta4-SNAPSHOT</version>
+        <version>20.0.0.Beta3-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-logging</artifactId>
@@ -38,9 +38,26 @@
     <name>WildFly: Logging Subsystem</name>
     <properties>
         <surefire.argLine>${surefire.system.args}</surefire.argLine>
+        <jboss.modules.dir>${project.build.directory}${file.separator}modules</jboss.modules.dir>
+        <test.class.path>${project.build.testOutputDirectory}</test.class.path>
     </properties>
 
     <build>
+        <testResources>
+            <!-- Process default resources -->
+            <testResource>
+                <directory>src/test/resources</directory>
+                <targetPath>${project.build.testOutputDirectory}</targetPath>
+            </testResource>
+            <!-- Process modules for a fake modular environment, this is used for custom-handler's, custom-formatter's
+                 and filters.
+             -->
+            <testResource>
+                <directory>src/test/modules</directory>
+                <filtering>true</filtering>
+                <targetPath>${jboss.modules.dir}</targetPath>
+            </testResource>
+        </testResources>
         <plugins>
             <!-- this is only needed on windows -->
             <plugin>
@@ -61,6 +78,12 @@
                 <configuration>
                     <argLine>-javaagent:${org.jboss.byteman:byteman:jar}=port:${byteman.port},address:${byteman.host},boot:${org.jboss.byteman:byteman:jar} ${surefire.argLine}</argLine>
                     <systemPropertyVariables>
+                        <!-- Configure a module directory as custom-handler's, custom-formatter's and filters require
+                             a module to be used
+                        -->
+                        <jboss.modules.dir>${jboss.modules.dir}</jboss.modules.dir>
+                        <module.path>${jboss.modules.dir}</module.path>
+                        <maven.repo.local>${settings.localRepository}</maven.repo.local>
                         <jboss.server.log.dir>${project.build.directory}${file.separator}logs</jboss.server.log.dir>
                         <jboss.server.config.dir>${project.build.directory}${file.separator}config</jboss.server.config.dir>
                         <org.jboss.byteman.contrib.bmunit.agent.inhibit>true</org.jboss.byteman.contrib.bmunit.agent.inhibit>
@@ -108,7 +131,7 @@
 
         <dependency>
             <groupId>org.wildfly.security</groupId>
-            <artifactId>wildfly-elytron</artifactId>
+            <artifactId>wildfly-elytron-security-manager</artifactId>
         </dependency>
 
         <dependency>
@@ -162,11 +185,6 @@
         </dependency>
 
         <dependency>
-            <groupId>org.jboss.logmanager</groupId>
-            <artifactId>log4j-jboss-logmanager</artifactId>
-        </dependency>
-
-        <dependency>
             <groupId>org.jboss.msc</groupId>
             <artifactId>jboss-msc</artifactId>
         </dependency>
@@ -174,12 +192,6 @@
         <dependency>
             <groupId>org.jboss.stdio</groupId>
             <artifactId>jboss-stdio</artifactId>
-        </dependency>
-
-        <!-- Required for the json-formatter -->
-        <dependency>
-            <groupId>javax.json</groupId>
-            <artifactId>javax.json-api</artifactId>
         </dependency>
 
         <!-- Test dependencies -->
@@ -191,21 +203,10 @@
             <scope>test</scope>
         </dependency>
 
-        <dependency>
-            <groupId>com.fasterxml.woodstox</groupId>
-            <artifactId>woodstox-core</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>xerces</groupId>
-            <artifactId>xercesImpl</artifactId>
-            <scope>test</scope>
-        </dependency>
-
+        <!-- JSONP API and IMPL -->
         <dependency>
             <groupId>org.glassfish</groupId>
-            <artifactId>javax.json</artifactId>
+            <artifactId>jakarta.json</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -268,6 +269,18 @@
                 <property>
                     <name>java.vendor</name>
                     <value>IBM Corporation</value>
+                </property>
+            </activation>
+            <properties>
+                <surefire.argLine>-Xbootclasspath/a:${org.jboss.logmanager:jboss-logmanager} -Djava.util.logging.manager=org.jboss.logmanager.LogManager ${surefire.system.args}</surefire.argLine>
+            </properties>
+        </profile>
+        <profile>
+            <id>openj9</id>
+            <activation>
+                <property>
+                    <name>java.vendor</name>
+                    <value>Eclipse OpenJ9</value>
                 </property>
             </activation>
             <properties>

@@ -32,6 +32,7 @@ import static org.jboss.as.test.integration.domain.management.util.DomainTestUti
 
 import java.io.IOException;
 
+import org.hamcrest.MatcherAssert;
 import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.client.helpers.domain.DomainClient;
 import org.jboss.as.test.integration.domain.management.util.DomainLifecycleUtil;
@@ -39,7 +40,6 @@ import org.jboss.as.test.integration.domain.management.util.DomainTestSupport;
 import org.jboss.as.test.integration.domain.management.util.DomainTestSupport.Configuration;
 import org.jboss.dmr.ModelNode;
 import org.junit.AfterClass;
-import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -50,9 +50,9 @@ import org.junit.Test;
 public class ServerStartFailureTestCase {
 
     private static DomainTestSupport testSupport;
-    private static DomainLifecycleUtil domainMasterLifecycleUtil;
-    private static final ModelNode hostMaster = new ModelNode();
-    private static final ModelNode hostSlave = new ModelNode();
+    private static DomainLifecycleUtil domainPrimaryLifecycleUtil;
+    private static final ModelNode hostPrimary = new ModelNode();
+    private static final ModelNode hostSecondary = new ModelNode();
     private static final ModelNode mainOne = new ModelNode();
     private static final ModelNode mainTwo = new ModelNode();
     private static final ModelNode mainThree = new ModelNode();
@@ -64,34 +64,34 @@ public class ServerStartFailureTestCase {
 
 
     static {
-        // (host=master)
-        hostMaster.add("host", "master");
-        // (host=master),(server-config=main-one)
-        mainOne.add("host", "master");
+        // (host=primary)
+        hostPrimary.add("host", "primary");
+        // (host=primary),(server-config=main-one)
+        mainOne.add("host", "primary");
         mainOne.add("server-config", "main-one");
-        // (host=master),(server-config=main-two)
-        mainTwo.add("host", "master");
+        // (host=primary),(server-config=main-two)
+        mainTwo.add("host", "primary");
         mainTwo.add("server-config", "main-two");
-        // (host=master),(server-config=other-one)
-        otherOne.add("host", "master");
+        // (host=primary),(server-config=other-one)
+        otherOne.add("host", "primary");
         otherOne.add("server-config", "other-one");
-        // (host=master),(server-config=other-two)
-        otherTwo.add("host", "master");
+        // (host=primary),(server-config=other-two)
+        otherTwo.add("host", "primary");
         otherTwo.add("server-config", "other-two");
 
-        // (host=slave)
-        hostSlave.add("host", "slave");
-        // (host=slave),(server-config=main-three)
-        mainThree.add("host", "slave");
+        // (host=secondary)
+        hostSecondary.add("host", "secondary");
+        // (host=secondary),(server-config=main-three)
+        mainThree.add("host", "secondary");
         mainThree.add("server-config", "main-three");
-        // (host=slave),(server-config=main-four)
-        mainFour.add("host", "slave");
+        // (host=secondary),(server-config=main-four)
+        mainFour.add("host", "secondary");
         mainFour.add("server-config", "main-four");
-        // (host=slave),(server-config=other-three)
-        otherThree.add("host", "slave");
+        // (host=secondary),(server-config=other-three)
+        otherThree.add("host", "secondary");
         otherThree.add("server-config", "other-three");
-        // (host=slave),(server-config=other-four)
-        otherFour.add("host", "slave");
+        // (host=secondary),(server-config=other-four)
+        otherFour.add("host", "secondary");
         otherFour.add("server-config", "other-four");
 
     }
@@ -99,47 +99,47 @@ public class ServerStartFailureTestCase {
     @BeforeClass
     public static void setupDomain() throws Exception {
         Configuration configuration = DomainTestSupport.Configuration.create(ServerStartFailureTestCase.class.getSimpleName(),
-                "domain-configs/domain-standard.xml", "host-configs/host-master.xml", "host-configs/host-slave-failure.xml");
-        configuration.getMasterConfiguration().addHostCommandLineProperty("-agentlib:jdwp=transport=dt_socket,address=8787,server=y,suspend=n");
-        configuration.getSlaveConfiguration().addHostCommandLineProperty("-agentlib:jdwp=transport=dt_socket,address=9787,server=y,suspend=n");
+                "domain-configs/domain-standard.xml", "host-configs/host-primary.xml", "host-configs/host-secondary-failure.xml");
+        configuration.getPrimaryConfiguration().addHostCommandLineProperty("-agentlib:jdwp=transport=dt_socket,address=8787,server=y,suspend=n");
+        configuration.getSecondaryConfiguration().addHostCommandLineProperty("-agentlib:jdwp=transport=dt_socket,address=9787,server=y,suspend=n");
         testSupport = DomainTestSupport.createAndStartSupport(configuration);
-        domainMasterLifecycleUtil = testSupport.getDomainMasterLifecycleUtil();
+        domainPrimaryLifecycleUtil = testSupport.getDomainPrimaryLifecycleUtil();
     }
 
     @AfterClass
     public static void tearDownDomain() throws Exception {
         testSupport.close();
         testSupport = null;
-        domainMasterLifecycleUtil = null;
+        domainPrimaryLifecycleUtil = null;
     }
 
     @Test
     public void testDomainLifecycleMethods() throws Throwable {
 
-        DomainClient client = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient client = domainPrimaryLifecycleUtil.getDomainClient();
         executeLifecycleOperation(client, null, START_SERVERS);
-        waitUntilState(client, "master", "main-one", "STARTED");
-        waitUntilState(client, "master", "main-two", "STARTED");
-        waitUntilState(client, "master", "other-one", "STARTED");
-        waitUntilState(client, "slave", "main-three", "STARTED");
-        waitUntilState(client, "slave", "failure-one", "STARTED");
-        waitUntilState(client, "slave", "failure-two", "FAILED");
-        waitUntilState(client, "slave", "failure-three", "FAILED");
+        waitUntilState(client, "primary", "main-one", "STARTED");
+        waitUntilState(client, "primary", "main-two", "STARTED");
+        waitUntilState(client, "primary", "other-one", "STARTED");
+        waitUntilState(client, "secondary", "main-three", "STARTED");
+        waitUntilState(client, "secondary", "failure-one", "STARTED");
+        waitUntilState(client, "secondary", "failure-two", "FAILED");
+        waitUntilState(client, "secondary", "failure-three", "FAILED");
 
         executeLifecycleOperation(client, null, STOP_SERVERS);
         //When stopped auto-start=true -> STOPPED, auto-start=false -> DISABLED
-        waitUntilState(client, "master", "main-one", "STOPPED");
-        waitUntilState(client, "master", "main-two", "DISABLED");
-        waitUntilState(client, "master", "other-one", "DISABLED");
-        waitUntilState(client, "slave", "main-three", "STOPPED");
-        waitUntilState(client, "slave", "failure-two", "DISABLED");
-        waitUntilState(client, "slave", "failure-three", "DISABLED");
+        waitUntilState(client, "primary", "main-one", "STOPPED");
+        waitUntilState(client, "primary", "main-two", "DISABLED");
+        waitUntilState(client, "primary", "other-one", "DISABLED");
+        waitUntilState(client, "secondary", "main-three", "STOPPED");
+        waitUntilState(client, "secondary", "failure-two", "DISABLED");
+        waitUntilState(client, "secondary", "failure-three", "DISABLED");
 
-        validateResponse(startServer(client, "master", "main-one"));
-        ModelNode result = validateResponse(startServer(client, "slave", "failure-two"));
-        Assert.assertThat(result.asString(), is("FAILED"));
-        result = validateResponse(startServer(client, "slave", "failure-three"));
-        Assert.assertThat(result.asString(), is("FAILED"));
+        validateResponse(startServer(client, "primary", "main-one"));
+        ModelNode result = validateResponse(startServer(client, "secondary", "failure-two"));
+        MatcherAssert.assertThat(result.asString(), is("FAILED"));
+        result = validateResponse(startServer(client, "secondary", "failure-three"));
+        MatcherAssert.assertThat(result.asString(), is("FAILED"));
     }
 
     private ModelNode startServer(final ModelControllerClient client, String host, String serverName) throws IOException {

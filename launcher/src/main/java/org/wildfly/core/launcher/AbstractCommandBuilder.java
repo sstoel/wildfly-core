@@ -39,9 +39,12 @@ import org.wildfly.core.launcher.logger.LauncherMessages;
 @SuppressWarnings("unused")
 abstract class AbstractCommandBuilder<T extends AbstractCommandBuilder<T>> implements CommandBuilder {
 
+    private static final String ALLOW_VALUE = "allow";
+    private static final String DISALLOW_VALUE = "disallow";
     static final String HOME_DIR = Environment.HOME_DIR;
     static final String SECURITY_MANAGER_ARG = "-secmgr";
     static final String SECURITY_MANAGER_PROP = "java.security.manager";
+    static final String SECURITY_MANAGER_PROP_WITH_ALLOW_VALUE = "-D" + SECURITY_MANAGER_PROP + "=" + ALLOW_VALUE;
     static final String[] DEFAULT_VM_ARGUMENTS;
     static final Collection<String> DEFAULT_MODULAR_VM_ARGUMENTS;
 
@@ -56,13 +59,28 @@ abstract class AbstractCommandBuilder<T extends AbstractCommandBuilder<T>> imple
         DEFAULT_VM_ARGUMENTS = javaOpts.toArray(new String[javaOpts.size()]);
 
         // Default JVM parameters for all modular JDKs
+        // Additions to these should include good explanations why in the relevant JIRA
+        // Keep them alphabetical to avoid the code history getting confused by reordering commits
         final ArrayList<String> modularJavaOpts = new ArrayList<>();
-        modularJavaOpts.add("--add-exports=java.base/sun.nio.ch=ALL-UNNAMED");
-        modularJavaOpts.add("--add-exports=jdk.unsupported/sun.reflect=ALL-UNNAMED");
-        modularJavaOpts.add("--add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED");
-        // As of jboss-modules 1.9.1.Final the java.se module is no longer required to be added. However as this API is
-        // designed to work with older versions of the server we still need to add this argument of modular JVM's.
-        modularJavaOpts.add("--add-modules=java.se");
+        if (!Boolean.parseBoolean(System.getProperty("launcher.skip.jpms.properties", "false"))) {
+            modularJavaOpts.add("--add-exports=java.desktop/sun.awt=ALL-UNNAMED");
+            modularJavaOpts.add("--add-exports=java.naming/com.sun.jndi.ldap=ALL-UNNAMED");
+            modularJavaOpts.add("--add-exports=java.naming/com.sun.jndi.url.ldap=ALL-UNNAMED");
+            modularJavaOpts.add("--add-exports=java.naming/com.sun.jndi.url.ldaps=ALL-UNNAMED");
+            modularJavaOpts.add("--add-exports=jdk.naming.dns/com.sun.jndi.dns=ALL-UNNAMED");
+            modularJavaOpts.add("--add-opens=java.base/java.lang=ALL-UNNAMED");
+            modularJavaOpts.add("--add-opens=java.base/java.lang.invoke=ALL-UNNAMED");
+            modularJavaOpts.add("--add-opens=java.base/java.lang.reflect=ALL-UNNAMED");
+            modularJavaOpts.add("--add-opens=java.base/java.io=ALL-UNNAMED");
+            modularJavaOpts.add("--add-opens=java.base/java.security=ALL-UNNAMED");
+            modularJavaOpts.add("--add-opens=java.base/java.util=ALL-UNNAMED");
+            modularJavaOpts.add("--add-opens=java.base/java.util.concurrent=ALL-UNNAMED");
+            modularJavaOpts.add("--add-opens=java.management/javax.management=ALL-UNNAMED");
+            modularJavaOpts.add("--add-opens=java.naming/javax.naming=ALL-UNNAMED");
+            // As of jboss-modules 1.9.1.Final the java.se module is no longer required to be added. However as this API is
+            // designed to work with older versions of the server we still need to add this argument of modular JVM's.
+            modularJavaOpts.add("--add-modules=java.se");
+        }
         DEFAULT_MODULAR_VM_ARGUMENTS = Collections.unmodifiableList(modularJavaOpts);
     }
 
@@ -647,5 +665,9 @@ abstract class AbstractCommandBuilder<T extends AbstractCommandBuilder<T>> imple
         if (value != null) {
             cmd.add("-D" + key + "=" + value);
         }
+    }
+
+    protected static boolean isJavaSecurityManagerConfigured(final Argument argument) {
+        return !ALLOW_VALUE.equals(argument.getValue()) && !DISALLOW_VALUE.equals(argument.getValue());
     }
 }

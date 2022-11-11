@@ -20,8 +20,10 @@ package org.wildfly.extension.elytron;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
 
+import java.util.concurrent.atomic.AtomicReference;
 import javax.net.ssl.SSLContext;
 
+import org.jboss.as.controller.extension.ExpressionResolverExtension;
 import org.jboss.as.controller.Extension;
 import org.jboss.as.controller.ExtensionContext;
 import org.jboss.as.controller.ModelVersion;
@@ -60,6 +62,17 @@ public class ElytronExtension implements Extension {
     static final String NAMESPACE_6_0 = "urn:wildfly:elytron:6.0";
     static final String NAMESPACE_7_0 = "urn:wildfly:elytron:7.0";
     static final String NAMESPACE_8_0 = "urn:wildfly:elytron:8.0";
+    static final String NAMESPACE_9_0 = "urn:wildfly:elytron:9.0";
+    static final String NAMESPACE_10_0 = "urn:wildfly:elytron:10.0";
+    static final String NAMESPACE_11_0 = "urn:wildfly:elytron:11.0";
+    static final String NAMESPACE_12_0 = "urn:wildfly:elytron:12.0";
+    static final String NAMESPACE_13_0 = "urn:wildfly:elytron:13.0";
+    static final String NAMESPACE_14_0 = "urn:wildfly:elytron:14.0";
+    static final String NAMESPACE_15_0 = "urn:wildfly:elytron:15.0";
+    static final String NAMESPACE_15_1 = "urn:wildfly:elytron:15.1";
+    static final String NAMESPACE_16_0 = "urn:wildfly:elytron:16.0";
+
+    static final String CURRENT_NAMESPACE = NAMESPACE_16_0;
 
     /**
      * The name of our subsystem within the model.
@@ -80,8 +93,17 @@ public class ElytronExtension implements Extension {
     static final ModelVersion ELYTRON_6_0_0 = ModelVersion.create(6);
     static final ModelVersion ELYTRON_7_0_0 = ModelVersion.create(7);
     static final ModelVersion ELYTRON_8_0_0 = ModelVersion.create(8);
+    static final ModelVersion ELYTRON_9_0_0 = ModelVersion.create(9);
+    static final ModelVersion ELYTRON_10_0_0 = ModelVersion.create(10);
+    static final ModelVersion ELYTRON_11_0_0 = ModelVersion.create(11);
+    static final ModelVersion ELYTRON_12_0_0 = ModelVersion.create(12);
+    static final ModelVersion ELYTRON_13_0_0 = ModelVersion.create(13);
+    static final ModelVersion ELYTRON_14_0_0 = ModelVersion.create(14);
+    static final ModelVersion ELYTRON_15_0_0 = ModelVersion.create(15);
+    static final ModelVersion ELYTRON_15_1_0 = ModelVersion.create(15, 1);
+    static final ModelVersion ELYTRON_16_0_0 = ModelVersion.create(16);
 
-    private static final ModelVersion ELYTRON_CURRENT = ELYTRON_8_0_0;
+    private static final ModelVersion ELYTRON_CURRENT = ELYTRON_16_0_0;
 
     static final String ISO_8601_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSSZ";
 
@@ -121,6 +143,15 @@ public class ElytronExtension implements Extension {
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_6_0, () -> new ElytronSubsystemParser6_0());
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_7_0, () -> new ElytronSubsystemParser7_0());
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_8_0, () -> new ElytronSubsystemParser8_0());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_9_0, () -> new ElytronSubsystemParser9_0());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_10_0, () -> new ElytronSubsystemParser10_0());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_11_0, () -> new ElytronSubsystemParser11_0());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_12_0, () -> new ElytronSubsystemParser12_0());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_13_0, () -> new ElytronSubsystemParser13_0());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_14_0, () -> new ElytronSubsystemParser14_0());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_15_0, () -> new ElytronSubsystemParser15_0());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_15_1, () -> new ElytronSubsystemParser15_1());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_16_0, () -> new ElytronSubsystemParser16_0());
     }
 
     @Override
@@ -130,10 +161,12 @@ public class ElytronExtension implements Extension {
         // Elytron is expected to be used everywhere.
         subsystemRegistration.setHostCapable();
 
-        final ManagementResourceRegistration registration = subsystemRegistration.registerSubsystemModel(ElytronDefinition.INSTANCE);
+        AtomicReference<ExpressionResolverExtension> resolverRef = new AtomicReference<>();
+        final ManagementResourceRegistration registration = subsystemRegistration.registerSubsystemModel(new ElytronDefinition(resolverRef));
         registration.registerOperationHandler(GenericSubsystemDescribeHandler.DEFINITION, GenericSubsystemDescribeHandler.INSTANCE);
+        subsystemRegistration.registerXMLElementWriter(() -> new ElytronSubsystemParser16_0());
 
-        subsystemRegistration.registerXMLElementWriter(() -> new ElytronSubsystemParser8_0());
+        context.registerExpressionResolverExtension(resolverRef::get, ExpressionResolverResourceDefinition.INITIAL_PATTERN, false);
     }
 
     @SuppressWarnings("unchecked")

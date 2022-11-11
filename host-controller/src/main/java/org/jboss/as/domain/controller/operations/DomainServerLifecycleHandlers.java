@@ -87,8 +87,9 @@ public class DomainServerLifecycleHandlers {
             .build();
 
     private static final AttributeDefinition START_MODE = SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.START_MODE, ModelType.STRING, true)
+            .setAllowExpression(true)
             .setDefaultValue(new ModelNode(StartMode.NORMAL.toString()))
-            .setValidator(new EnumValidator<>(StartMode.class, true, true))
+            .setValidator(EnumValidator.create(StartMode.class))
             .build();
 
     @Deprecated
@@ -513,7 +514,7 @@ public class DomainServerLifecycleHandlers {
             context.addStep(new OperationStepHandler() {
                 @Override
                 public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
-                    context.authorize(operation, EnumSet.of(Action.ActionEffect.WRITE_RUNTIME));
+                    context.authorize(operation, EnumSet.of(Action.ActionEffect.WRITE_RUNTIME)).failIfDenied(operation);
                     context.completeStep(new OperationContext.ResultHandler() {
                         @Override
                         public void handleResult(OperationContext.ResultAction resultAction, OperationContext context, ModelNode operation) {
@@ -551,7 +552,7 @@ public class DomainServerLifecycleHandlers {
             context.addStep(new OperationStepHandler() {
                 @Override
                 public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
-                    context.authorize(operation, EnumSet.of(Action.ActionEffect.WRITE_RUNTIME));
+                    context.authorize(operation, EnumSet.of(Action.ActionEffect.WRITE_RUNTIME)).failIfDenied(operation);
                     context.completeStep(new OperationContext.ResultHandler() {
                         @Override
                         public void handleResult(OperationContext.ResultAction resultAction, OperationContext context, ModelNode operation) {
@@ -640,15 +641,15 @@ public class DomainServerLifecycleHandlers {
 
     public static void registerSuspendedStartTransformers(ResourceTransformationDescriptionBuilder builder) {
         builder.addOperationTransformationOverride(START_SERVERS)
-                .setDiscard(new DiscardAttributeChecker.DiscardAttributeValueChecker(new ModelNode(StartMode.NORMAL.toString())), START_MODE)
+                .setDiscard(DiscardAttributeChecker.DEFAULT_VALUE, START_MODE)
                 .addRejectCheck(RejectAttributeChecker.DEFINED, START_MODE)
                 .end()
                 .addOperationTransformationOverride(RELOAD_SERVERS)
-                .setDiscard(new DiscardAttributeChecker.DiscardAttributeValueChecker(new ModelNode(StartMode.NORMAL.toString())), START_MODE)
+                .setDiscard(DiscardAttributeChecker.DEFAULT_VALUE, START_MODE)
                 .addRejectCheck(RejectAttributeChecker.DEFINED, START_MODE)
                 .end()
                 .addOperationTransformationOverride(RESTART_SERVERS)
-                .setDiscard(new DiscardAttributeChecker.DiscardAttributeValueChecker(new ModelNode(StartMode.NORMAL.toString())), START_MODE)
+                .setDiscard(DiscardAttributeChecker.DEFAULT_VALUE, START_MODE)
                 .addRejectCheck(RejectAttributeChecker.DEFINED, START_MODE)
                 .end();
 

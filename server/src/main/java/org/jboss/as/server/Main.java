@@ -22,7 +22,7 @@
 
 package org.jboss.as.server;
 
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MASTER;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.GIT_MASTER_BRANCH;
 
 import java.io.File;
 import java.io.IOException;
@@ -36,6 +36,7 @@ import java.util.Properties;
 import java.util.StringTokenizer;
 
 import org.jboss.as.controller.RunningMode;
+import org.jboss.as.controller.persistence.ConfigurationExtensionFactory;
 import org.jboss.as.controller.persistence.ConfigurationFile;
 import org.jboss.as.process.CommandLineConstants;
 import org.jboss.as.process.ExitCodes;
@@ -145,12 +146,14 @@ public final class Main {
         final int argsLength = args.length;
         String serverConfig = null;
         String gitRepository = null;
-        String gitBranch = MASTER;
+        String gitBranch = GIT_MASTER_BRANCH;
         String gitAuthConfiguration = null;
+        String supplementalConfiguration = null;
         RunningMode runningMode = RunningMode.NORMAL;
         ProductConfig productConfig;
         ConfigurationFile.InteractionPolicy configInteractionPolicy = ConfigurationFile.InteractionPolicy.STANDARD;
         boolean startSuspended = false;
+        boolean startGracefully = true;
         boolean removeConfig = false;
         boolean startModeSet = false;
         for (int i = 0; i < argsLength; i++) {
@@ -283,33 +286,51 @@ public final class Main {
                     String token = arg.substring(2);
                     processSecurityProperties(token,systemProperties);
                 } else if (arg.startsWith(CommandLineConstants.START_MODE)) {
-                    if(startModeSet) {
+                    if (startModeSet) {
                         STDERR.println(ServerLogger.ROOT_LOGGER.cannotSetBothAdminOnlyAndStartMode());
                         usage();
-                        return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
+                        return new ServerEnvironmentWrapper(ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                     startModeSet = true;
                     int idx = arg.indexOf('=');
                     if (idx == arg.length() - 1) {
                         STDERR.println(ServerLogger.ROOT_LOGGER.noArgValue(arg));
                         usage();
-                        return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
+                        return new ServerEnvironmentWrapper(ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                     String value = idx > -1 ? arg.substring(idx + 1) : args[++i];
                     value = value.toLowerCase(Locale.ENGLISH);
                     switch (value) {
                         case CommandLineConstants.ADMIN_ONLY_MODE:
                             runningMode = RunningMode.ADMIN_ONLY;
-                        break;
+                            break;
                         case CommandLineConstants.SUSPEND_MODE:
                             startSuspended = true;
-                        break;
+                            break;
                         case CommandLineConstants.NORMAL_MODE:
                             break;
                         default:
                             STDERR.println(ServerLogger.ROOT_LOGGER.unknownStartMode(value));
                             usage();
-                            return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
+                            return new ServerEnvironmentWrapper(ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
+                    }
+                } else if (arg.startsWith(CommandLineConstants.GRACEFUL_STARTUP)) {
+                    int idx = arg.indexOf('=');
+                    if (idx == arg.length() - 1) {
+                        STDERR.println(ServerLogger.ROOT_LOGGER.noArgValue(arg));
+                        usage();
+                        return new ServerEnvironmentWrapper(ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
+                    }
+                    String value = (idx > -1 ? arg.substring(idx + 1) : args[++i])
+                            .toLowerCase(Locale.ENGLISH);
+                    if ("true".equals(value)) {
+                        startGracefully = true;
+                    } else if ("false".equals(value)) {
+                        startGracefully = false;
+                    } else {
+                        STDERR.println(ServerLogger.ROOT_LOGGER.invalidCommandLineOption(arg));
+                        usage();
+                        return new ServerEnvironmentWrapper(ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                 } else if (arg.equals(CommandLineConstants.DEBUG)) { // Need to process the debug options as they cannot be filtered out in Windows
                     // The next option may or may not be a port. Assume if it's a number and doesn't start with a - it's the port
@@ -336,7 +357,7 @@ public final class Main {
                         } else {
                             STDERR.println(ServerLogger.ROOT_LOGGER.valueExpectedForCommandLineOption(arg));
                             usage();
-                            return null;
+                            return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                         }
                     } else {
                         gitRepository = arg.substring(idx + 1, arg.length());
@@ -351,7 +372,7 @@ public final class Main {
                         } else {
                             STDERR.println(ServerLogger.ROOT_LOGGER.valueExpectedForCommandLineOption(arg));
                             usage();
-                            return null;
+                            return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                         }
                     } else {
                         gitAuthConfiguration = arg.substring(idx + 1, arg.length());
@@ -366,12 +387,28 @@ public final class Main {
                         } else {
                             STDERR.println(ServerLogger.ROOT_LOGGER.valueExpectedForCommandLineOption(arg));
                             usage();
-                            return null;
+                            return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                         }
                     } else {
                         gitBranch = arg.substring(idx + 1, arg.length());
                     }
-                }else {
+                } else if(ConfigurationExtensionFactory.isConfigurationExtensionSupported()
+                        && ConfigurationExtensionFactory.commandLineContainsArgument(arg)) {
+                    int idx = arg.indexOf("=");
+                    if (idx == -1) {
+                       final int next = i + 1;
+                        if (next < argsLength) {
+                            supplementalConfiguration = args[next];
+                            i++;
+                        } else {
+                            STDERR.println(ServerLogger.ROOT_LOGGER.valueExpectedForCommandLineOption(arg));
+                            usage();
+                            return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
+                        }
+                    } else {
+                        supplementalConfiguration = arg.substring(idx + 1, arg.length());
+                    }
+                } else {
                     STDERR.println(ServerLogger.ROOT_LOGGER.invalidCommandLineOption(arg));
                     usage();
                     return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
@@ -387,7 +424,7 @@ public final class Main {
         productConfig = ProductConfig.fromFilesystemSlot(Module.getBootModuleLoader(), WildFlySecurityManager.getPropertyPrivileged(ServerEnvironment.HOME_DIR, null), systemProperties);
         return new ServerEnvironmentWrapper(new ServerEnvironment(hostControllerName, systemProperties, systemEnvironment,
                 serverConfig, configInteractionPolicy, launchType, runningMode, productConfig, startTime, startSuspended,
-                gitRepository, gitBranch, gitAuthConfiguration));
+                startGracefully, gitRepository, gitBranch, gitAuthConfiguration, supplementalConfiguration));
     }
 
     private static void assertSingleConfig(String serverConfig) {

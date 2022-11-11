@@ -10,13 +10,14 @@ import org.jboss.as.cli.impl.CommandContextConfiguration;
 import org.jboss.as.cli.impl.ReadlineConsole;
 import org.jboss.as.test.integration.management.util.CLITestUtil;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
+import org.jboss.as.test.shared.TimeoutUtil;
 import org.jboss.logging.Logger;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 import org.wildfly.security.manager.WildFlySecurityManager;
 
 import java.io.BufferedReader;
@@ -44,10 +45,10 @@ import java.util.regex.Pattern;
  * This test covers the minimal use-cases.
  * @author eduda@redhat.com
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 public class LongOutputTestCase {
 
-    private static final Logger log = Logger.getLogger(WildflyTestRunner.class);
+    private static final Logger log = Logger.getLogger(WildFlyRunner.class);
 
     private static final String LINE_SEP = System.getProperty("line.separator");
     private static final Pattern morePattern = Pattern.compile(".*--More\\(\\d+%\\)--$");
@@ -389,7 +390,7 @@ public class LongOutputTestCase {
     private void testDisabledOutputPaging() throws Exception {
         consoleWriter.println("/subsystem=elytron:read-resource-description(recursive=true)");
         Assert.assertFalse(consoleWriter.checkError());
-        String window = queue.poll(10, TimeUnit.SECONDS);
+        String window = queue.poll(TimeoutUtil.adjust(20), TimeUnit.SECONDS);
 
         Assert.assertNotNull(window);
         checkWithRegex(window, promptPattern);

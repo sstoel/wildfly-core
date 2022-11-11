@@ -1,4 +1,20 @@
+<!--
+    Configuration to test transforming the model from 8.0 (WildFly 18 / EAP 7.3) to 4.0 (WildFly 14 / EAP 7.2)
+ -->
+
 <subsystem xmlns="urn:wildfly:elytron:8.0" default-ssl-context="ClientContext">
+    <authentication-client>
+        <authentication-configuration name="authWithCredentialReference"
+                                      security-domain="TestDomain"
+                                      forwarding-mode="authorization">
+            <credential-reference store="store1" clear-text="supersecret!"/>
+        </authentication-configuration>
+    </authentication-client>
+    <credential-stores>
+        <credential-store name="store1" location="path/to/store_file" >
+            <credential-reference clear-text="STOREPASSWORD"/>
+        </credential-store>
+    </credential-stores>
     <jaspi>
         <jaspi-configuration name="minimal">
             <server-auth-modules>
@@ -14,13 +30,20 @@
         <periodic-rotating-file-audit-log name="audit4" path="target/audit.log" format="JSON" suffix="y-M-d" synchronized="false" autoflush="true" />
         <size-rotating-file-audit-log name="audit5" path="target/audit.log" format="JSON" max-backup-index="5" rotate-on-boot="true" rotate-size="5" suffix="y-M-d" synchronized="true" autoflush="false" />
         <size-rotating-file-audit-log name="audit6" path="target/audit.log" format="JSON" max-backup-index="5" rotate-on-boot="true" rotate-size="5" suffix="y-M-d" synchronized="false" autoflush="true" />
+        <syslog-audit-log name="audit7" server-address="127.0.0.1" port="10837" host-name="localhost" syslog-format="RFC3164" reconnect-attempts="5" />
+        <syslog-audit-log name="audit8" server-address="127.0.0.1" port="10837" host-name="localhost" reconnect-attempts="0" />
     </audit-logging>
     <security-domains>
         <security-domain name="X500Domain" default-realm="FileRealm" evidence-decoder="aggregateEvidenceDecoder">
             <realm name="FileRealm"/>
         </security-domain>
+        <security-domain name="TestDomain" default-realm="FileRealm">
+            <realm name="FileRealm" />
+        </security-domain>
     </security-domains>
     <security-realms>
+        <aggregate-realm name="AggregateOne" authentication-realm="JdbcBcryptHashHex" authorization-realms="JdbcBcryptSaltHex JdbcScramHashHex" />
+        <aggregate-realm name="AggregateTwo" authentication-realm="JdbcBcryptHashHex" authorization-realm="JdbcBcryptSaltHex" principal-transformer ="RegexOne"/>
         <jdbc-realm name="JdbcBcryptHashHex">
             <principal-query sql="SELECT role, password, salt, ic FROM User WHERE username = ?" data-source="ExampleDS">
                 <bcrypt-mapper password-index="2" salt-index="3" iteration-count-index="4" hash-encoding="hex"/>
@@ -81,6 +104,7 @@
             <evidence-decoder name="rfc822Decoder"/>
             <evidence-decoder name="subjectDecoder"/>
         </aggregate-evidence-decoder>
+        <regex-principal-transformer name="RegexOne" pattern="a" replacement="b" />
     </mappers>
     <tls>
         <key-stores>
@@ -98,6 +122,9 @@
         <key-managers>
             <key-manager name="key1" key-store="accounts.keystore">
                 <credential-reference clear-text="password"/>
+            </key-manager>
+            <key-manager name="key2" key-store="accounts.keystore">
+                <credential-reference store="store1" clear-text="supersecret!"/>
             </key-manager>
         </key-managers>
         <server-ssl-contexts>
@@ -123,6 +150,11 @@
                     <credential-reference clear-text="elytron"/>
                 </account-key>
             </certificate-authority-account>
+            <certificate-authority-account name="testCAA2" certificate-authority="testCA">
+                <account-key key-store="accounts.keystore" alias="alias">
+                    <credential-reference store="store1" clear-text="elytron"/>
+                </account-key>
+            </certificate-authority-account>
         </certificate-authority-accounts>
         <trust-managers>
             <trust-manager name="TestingTrustManager" key-store="accounts.keystore">
@@ -130,4 +162,9 @@
             </trust-manager>
         </trust-managers>
     </tls>
+    <dir-contexts>
+        <dir-context name="dirContext" url="ldap://localhost:11390" principal="uid=server,dc=elytron,dc=wildfly,dc=org" enable-connection-pooling="true">
+            <credential-reference store="store1" clear-text="serverPassword"/>
+        </dir-context>
+    </dir-contexts>
 </subsystem>

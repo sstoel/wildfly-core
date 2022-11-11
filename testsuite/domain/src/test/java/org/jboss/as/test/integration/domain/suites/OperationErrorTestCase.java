@@ -28,7 +28,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOS
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.IN_SERIES;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MANAGEMENT;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MANAGEMENT_OPERATIONS;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MASTER;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.PRIMARY;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MAX_FAILED_SERVERS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NAME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
@@ -97,8 +97,8 @@ public class OperationErrorTestCase {
             PathElement.pathElement(CORE_SERVICE, MANAGEMENT),
             PathElement.pathElement(SERVICE, MANAGEMENT_OPERATIONS)
     );
-    private static final PathAddress MASTER_ADDRESS = PathAddress.pathAddress(HOST, MASTER);
-    private static final PathAddress SLAVE_ADDRESS = PathAddress.pathAddress(HOST, "slave");
+    private static final PathAddress PRIMARY_ADDRESS = PathAddress.pathAddress(HOST, PRIMARY);
+    private static final PathAddress SECONDARY_ADDRESS = PathAddress.pathAddress(HOST, "secondary");
 
 
     private static final EnumSet<ErrorExtension.ErrorPoint> RUNTIME_POINTS =
@@ -116,12 +116,12 @@ public class OperationErrorTestCase {
     }
 
     private static DomainTestSupport testSupport;
-    private static DomainClient masterClient;
+    private static DomainClient primaryClient;
 
     @BeforeClass
     public static void setupDomain() throws Exception {
         testSupport = DomainTestSuite.createSupport(OperationCancellationTestCase.class.getSimpleName());
-        masterClient = testSupport.getDomainMasterLifecycleUtil().getDomainClient();
+        primaryClient = testSupport.getDomainPrimaryLifecycleUtil().getDomainClient();
 
         // Initialize the test extension
         ExtensionSetup.initializeErrorExtension(testSupport);
@@ -129,24 +129,24 @@ public class OperationErrorTestCase {
         PathAddress extensionAddress = PathAddress.pathAddress(EXTENSION, ErrorExtension.MODULE_NAME);
         ModelNode addExtension = Util.createAddOperation(extensionAddress);
 
-        executeForResponse(addExtension, masterClient);
+        executeForResponse(addExtension, primaryClient);
 
         ModelNode addSubsystem = Util.createAddOperation(PathAddress.pathAddress(
                 PathElement.pathElement(PROFILE, "default"),
                 SUBSYSTEM_ELEMENT));
-        executeForResponse(addSubsystem, masterClient);
+        executeForResponse(addSubsystem, primaryClient);
 
-        ModelNode addMasterExtension = Util.createAddOperation(MASTER_ADDRESS.append(extensionAddress));
-        executeForResponse(addMasterExtension, masterClient);
+        ModelNode addPrimaryExtension = Util.createAddOperation(PRIMARY_ADDRESS.append(extensionAddress));
+        executeForResponse(addPrimaryExtension, primaryClient);
 
-        ModelNode addMasterSubsystem = Util.createAddOperation(MASTER_ADDRESS.append(SUBSYSTEM_ELEMENT));
-        executeForResponse(addMasterSubsystem, masterClient);
+        ModelNode addPrimarySubsystem = Util.createAddOperation(PRIMARY_ADDRESS.append(SUBSYSTEM_ELEMENT));
+        executeForResponse(addPrimarySubsystem, primaryClient);
 
-        ModelNode addSlaveExtension = Util.createAddOperation(SLAVE_ADDRESS.append(extensionAddress));
-        executeForResponse(addSlaveExtension, masterClient);
+        ModelNode addSecondaryExtension = Util.createAddOperation(SECONDARY_ADDRESS.append(extensionAddress));
+        executeForResponse(addSecondaryExtension, primaryClient);
 
-        ModelNode addSlaveSubsystem = Util.createAddOperation(SLAVE_ADDRESS.append(SUBSYSTEM_ELEMENT));
-        executeForResponse(addSlaveSubsystem, masterClient);
+        ModelNode addSecondarySubsystem = Util.createAddOperation(SECONDARY_ADDRESS.append(SUBSYSTEM_ELEMENT));
+        executeForResponse(addSecondarySubsystem, primaryClient);
     }
 
     @AfterClass
@@ -154,26 +154,26 @@ public class OperationErrorTestCase {
         ModelNode removeSubsystem = Util.createEmptyOperation(REMOVE, PathAddress.pathAddress(
                 PathElement.pathElement(PROFILE, "default"),
                 SUBSYSTEM_ELEMENT));
-        executeForResponse(removeSubsystem, masterClient);
+        executeForResponse(removeSubsystem, primaryClient);
 
         PathAddress extensionAddress = PathAddress.pathAddress(EXTENSION, ErrorExtension.MODULE_NAME);
         ModelNode removeExtension = Util.createEmptyOperation(REMOVE, extensionAddress);
-        executeForResponse(removeExtension, masterClient);
+        executeForResponse(removeExtension, primaryClient);
 
-        ModelNode removeSlaveSubsystem = Util.createEmptyOperation(REMOVE, SLAVE_ADDRESS.append(SUBSYSTEM_ELEMENT));
-        executeForResponse(removeSlaveSubsystem, masterClient);
+        ModelNode removeSecondarySubsystem = Util.createEmptyOperation(REMOVE, SECONDARY_ADDRESS.append(SUBSYSTEM_ELEMENT));
+        executeForResponse(removeSecondarySubsystem, primaryClient);
 
-        ModelNode removeSlaveExtension = Util.createEmptyOperation(REMOVE, SLAVE_ADDRESS.append(extensionAddress));
-        executeForResponse(removeSlaveExtension, masterClient);
+        ModelNode removeSecondaryExtension = Util.createEmptyOperation(REMOVE, SECONDARY_ADDRESS.append(extensionAddress));
+        executeForResponse(removeSecondaryExtension, primaryClient);
 
-        ModelNode removeMasterSubsystem = Util.createEmptyOperation(REMOVE, MASTER_ADDRESS.append(SUBSYSTEM_ELEMENT));
-        executeForResponse(removeMasterSubsystem, masterClient);
+        ModelNode removePrimarySubsystem = Util.createEmptyOperation(REMOVE, PRIMARY_ADDRESS.append(SUBSYSTEM_ELEMENT));
+        executeForResponse(removePrimarySubsystem, primaryClient);
 
-        ModelNode removeMasterExtension = Util.createEmptyOperation(REMOVE, MASTER_ADDRESS.append(extensionAddress));
-        executeForResponse(removeMasterExtension, masterClient);
+        ModelNode removePrimaryExtension = Util.createEmptyOperation(REMOVE, PRIMARY_ADDRESS.append(extensionAddress));
+        executeForResponse(removePrimaryExtension, primaryClient);
 
         testSupport = null;
-        masterClient = null;
+        primaryClient = null;
         DomainTestSuite.stopSupport();
     }
 
@@ -183,216 +183,216 @@ public class OperationErrorTestCase {
         // Start from the leaves of the domain process tree and work inward validating
         // that all error ops are cleared locally. This ensures that a later test doesn't
         // mistakenly cancel a completing op from an earlier test
-        validateNoActiveOperation(masterClient, "master", "main-one");
-        validateNoActiveOperation(masterClient, "slave", "main-three");
-        validateNoActiveOperation(masterClient, "slave", null);
-        MgmtOperationException moe = validateNoActiveOperation(masterClient, "master", null);
+        validateNoActiveOperation(primaryClient, "primary", "main-one");
+        validateNoActiveOperation(primaryClient, "secondary", "main-three");
+        validateNoActiveOperation(primaryClient, "secondary", null);
+        MgmtOperationException moe = validateNoActiveOperation(primaryClient, "primary", null);
         if (moe != null) {
             throw moe;
         }
     }
 
     @Test
-    public void testMasterServerStageModel() throws Exception {
+    public void testPrimaryServerStageModel() throws Exception {
         // The server fails in pre-prepare so whether overall outcome=failed depends on the rollout plan
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.MODEL, false, true);
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.MODEL, true, false);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.MODEL, false, true);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.MODEL, true, false);
     }
 
     @Test
-    public void testSlaveServerStageModel() throws Exception {
+    public void testSecondaryServerStageModel() throws Exception {
         // The server fails in pre-prepare so whether overall outcome=failed depends on the rollout plan
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.MODEL, false, true);
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.MODEL, true, false);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.MODEL, false, true);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.MODEL, true, false);
     }
 
     @Test
-    public void testMasterHCStageModel() throws Exception {
+    public void testPrimaryHCStageModel() throws Exception {
         // A pre-prepare failure on an HC always means outcome=failed
-        errorTest("master", null, ErrorExtension.ErrorPoint.MODEL, false, true);
-        errorTest("master", null, ErrorExtension.ErrorPoint.MODEL, true, true);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.MODEL, false, true);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.MODEL, true, true);
     }
 
     @Test
-    public void testSlaveHCStageModel() throws Exception {
+    public void testSecondaryHCStageModel() throws Exception {
         // A pre-prepare failure on an HC always means outcome=failed
-        errorTest("slave", null, ErrorExtension.ErrorPoint.MODEL, false, true);
-        errorTest("slave", null, ErrorExtension.ErrorPoint.MODEL, true, true);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.MODEL, false, true);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.MODEL, true, true);
     }
 
     @Test
-    public void testMasterServerStageRuntime() throws Exception {
+    public void testPrimaryServerStageRuntime() throws Exception {
         // The server fails in pre-prepare so whether overall outcome=failed depends on the rollout plan
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.RUNTIME, false, true);
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.RUNTIME, true, false);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.RUNTIME, false, true);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.RUNTIME, true, false);
     }
 
     @Test
-    public void testSlaveServerStageRuntime() throws Exception {
+    public void testSecondaryServerStageRuntime() throws Exception {
         // The server fails in pre-prepare so whether overall outcome=failed depends on the rollout plan
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.RUNTIME, false, true);
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.RUNTIME, true, false);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.RUNTIME, false, true);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.RUNTIME, true, false);
     }
 
     @Test
-    public void testMasterHCStageRuntime() throws Exception {
+    public void testPrimaryHCStageRuntime() throws Exception {
         // A pre-prepare failure on an HC always means outcome=failed
-        errorTest("master", null, ErrorExtension.ErrorPoint.RUNTIME, false, true);
-        errorTest("master", null, ErrorExtension.ErrorPoint.RUNTIME, true, true);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.RUNTIME, false, true);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.RUNTIME, true, true);
     }
 
     @Test
-    public void testSlaveHCStageRuntime() throws Exception {
+    public void testSecondaryHCStageRuntime() throws Exception {
         // A pre-prepare failure on an HC always means outcome=failed
-        errorTest("slave", null, ErrorExtension.ErrorPoint.RUNTIME, false, true);
-        errorTest("slave", null, ErrorExtension.ErrorPoint.RUNTIME, true, true);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.RUNTIME, false, true);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.RUNTIME, true, true);
     }
 
     @Test
-    public void testMasterServerServiceStart() throws Exception {
+    public void testPrimaryServerServiceStart() throws Exception {
         // The server fails in pre-prepare so whether overall outcome=failed depends on the rollout plan
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.SERVICE_START, false, true);
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.SERVICE_START, true, false);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.SERVICE_START, false, true);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.SERVICE_START, true, false);
     }
 
     @Test
-    public void testSlaveServerServiceStart() throws Exception {
+    public void testSecondaryServerServiceStart() throws Exception {
         // The server fails in pre-prepare so whether overall outcome=failed depends on the rollout plan
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.SERVICE_START, false, true);
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.SERVICE_START, true, false);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.SERVICE_START, false, true);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.SERVICE_START, true, false);
     }
 
     @Test
-    public void testMasterHCServiceStart() throws Exception {
+    public void testPrimaryHCServiceStart() throws Exception {
         // A pre-prepare failure on an HC always means outcome=failed
-        errorTest("master", null, ErrorExtension.ErrorPoint.SERVICE_START, false, true);
-        errorTest("master", null, ErrorExtension.ErrorPoint.SERVICE_START, true, true);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.SERVICE_START, false, true);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.SERVICE_START, true, true);
     }
 
     @Test
-    public void testSlaveHCServiceStart() throws Exception {
+    public void testSecondaryHCServiceStart() throws Exception {
         // A pre-prepare failure on an HC always means outcome=failed
-        errorTest("slave", null, ErrorExtension.ErrorPoint.SERVICE_START, false, true);
-        errorTest("slave", null, ErrorExtension.ErrorPoint.SERVICE_START, true, true);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.SERVICE_START, false, true);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.SERVICE_START, true, true);
     }
 
     @Test
-    public void testMasterServerServiceStop() throws Exception {
+    public void testPrimaryServerServiceStop() throws Exception {
         // MSC only logs a WARN for service.stop() errors and stops the service regardless.
         // So the op should succeed.
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.SERVICE_STOP, false, false);
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.SERVICE_STOP, true, false);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.SERVICE_STOP, false, false);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.SERVICE_STOP, true, false);
     }
 
     @Test
-    public void testSlaveServerServiceStop() throws Exception {
+    public void testSecondaryServerServiceStop() throws Exception {
         // MSC only logs a WARN for service.stop() errors and stops the service regardless.
         // So the op should succeed.
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.SERVICE_STOP, false, false);
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.SERVICE_STOP, true, false);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.SERVICE_STOP, false, false);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.SERVICE_STOP, true, false);
     }
 
     @Test
-    public void testMasterHCServiceStop() throws Exception {
+    public void testPrimaryHCServiceStop() throws Exception {
         // MSC only logs a WARN for service.stop() errors and stops the service regardless.
         // So the op should succeed.
-        errorTest("master", null, ErrorExtension.ErrorPoint.SERVICE_STOP, false, false);
-        errorTest("master", null, ErrorExtension.ErrorPoint.SERVICE_STOP, true, false);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.SERVICE_STOP, false, false);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.SERVICE_STOP, true, false);
     }
 
     @Test
-    public void testSlaveHCServiceStop() throws Exception {
+    public void testSecondaryHCServiceStop() throws Exception {
         // MSC only logs a WARN for service.stop() errors and stops the service regardless.
         // So the op should succeed.
-        errorTest("slave", null, ErrorExtension.ErrorPoint.SERVICE_STOP, false, false);
-        errorTest("slave", null, ErrorExtension.ErrorPoint.SERVICE_STOP, true, false);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.SERVICE_STOP, false, false);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.SERVICE_STOP, true, false);
     }
 
     @Test
-    public void testMasterServerStageVerify() throws Exception {
+    public void testPrimaryServerStageVerify() throws Exception {
         // The server fails in pre-prepare so whether overall outcome=failed depends on the rollout plan
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.VERIFY, false, true);
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.VERIFY, true, false);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.VERIFY, false, true);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.VERIFY, true, false);
     }
 
     @Test
-    public void testSlaveServerStageVerify() throws Exception {
+    public void testSecondaryServerStageVerify() throws Exception {
         // The server fails in pre-prepare so whether overall outcome=failed depends on the rollout plan
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.VERIFY, false, true);
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.VERIFY, true, false);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.VERIFY, false, true);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.VERIFY, true, false);
     }
 
     @Test
-    public void testMasterHCStageVerify() throws Exception {
+    public void testPrimaryHCStageVerify() throws Exception {
         // A pre-prepare failure on an HC always means outcome=failed
-        errorTest("master", null, ErrorExtension.ErrorPoint.VERIFY, false, true);
-        errorTest("master", null, ErrorExtension.ErrorPoint.VERIFY, true, true);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.VERIFY, false, true);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.VERIFY, true, true);
     }
 
     @Test
-    public void testSlaveHCStageVerify() throws Exception {
+    public void testSecondaryHCStageVerify() throws Exception {
         // A pre-prepare failure on an HC always means outcome=failed
-        errorTest("slave", null, ErrorExtension.ErrorPoint.VERIFY, false, true);
-        errorTest("slave", null, ErrorExtension.ErrorPoint.VERIFY, true, true);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.VERIFY, false, true);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.VERIFY, true, true);
     }
 
     @Test
-    public void testMasterServerStageCommit() throws Exception {
+    public void testPrimaryServerStageCommit() throws Exception {
         // Post commit failure does not result in outcome=failed
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.COMMIT, false, false);
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.COMMIT, true, false);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.COMMIT, false, false);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.COMMIT, true, false);
     }
 
     @Test
-    public void testSlaveServerStageCommit() throws Exception {
+    public void testSecondaryServerStageCommit() throws Exception {
         // Post commit failure does not result in outcome=failed
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.COMMIT, false, false);
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.COMMIT, true, false);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.COMMIT, false, false);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.COMMIT, true, false);
     }
 
     @Test
-    public void testMasterHCStageCommit() throws Exception {
+    public void testPrimaryHCStageCommit() throws Exception {
         // Here the failure blows away the normal domain response and results in reporting a failure
         // TODO this isn't ideal as the DC's model, MSC and the rest of the domain are changed
-        errorTest("master", null, ErrorExtension.ErrorPoint.COMMIT, false, true);
-        errorTest("master", null, ErrorExtension.ErrorPoint.COMMIT, true, true);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.COMMIT, false, true);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.COMMIT, true, true);
     }
 
     @Test
-    public void testSlaveHCStageCommit() throws Exception {
+    public void testSecondaryHCStageCommit() throws Exception {
         // Post commit failure does not result in outcome=failed
-        errorTest("slave", null, ErrorExtension.ErrorPoint.COMMIT, false, false);
-        errorTest("slave", null, ErrorExtension.ErrorPoint.COMMIT, true, false);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.COMMIT, false, false);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.COMMIT, true, false);
     }
 
     @Test
-    public void testMasterServerStageRollback() throws Exception {
+    public void testPrimaryServerStageRollback() throws Exception {
         // The server fails in pre-prepare (to trigger the rollback that throws Error),
         // so whether overall outcome=failed depends on the rollout plan
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.ROLLBACK, false, true);
-        errorTest("master", "main-one", ErrorExtension.ErrorPoint.ROLLBACK, true, false);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.ROLLBACK, false, true);
+        errorTest("primary", "main-one", ErrorExtension.ErrorPoint.ROLLBACK, true, false);
     }
 
     @Test
-    public void testSlaveServerStageRollback() throws Exception {
+    public void testSecondaryServerStageRollback() throws Exception {
         // The server fails in pre-prepare (to trigger the rollback that throws Error),
         // so whether overall outcome=failed depends on the rollout plan
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.ROLLBACK, false, true);
-        errorTest("slave", "main-three", ErrorExtension.ErrorPoint.ROLLBACK, true, false);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.ROLLBACK, false, true);
+        errorTest("secondary", "main-three", ErrorExtension.ErrorPoint.ROLLBACK, true, false);
     }
 
     @Test
-    public void testMasterHCStageRollback() throws Exception {
+    public void testPrimaryHCStageRollback() throws Exception {
         // A pre-prepare failure (used to trigger the rollback that throws Error) on an HC always means outcome=failed
-        errorTest("master", null, ErrorExtension.ErrorPoint.ROLLBACK, false, true);
-        errorTest("master", null, ErrorExtension.ErrorPoint.ROLLBACK, true, true);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.ROLLBACK, false, true);
+        errorTest("primary", null, ErrorExtension.ErrorPoint.ROLLBACK, true, true);
     }
 
     @Test
-    public void testSlaveHCStageRollback() throws Exception {
+    public void testSecondaryHCStageRollback() throws Exception {
         // A pre-prepare failure (used to trigger the rollback that throws Error) on an HC always means outcome=failed
-        errorTest("slave", null, ErrorExtension.ErrorPoint.ROLLBACK, false, true);
-        errorTest("slave", null, ErrorExtension.ErrorPoint.ROLLBACK, true, true);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.ROLLBACK, false, true);
+        errorTest("secondary", null, ErrorExtension.ErrorPoint.ROLLBACK, true, true);
     }
 
     private void errorTest(String host, String server, ErrorExtension.ErrorPoint errorPoint, boolean addRolloutPlan, boolean expectFailure) throws Exception {
@@ -409,16 +409,16 @@ public class OperationErrorTestCase {
         }
         if (server == null && RUNTIME_POINTS.contains(errorPoint)) {
             // retarget the op to the HC subsystem
-            PathAddress addr = host.equals("master") ? MASTER_ADDRESS : SLAVE_ADDRESS;
+            PathAddress addr = host.equals("primary") ? PRIMARY_ADDRESS : SECONDARY_ADDRESS;
             op.get(OP_ADDR).set(addr.append(SUBSYSTEM_ELEMENT).toModelNode());
             multiphase = false;
         }
 
         ModelNode response;
         if (expectFailure) {
-            response = executeForFailure(op, masterClient);
+            response = executeForFailure(op, primaryClient);
         } else {
-            response = executeForResponse(op, masterClient);
+            response = executeForResponse(op, primaryClient);
         }
         if (errorPoint != ErrorExtension.ErrorPoint.SERVICE_STOP) {
             validateResponseDetails(response, host, server, errorPoint, multiphase);
@@ -433,7 +433,7 @@ public class OperationErrorTestCase {
             ModelNode serverResp = response.get(SERVER_GROUPS, "main-server-group", HOST, host, server, RESPONSE);
             assertEquals(unmodified.toString(), FAILED, serverResp.get(OUTCOME).asString());
             fd = serverResp.get(FAILURE_DESCRIPTION);
-        } else if ("master".equals(host)) {
+        } else if ("primary".equals(host)) {
             if (errorPoint == ErrorExtension.ErrorPoint.COMMIT || errorPoint == ErrorExtension.ErrorPoint.ROLLBACK) {
                 // In this case the late error destroys the normal response structure and we
                 // get a simple failure. This isn't ideal. I'm writing the test to specifically assert

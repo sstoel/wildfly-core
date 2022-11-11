@@ -48,7 +48,6 @@ public class LocalHostControllerInfoImpl implements LocalHostControllerInfo {
     private volatile int nativeManagementPort;
 
     private volatile String remoteDCUser;
-    private volatile String remoteSecurityRealm;
     private volatile ServiceName authenticationContext;
     private volatile List<DiscoveryOption> remoteDiscoveryOptions = new ArrayList<DiscoveryOption>();
     private volatile boolean remoteIgnoreUnaffectedConfiguration;
@@ -86,6 +85,10 @@ public class LocalHostControllerInfoImpl implements LocalHostControllerInfo {
     void setLocalHostName(final String hostName) {
         this.overrideLocalHostName = true;
         this.localHostName = hostName;
+    }
+
+    public void clearOverrideLocalHostName() {
+        this.overrideLocalHostName = false;
     }
 
     @Override
@@ -135,14 +138,6 @@ public class LocalHostControllerInfoImpl implements LocalHostControllerInfo {
     @Override
     public String getRemoteDomainControllerUsername() {
         return remoteDCUser;
-    }
-
-    /**
-     * @deprecated Client side security configuration should be obtained from an AuthenticationContext.
-     */
-    @Deprecated
-    public String getRemoteDomainControllerSecurityRealm() {
-        return remoteSecurityRealm;
     }
 
     @Override
@@ -212,10 +207,6 @@ public class LocalHostControllerInfoImpl implements LocalHostControllerInfo {
 
     void setRemoteDomainControllerUsername(String userName) {
         this.remoteDCUser = userName;
-    }
-
-    void setRemoteDomainControllerSecurityRealm(String remoteSecurityRealm) {
-        this.remoteSecurityRealm = remoteSecurityRealm;
     }
 
     void addRemoteDomainControllerDiscoveryOption(DiscoveryOption discoveryOption) {

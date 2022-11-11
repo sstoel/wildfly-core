@@ -127,7 +127,7 @@ public class OpTypesExtension implements Extension {
         private final ProcessType processType;
 
         private OperationTypesSubsystemResourceDefinition(ProcessType processType) {
-            super(new Parameters(PathElement.pathElement(SUBSYSTEM, SUBSYSTEM_NAME), new NonResolvingResourceDescriptionResolver())
+            super(new Parameters(PathElement.pathElement(SUBSYSTEM, SUBSYSTEM_NAME), NonResolvingResourceDescriptionResolver.INSTANCE)
                     .setAddHandler(new ModelOnlyAddStepHandler())
                     .setRemoveHandler(new ModelOnlyRemoveStepHandler())
             );
@@ -172,7 +172,7 @@ public class OpTypesExtension implements Extension {
                 String targetHost = TARGET_HOST.resolveModelAttribute(context, operation).asStringOrNull();
                 if (targetHost != null) {
                     Set<String> hosts = context.readResourceFromRoot(PathAddress.EMPTY_ADDRESS, false).getChildrenNames(HOST);
-                    String name = hosts.size() > 1 ? "master": hosts.iterator().next();
+                    String name = hosts.size() > 1 ? "primary": hosts.iterator().next();
                     forMe = targetHost.equals(name);
                 }
             }

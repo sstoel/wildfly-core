@@ -89,13 +89,42 @@ public enum Namespace {
     // WF 15
     DOMAIN_9_0(9, "urn:jboss:domain:9.0"),
 
-    // WF 16
-    DOMAIN_10_0(10, "urn:jboss:domain:10.0");
+    // WF 16 / WF 17 / WF 18
+    DOMAIN_10_0(10, "urn:jboss:domain:10.0"),
+
+    // EAP 7.3
+    DOMAIN_11_0(11, "urn:jboss:domain:11.0"),
+
+    // WF 19
+    DOMAIN_12_0(12, "urn:jboss:domain:12.0"),
+
+    // WF 20
+    DOMAIN_13_0(13, "urn:jboss:domain:13.0"),
+
+    // WF 21
+    DOMAIN_14_0(14, "urn:jboss:domain:14.0"),
+
+    // WF 22
+    DOMAIN_15_0(15, "urn:jboss:domain:15.0"),
+
+    // WF 23
+    DOMAIN_16_0(16, "urn:jboss:domain:16.0"),
+
+    // WF 24
+    DOMAIN_17_0(17, "urn:jboss:domain:17.0"),
+
+    // WF 25
+    DOMAIN_18_0(18, "urn:jboss:domain:18.0"),
+
+    // WF 26
+    DOMAIN_19_0(19, "urn:jboss:domain:19.0"),
+
+    DOMAIN_20_0(20, "urn:jboss:domain:20.0");
 
     /**
      * The current namespace version.
      */
-    public static final Namespace CURRENT = DOMAIN_10_0;
+    public static final Namespace CURRENT = DOMAIN_20_0;
 
     public static final Namespace[] ALL_NAMESPACES = domainValues();
 

@@ -21,6 +21,7 @@
  */
 package org.jboss.as.controller.test;
 
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FAILURE_DESCRIPTION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.INCLUDE_RUNTIME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.PROXIES;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.READ_RESOURCE_OPERATION;
@@ -65,6 +66,8 @@ import org.junit.Test;
  */
 public class ReadResourceWithRuntimeResourceTestCase extends AbstractControllerTestBase {
 
+    public static final String FAILURE_DESC = "Fail with a failure description";
+
     private ManagementModel managementModel;
 
     @Test
@@ -108,6 +111,13 @@ public class ReadResourceWithRuntimeResourceTestCase extends AbstractControllerT
         assertTrue(children.keys().contains("C"));
         ModelNode resourceB = children.get("B");
         assertEquals(-1, resourceB.get("attr").asLong());
+
+        // WFCORE-3682 Test to check Stage.Runtime failure description is roll back to result.
+        res = managementModel.getRootResource().requireChild(MockProxyController.ADDRESS.getElement(0));
+        res.registerChild(PathElement.pathElement("resource", "D"), Resource.Factory.create(true));
+        result = executeCheckForFailure(operation);
+        assertTrue("failure description should be included in result", result.hasDefined(FAILURE_DESCRIPTION));
+        assertTrue(result.get(FAILURE_DESCRIPTION).asString().contains(FAILURE_DESC));
     }
 
     @Override
@@ -120,18 +130,29 @@ public class ReadResourceWithRuntimeResourceTestCase extends AbstractControllerT
         GlobalNotifications.registerGlobalNotifications(registration, processType);
 
         ManagementResourceRegistration subsystemRegistration = registration.registerSubModel(
-                new SimpleResourceDefinition(PathElement.pathElement("subsystem", "mysubsystem"), new NonResolvingResourceDescriptionResolver()));
+                new SimpleResourceDefinition(PathElement.pathElement("subsystem", "mysubsystem"), NonResolvingResourceDescriptionResolver.INSTANCE));
         // /subsystem=mysubsystem/resource=A is a regular resource
         subsystemRegistration.registerSubModel(
-                new SimpleResourceDefinition(PathElement.pathElement("resource", "A"), new NonResolvingResourceDescriptionResolver()));
+                new SimpleResourceDefinition(PathElement.pathElement("resource", "A"), NonResolvingResourceDescriptionResolver.INSTANCE));
         // /subsystem=mysubsystem/resource=B is a runtime-only resource
         ManagementResourceRegistration runtimeResource = subsystemRegistration.registerSubModel(
-                new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(PathElement.pathElement("resource", "B"), new NonResolvingResourceDescriptionResolver()).setRuntime()));
+                new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(PathElement.pathElement("resource", "B"), NonResolvingResourceDescriptionResolver.INSTANCE).setRuntime()));
         AttributeDefinition runtimeAttr = TestUtils.createAttribute("attr", ModelType.LONG);
         runtimeResource.registerReadOnlyAttribute(runtimeAttr, new OperationStepHandler() {
             @Override
             public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
                 context.getResult().set(-1);
+            }
+        });
+
+        // /subsystem=mysubsystem/resource=D is a runtime-only resource fail at Stage.Runtime
+        ManagementResourceRegistration runtimeResourceD = subsystemRegistration.registerSubModel(
+                new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(PathElement.pathElement("resource", "D"), NonResolvingResourceDescriptionResolver.INSTANCE).setRuntime()));
+        AttributeDefinition runtimeAttrD = TestUtils.createAttribute("attrD", ModelType.LONG);
+        runtimeResourceD.registerReadOnlyAttribute(runtimeAttrD, new OperationStepHandler() {
+            @Override
+            public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
+                throw new RuntimeException(FAILURE_DESC);
             }
         });
 

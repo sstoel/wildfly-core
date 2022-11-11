@@ -23,6 +23,7 @@ import static org.jboss.logging.Logger.Level.WARN;
 import java.io.IOException;
 import java.net.UnknownHostException;
 import java.security.KeyStore;
+import java.security.KeyStoreException;
 import java.security.NoSuchProviderException;
 import java.security.Policy;
 import java.security.Provider;
@@ -30,6 +31,7 @@ import java.security.Provider;
 import javax.xml.stream.Location;
 import javax.xml.stream.XMLStreamException;
 
+import org.jboss.as.controller.ExpressionResolver;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.logging.BasicLogger;
 import org.jboss.logging.Logger;
@@ -185,7 +187,7 @@ public interface ElytronSubsystemMessages extends BasicLogger {
      * @param className the class name of the custom component implementation being loaded.
      * @return The {@link StartException} for the error.
      */
-    @Message(id = 15, value = "The custom component implementation '%s' doe not implement method initialize(Map<String, String>), however configuration has been supplied.")
+    @Message(id = 15, value = "The custom component implementation '%s' does not implement method initialize(Map<String, String>), however configuration has been supplied.")
     StartException componentNotConfigurable(final String className, @Cause Exception cause);
 
     /**
@@ -326,7 +328,32 @@ public interface ElytronSubsystemMessages extends BasicLogger {
     @Message(id = 41, value = "Unable to transform configuration to the target version - attribute '%s' is different from '%s'")
     String unableToTransformTornAttribute(String attribute1, String attribute2);
 
-    // CREDENTIAL_STORE section
+    @Message(id = 42, value = "Unable to transform multiple 'authorization-realms' to the single value")
+    String unableToTransformMultipleRealms();
+
+    @Message(id = 43, value = "A cycle has been detected initialising the resources - %s")
+    OperationFailedException cycleDetected(String cycle);
+
+    @Message(id = 44, value = "Unexpected name of servicename's parent - %s")
+    IllegalStateException invalidServiceNameParent(String canonicalName);
+
+    @Message(id = 45, value = "Failed to load CallbackHandler from the provided module.")
+    IllegalStateException failedToLoadCallbackhandlerFromProvidedModule();
+
+    @Message(id = 46, value = "Provided path '%s' to JAAS configuration file does not exist.")
+    StartException jaasFileDoesNotExist(final String path);
+
+    @LogMessage(level = WARN)
+    @Message(id = 47, value = "LDAP Realm is configured to use direct-verification and user-password-mapper which is invalid configuration.")
+    void ldapRealmDirectVerificationAndUserPasswordMapper();
+
+    @Message(id = 48, value = "A string representation of an X.500 distinguished name is required: %s")
+    IllegalArgumentException representationOfX500IsRequired(String causeMessage);
+
+    /*
+     * Credential Store Section.
+     */
+
     @Message(id = 909, value = "Credential store '%s' does not support given credential store entry type '%s'")
     OperationFailedException credentialStoreEntryTypeNotSupported(String credentialStoreName, String entryType);
 
@@ -366,6 +393,24 @@ public interface ElytronSubsystemMessages extends BasicLogger {
 
     @Message(id = Message.NONE, value = "Update dependent resources as alias '%s' does not exist anymore")
     String updateDependantServices(String alias);
+
+    @Message(id = 922, value = "Unable to load credential from credential store.")
+    ExpressionResolver.ExpressionResolutionUserException unableToLoadCredential(@Cause Throwable cause);
+
+    @Message(id = 923, value = "Unable to encrypt the supplied clear text.")
+    OperationFailedException unableToEncryptClearText(@Cause Throwable cause);
+
+    @Message(id = 924, value = "Unable to create immediately available credential store.")
+    OperationFailedException unableToCreateCredentialStoreImmediately(@Cause Throwable cause);
+
+    @Message(id = 925, value = "Unable to reload the credential store.")
+    OperationFailedException unableToReloadCredentialStore(@Cause Throwable cause);
+
+    @Message(id = 926, value = "Unable to initialize the credential store.")
+    OperationFailedException unableToInitialiseCredentialStore(@Cause Throwable cause);
+
+    @Message(id = 927, value = "The secret key operation '%s' failed to complete due to '%s'.")
+    OperationFailedException secretKeyOperationFailed(String operationName, String error, @Cause Throwable cause);
 
     /*
      * Identity Resource Messages - 1000
@@ -571,5 +616,116 @@ public interface ElytronSubsystemMessages extends BasicLogger {
 
     @Message(id = 1065, value = "Multiple maximum-cert-path definitions found.")
     OperationFailedException multipleMaximumCertPathDefinitions();
+
+    @Message(id = 1066, value = "Invalid value for cipher-suite-names. %s")
+    OperationFailedException invalidCipherSuiteNames(@Cause Throwable cause, String causeMessage);
+
+    @Message(id = 1067, value = "Value '%s' is not valid regex.")
+    OperationFailedException invalidRegex(String regex);
+
+    @Message(id = 1068, value = "Duplicate PolicyContextHandler found for key '%s'.")
+    IllegalStateException duplicatePolicyContextHandler(String key);
+
+    @Message(id = 1069, value = "Invalid %s loaded, expected %s but received %s.")
+    IllegalStateException invalidImplementationLoaded(String type, String expected, String actual);
+
+    @Message(id = 1079, value = "Unable to load module '%s'.")
+    RuntimeException unableToLoadModuleRuntime(String module, @Cause Exception cause);
+
+    @Message(id = 1080, value = "Non existing key store needs to have defined type.")
+    OperationFailedException nonexistingKeyStoreMissingType();
+
+    @Message(id = 1081, value = "Failed to lazily initialize key manager")
+    RuntimeException failedToLazilyInitKeyManager(@Cause  Exception e);
+
+    @Message(id = 1082, value = "Failed to store generated self-signed certificate")
+    RuntimeException failedToStoreGeneratedSelfSignedCertificate(@Cause  Exception e);
+
+    @Message(id = 1083, value = "No '%s' found in injected value.")
+    RuntimeException noTypeFoundForLazyInitKeyManager(final String type);
+
+    @Message(id = 1084, value = "KeyStore %s not found, it will be auto generated on first use with a self-signed certificate for host %s")
+    @LogMessage(level = WARN)
+    void selfSignedCertificateWillBeCreated(String file, String host);
+
+    @Message(id = 1085, value = "Generated self-signed certificate at %s. Please note that self-signed certificates are not secure and should only be used for testing purposes. Do not use this self-signed certificate in production.\nSHA-1 fingerprint of the generated key is %s\nSHA-256 fingerprint of the generated key is %s")
+    @LogMessage(level = WARN)
+    void selfSignedCertificateHasBeenCreated(String file, String sha1, String sha256);
+
+    @Message(id=1086, value = "Unable to initialize Elytron JACC support while legacy JACC support is enabled.")
+    IllegalStateException unableToEnableJaccSupport();
+
+    @Message(id = 1087, value = "Hostname in SNI mapping cannot contain ^ character.")
+    OperationFailedException hostContextMapHostnameContainsCaret();
+
+    @Message(id = 1088, value = "Missing certificate authority challenge")
+    AcmeException missingCertificateAuthorityChallenge();
+
+    /*
+     * Expression Resolver Section
+     */
+
+    @Message(id = 1200, value = "The name of the resolver to use was not specified and no default-resolver has been defined.")
+    OperationFailedException noResolverSpecifiedAndNoDefault();
+
+    @Message(id = 1201, value = "No expression resolver has been defined with the name '%s'.")
+    OperationFailedException noResolverWithSpecifiedName(String name);
+
+    @Message(id = 1202, value = "A cycle has been detected initialising the expression resolver for '%s' and '%s'.")
+    ExpressionResolver.ExpressionResolutionUserException cycleDetectedInitialisingExpressionResolver(String firstExpression, String secondExpression);
+
+    @Message(id = 1203, value = "Expression resolver initialisation has already failed.")
+    ExpressionResolver.ExpressionResolutionUserException expressionResolverInitialisationAlreadyFailed(@Cause Throwable cause);
+
+    @Message(id = 1204, value = "The expression '%s' does not specify a resolver and no default is defined.")
+    ExpressionResolver.ExpressionResolutionUserException expressionResolutionWithoutResolver(String expression);
+
+    @Message(id = 1205, value = "The expression '%s' specifies a resolver configuration which does not exist.")
+    ExpressionResolver.ExpressionResolutionUserException invalidResolver(String expression);
+
+    @Message(id = 1206, value = "Unable to decrypt expression '%s'.")
+    ExpressionResolver.ExpressionResolutionUserException unableToDecryptExpression(String expression, @Cause Throwable cause);
+
+    @Message(id = 1207, value = "Resolution of credential store expressions is not supported in the MODEL stage of operation execution.")
+    ExpressionResolver.ExpressionResolutionServerException modelStageResolutionNotSupported(@Cause IllegalStateException cause);
+
+    @Message(id = 1208, value = "Unable to resolve CredentialStore %s -- %s")
+    ExpressionResolver.ExpressionResolutionServerException unableToResolveCredentialStore(String storeName, String details, @Cause Exception cause);
+
+    @Message(id = 1209, value = "Unable to initialize CredentialStore %s -- %s")
+    ExpressionResolver.ExpressionResolutionUserException unableToInitializeCredentialStore(String storeName, String details, @Cause Exception cause);
+
+    @Message(id = 1210, value = "Initialisation of an %s without an active management OperationContext is not allowed.")
+    ExpressionResolver.ExpressionResolutionServerException illegalNonManagementInitialization(Class<?> initialzingClass);
+
+    @Message(id = 1211, value = "Unable to load the credential store.")
+    OperationFailedException unableToLoadCredentialStore(@Cause Throwable cause);
+
+    @Message(id = 1212, value = "KeyStore does not contain a PrivateKey for KeyStore: [%s] and alias: [%s].")
+    StartException missingPrivateKey(String keyStore, String alias);
+
+    @Message(id = 1213, value = "KeyStore does not contain a PublicKey for KeyStore: [%s] and alias: [%s].")
+    StartException missingPublicKey(String keyStore, String alias);
+
+    @Message(id = 1214, value = "Unable to verify the integrity of the filesystem realm: %s")
+    OperationFailedException unableToVerifyIntegrity(@Cause Exception cause, String causeMessage);
+
+    @Message(id = 1215, value = "Filesystem realm is missing key pair configuration, integrity checking is not enabled")
+    OperationFailedException filesystemMissingKeypair();
+
+    @Message(id = 1216, value = "Filesystem realm is unable to obtain key store password")
+    RuntimeException unableToGetKeyStorePassword();
+
+    @Message(id = 1217, value = "Realm verification failed, invalid signatures for the identities: %s")
+    OperationFailedException filesystemIntegrityInvalid(String identities);
+
+    @Message(id = 1218, value = "Keystore used by filesystem realm does not contain the alias: %s")
+    KeyStoreException keyStoreMissingAlias(String alias);
+
+    /*
+     * Don't just add new errors to the end of the file, there may be an appropriate section above for the resource.
+     *
+     * If no suitable section is available add a new section.
+     */
 
 }

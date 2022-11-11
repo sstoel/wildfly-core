@@ -52,7 +52,7 @@ import org.junit.Test;
  */
 public class ModuleLoadingManagementTestCase {
 
-    private static final PathElement HOST_PE = PathElement.pathElement(HOST, "master");
+    private static final PathElement HOST_PE = PathElement.pathElement(HOST, "primary");
     private static final PathElement SERVER_PE = PathElement.pathElement(SERVER, "main-one");
     private static final PathElement RESOURCE = PathElement.pathElement(CORE_SERVICE, MODULE_LOADING);
     private static final PathAddress HOST_PA = PathAddress.pathAddress(HOST_PE, RESOURCE);
@@ -63,20 +63,20 @@ public class ModuleLoadingManagementTestCase {
             + "layers" + File.separator + "base";
 
     private static DomainTestSupport testSupport;
-    private static DomainLifecycleUtil domainMasterLifecycleUtil;
+    private static DomainLifecycleUtil domainPrimaryLifecycleUtil;
 
     @BeforeClass
     public static void setupDomain() throws Exception {
         testSupport = DomainTestSuite.createSupport(ModuleLoadingManagementTestCase.class.getSimpleName());
 
-        domainMasterLifecycleUtil = testSupport.getDomainMasterLifecycleUtil();
+        domainPrimaryLifecycleUtil = testSupport.getDomainPrimaryLifecycleUtil();
     }
 
     @AfterClass
     public static void tearDownDomain() throws Exception {
         DomainTestSuite.stopSupport();
         testSupport = null;
-        domainMasterLifecycleUtil = null;
+        domainPrimaryLifecycleUtil = null;
     }
 
     @Test
@@ -86,7 +86,7 @@ public class ModuleLoadingManagementTestCase {
     }
 
     private void moduleRootAttributeTest(boolean forServer) throws Exception {
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode op = Util.createEmptyOperation("read-attribute", forServer ? SERVER_PA : HOST_PA);
         op.get(NAME).set("module-roots");
 
@@ -112,7 +112,7 @@ public class ModuleLoadingManagementTestCase {
     @Test
     public void testListResourceLoaderPaths() throws Exception {
 
-        DomainClient domainClient = domainMasterLifecycleUtil.getDomainClient();
+        DomainClient domainClient = domainPrimaryLifecycleUtil.getDomainClient();
         ModelNode op = Util.createEmptyOperation("list-resource-loader-paths", HOST_PA);
         op.get(MODULE).set("org.jboss.dmr");
 

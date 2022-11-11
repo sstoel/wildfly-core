@@ -21,7 +21,10 @@
  */
 package org.jboss.as.controller.registry;
 
+import static org.wildfly.common.Assert.checkNotNullParamWithNullPointerException;
+
 import java.util.Objects;
+
 
 /**
  * A runtime package dependency expresses a dependency to a galleon package. A
@@ -33,6 +36,7 @@ import java.util.Objects;
  * @author jdenise@redhat.com
  */
 public final class RuntimePackageDependency {
+
     private enum TYPE {
         REQUIRED,
         OPTIONAL,
@@ -43,10 +47,8 @@ public final class RuntimePackageDependency {
     private final TYPE type;
 
     private RuntimePackageDependency(String name, TYPE type) {
-        Objects.requireNonNull(name);
-        Objects.requireNonNull(type);
-        this.name = name;
-        this.type = type;
+        this.name = checkNotNullParamWithNullPointerException("name", name);
+        this.type = checkNotNullParamWithNullPointerException("type", type);
     }
 
     /**
@@ -114,5 +116,39 @@ public final class RuntimePackageDependency {
      */
     public static RuntimePackageDependency optional(String name) {
         return new RuntimePackageDependency(name, TYPE.OPTIONAL);
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 7;
+        hash = 71 * hash + Objects.hashCode(this.name);
+        hash = 71 * hash + Objects.hashCode(this.type);
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final RuntimePackageDependency other = (RuntimePackageDependency) obj;
+        if (!Objects.equals(this.name, other.name)) {
+            return false;
+        }
+        if (this.type != other.type) {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public String toString() {
+        return "RuntimePackageDependency{" + "name=" + name + ", type=" + type + '}';
     }
 }

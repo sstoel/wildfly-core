@@ -73,6 +73,18 @@ public class Scanner {
                                 .newInstance();
                         DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
                         Document document = documentBuilder.parse(file.toFile());
+                        Element elemAlias = (Element) document.getElementsByTagName("module-alias").item(0);
+                        if (elemAlias != null) {
+                            String moduleName = elemAlias.getAttribute("name");
+                            String target = elemAlias.getAttribute("target-name");
+                            Set<String> referencing = modulesReference.get(target);
+                            if (referencing == null) {
+                                referencing = new HashSet<>();
+                                modulesReference.put(target, referencing);
+                            }
+                            referencing.add(moduleName);
+                            return FileVisitResult.CONTINUE;
+                        }
                         Element elem = (Element) document.getElementsByTagName("module").item(0);
                         if (elem == null) {
                             return FileVisitResult.CONTINUE;
@@ -223,8 +235,10 @@ public class Scanner {
             return;
         }
         seen.add(module);
-        Path path = Paths.get(modulePath.toString(), module.replaceAll("\\.", "/"),
-                "main/module.xml");
+
+        String suffix = module.indexOf(':') > 0 ? "/module.xml" : "main/module.xml";
+        String moduleIdPath = module.replaceAll("\\.", "/").replace(':', '/');
+        Path path = Paths.get(modulePath.toString(), moduleIdPath, suffix);
         if (!Files.exists(path)) {
             // pseudo module
             return;
@@ -241,16 +255,23 @@ public class Scanner {
                 .newInstance();
         DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
         Document document = documentBuilder.parse(path.toFile());
-        Node n = document.getElementsByTagName("dependencies").item(0);
-        if (n != null) {
-            NodeList deps = n.getChildNodes();
-            for (int i = 0; i < deps.getLength(); i++) {
-                if (deps.item(i).getNodeType() == Node.ELEMENT_NODE) {
-                    Element element = (Element) deps.item(i);
-                    String mod = element.getAttribute("name");
-                    if (!mod.isEmpty() && !mod.startsWith("java.") && !mod.startsWith("jdk.") && !mod.equals("org.jboss.modules")) {
-                        dependencies.add(mod);
-                        getDependencies(modulePath, mod, dependencies, seen, size);
+        Element elemAlias = (Element) document.getElementsByTagName("module-alias").item(0);
+        if (elemAlias != null) {
+            String target = elemAlias.getAttribute("target-name");
+            dependencies.add(target);
+            getDependencies(modulePath, target, dependencies, seen, size);
+        } else {
+            Node n = document.getElementsByTagName("dependencies").item(0);
+            if (n != null) {
+                NodeList deps = n.getChildNodes();
+                for (int i = 0; i < deps.getLength(); i++) {
+                    if (deps.item(i).getNodeType() == Node.ELEMENT_NODE) {
+                        Element element = (Element) deps.item(i);
+                        String mod = element.getAttribute("name");
+                        if (!mod.isEmpty() && !mod.startsWith("java.") && !mod.startsWith("jdk.") && !mod.equals("org.jboss.modules")) {
+                            dependencies.add(mod);
+                            getDependencies(modulePath, mod, dependencies, seen, size);
+                        }
                     }
                 }
             }

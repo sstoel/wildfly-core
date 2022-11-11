@@ -52,7 +52,6 @@ import org.jboss.as.repository.ContentReference;
 import org.jboss.as.repository.ContentRepository;
 import org.jboss.as.server.controller.resources.DeploymentAttributes;
 import org.jboss.as.server.logging.ServerLogger;
-import org.jboss.as.server.services.security.AbstractVaultReader;
 import org.jboss.dmr.ModelNode;
 
 /**
@@ -66,16 +65,16 @@ public class DeploymentFullReplaceHandler implements OperationStepHandler {
 
     protected final ContentRepository contentRepository;
 
-    private final AbstractVaultReader vaultReader;
+    private final DeploymentTransformation deploymentTransformation;
 
-    protected DeploymentFullReplaceHandler(final ContentRepository contentRepository, final AbstractVaultReader vaultReader) {
+    protected DeploymentFullReplaceHandler(final ContentRepository contentRepository) {
         assert contentRepository != null : "Null contentRepository";
         this.contentRepository = contentRepository;
-        this.vaultReader = vaultReader;
+        this.deploymentTransformation = new DeploymentTransformation();
     }
 
-    public static DeploymentFullReplaceHandler create(final ContentRepository contentRepository, final AbstractVaultReader vaultReader) {
-        return new DeploymentFullReplaceHandler(contentRepository, vaultReader);
+    public static DeploymentFullReplaceHandler create(final ContentRepository contentRepository) {
+        return new DeploymentFullReplaceHandler(contentRepository);
     }
 
     public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
@@ -126,7 +125,7 @@ public class DeploymentFullReplaceHandler implements OperationStepHandler {
             ContentReference reference = ModelContentReference.fromModelAddress(address, newHash);
             contentItem = addFromHash(reference);
         } else if (hasValidContentAdditionParameterDefined(contentItemNode)) {
-            contentItem = addFromContentAdditionParameter(context, contentItemNode);
+            contentItem = addFromContentAdditionParameter(context, contentItemNode, name);
             newHash = contentItem.getHash();
 
             // Replace the content data
@@ -169,9 +168,9 @@ public class DeploymentFullReplaceHandler implements OperationStepHandler {
         context.addResource(PathAddress.pathAddress(deploymentPath), resource);
 
         if (ENABLED.resolveModelAttribute(context, deploymentModel).asBoolean()) {
-            DeploymentHandlerUtil.replace(context, originalDeployment, runtimeName, name, replacedRuntimeName, vaultReader, contentItem);
+            DeploymentHandlerUtil.replace(context, originalDeployment, runtimeName, name, replacedRuntimeName, contentItem);
         } else if (wasDeployed) {
-            DeploymentHandlerUtil.undeploy(context, operation, name, runtimeName, vaultReader);
+            DeploymentHandlerUtil.undeploy(context, operation, name, runtimeName);
         }
 
         addFlushHandler(context, contentRepository, new OperationContext.ResultHandler() {
@@ -200,18 +199,21 @@ public class DeploymentFullReplaceHandler implements OperationStepHandler {
         return new DeploymentHandlerUtil.ContentItem(reference.getHash());
     }
 
-    DeploymentHandlerUtil.ContentItem addFromContentAdditionParameter(OperationContext context, ModelNode contentItemNode) throws OperationFailedException {
+    DeploymentHandlerUtil.ContentItem addFromContentAdditionParameter(OperationContext context, ModelNode contentItemNode, String name) throws OperationFailedException {
         byte[] hash;
         InputStream in = getInputStream(context, contentItemNode);
+        InputStream transformed = null;
         try {
             try {
-                hash = contentRepository.addContent(in);
+                transformed = deploymentTransformation.doTransformation(context, contentItemNode, name, in);
+                hash = contentRepository.addContent(transformed);
             } catch (IOException e) {
                 throw createFailureException(e.toString());
             }
 
         } finally {
             StreamUtils.safeClose(in);
+            StreamUtils.safeClose(transformed);
         }
         contentItemNode.clear(); // AS7-1029
         contentItemNode.get(CONTENT_HASH.getName()).set(hash);

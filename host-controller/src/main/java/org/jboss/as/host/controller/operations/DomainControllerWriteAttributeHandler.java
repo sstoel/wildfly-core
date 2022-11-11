@@ -27,15 +27,16 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.VAL
 
 import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.OperationContext;
+import org.jboss.as.controller.OperationContext.Stage;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.ReloadRequiredWriteAttributeHandler;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
-import org.jboss.as.controller.OperationContext.Stage;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.extension.ExtensionRegistry;
+import org.jboss.as.controller.logging.ControllerLogger;
 import org.jboss.as.controller.operations.validation.EnumValidator;
 import org.jboss.as.controller.operations.validation.IntRangeValidator;
 import org.jboss.as.controller.operations.validation.StringLengthValidator;
@@ -60,12 +61,6 @@ import org.wildfly.security.auth.client.AuthenticationContext;
  */
 public abstract class DomainControllerWriteAttributeHandler extends ReloadRequiredWriteAttributeHandler {
 
-    public static final SimpleAttributeDefinition SECURITY_REALM =
-            new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.SECURITY_REALM, ModelType.STRING, true)
-                    .setValidator(new StringLengthValidator(1, true))
-                    .setAlternatives(ModelDescriptionConstants.AUTHENTICATION_CONTEXT)
-                    .setDeprecated(ModelVersion.create(5))
-                    .build();
     public static final SimpleAttributeDefinition AUTHENTICATION_CONTEXT =
             new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.AUTHENTICATION_CONTEXT,  ModelType.STRING,  true)
                     .setCapabilityReference("org.wildfly.security.authentication-context", "org.wildfly.host.controller")
@@ -91,8 +86,9 @@ public abstract class DomainControllerWriteAttributeHandler extends ReloadRequir
             new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.ADMIN_ONLY_POLICY, ModelType.STRING, true)
                     .setAllowExpression(true)
                     .setFlags(AttributeAccess.Flag.RESTART_JVM)
-                    .setValidator(new EnumValidator<AdminOnlyDomainConfigPolicy>(AdminOnlyDomainConfigPolicy.class, true, true))
+                    .setValidator(EnumValidator.create(AdminOnlyDomainConfigPolicy.class))
                     .setDefaultValue(new ModelNode(AdminOnlyDomainConfigPolicy.ALLOW_NO_CONFIG.toString()))
+                    .setAllowedValues(AdminOnlyDomainConfigPolicy.ALLOW_NO_CONFIG.toString(), AdminOnlyDomainConfigPolicy.FETCH_FROM_DOMAIN_CONTROLLER.toString(), AdminOnlyDomainConfigPolicy.REQUIRE_LOCAL_CONFIG.toString())
                     .build();
     public static final SimpleAttributeDefinition IGNORE_UNUSED_CONFIG =
             new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.IGNORE_UNUSED_CONFIG, ModelType.BOOLEAN, true)
@@ -112,7 +108,7 @@ public abstract class DomainControllerWriteAttributeHandler extends ReloadRequir
             new SimpleAttributeDefinitionBuilder(ModelDescriptionConstants.PROTOCOL, ModelType.STRING)
                     .setRequired(false)
                     .setAllowExpression(true)
-                    .setValidator(new EnumValidator(Protocol.class, true, true))
+                    .setValidator(EnumValidator.create(Protocol.class))
                     .setDefaultValue(org.jboss.as.remoting.Protocol.REMOTE.toModelNode())
                     .setFlags(AttributeAccess.Flag.RESTART_ALL_SERVICES)
                     .setRequires(ModelDescriptionConstants.HOST, ModelDescriptionConstants.PORT)
@@ -164,6 +160,13 @@ public abstract class DomainControllerWriteAttributeHandler extends ReloadRequir
                 dc.remove(LOCAL);
             }
             final ModelNode remoteDC = dc.get(REMOTE);
+            if (remoteDC.hasDefined(ADMIN_ONLY_POLICY.getName())) {
+                ModelNode current = ADMIN_ONLY_POLICY.resolveModelAttribute(context, remoteDC);
+                if (current.asString().equals(AdminOnlyDomainConfigPolicy.LEGACY_FETCH_FROM_DOMAIN_CONTROLLER.toString())) {
+                    ControllerLogger.ROOT_LOGGER.adminOnlyPolicyDeprecatedValue();
+                    remoteDC.get(ADMIN_ONLY_POLICY.getName()).set(AdminOnlyDomainConfigPolicy.FETCH_FROM_DOMAIN_CONTROLLER.toString());
+                }
+            }
             secureRemoteDomain(context, operation, remoteDC);
             if (context.isBooting()) {
                 initializeRemoteDomain(context, remoteDC);
@@ -285,13 +288,6 @@ public abstract class DomainControllerWriteAttributeHandler extends ReloadRequir
                 }, Stage.RUNTIME);
             } else {
                 remoteDC.get(DomainControllerWriteAttributeHandler.AUTHENTICATION_CONTEXT.getName()).clear();
-            }
-
-            if (parameters.has(DomainControllerWriteAttributeHandler.SECURITY_REALM.getName())) {
-                DomainControllerWriteAttributeHandler.SECURITY_REALM.validateAndSet(parameters, remoteDC);
-                hostControllerInfo.setRemoteDomainControllerSecurityRealm(DomainControllerWriteAttributeHandler.SECURITY_REALM.resolveModelAttribute(context, parameters).asString());
-            } else {
-                remoteDC.get(DomainControllerWriteAttributeHandler.SECURITY_REALM.getName()).clear();
             }
         }
 

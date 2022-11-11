@@ -23,7 +23,6 @@ package org.wildfly.extension.core.management;
 
 
 
-import static org.jboss.as.controller.AbstractControllerService.EXECUTOR_CAPABILITY;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MODULE;
 import static org.wildfly.extension.core.management.CoreManagementExtension.PROCESS_STATE_LISTENER_PATH;
 
@@ -51,6 +50,7 @@ import org.jboss.modules.Module;
 import org.jboss.modules.ModuleLoadException;
 import org.wildfly.extension.core.management.client.ProcessStateListener;
 import org.wildfly.extension.core.management.logging.CoreManagementLogger;
+import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**
  * @author <a href="http://jmesnil.net/">Jeff Mesnil</a> (c) 2016 Red Hat inc.
@@ -59,8 +59,8 @@ public class ProcessStateListenerResourceDefinition extends PersistentResourceDe
     private static final String CLASS = "class";
     private static final String PROCESS_STATE_LISTENER_CAPABILITY_NAME = "org.wildfly.extension.core-management.process-state";
     static final RuntimeCapability<Void> PROCESS_STATE_LISTENER_CAPABILITY =
-            RuntimeCapability.Builder.of(PROCESS_STATE_LISTENER_CAPABILITY_NAME, true)
-                    .addRequirements(EXECUTOR_CAPABILITY.getName())
+            RuntimeCapability.Builder.of(PROCESS_STATE_LISTENER_CAPABILITY_NAME, true, Void.class)
+                    .addRequirements("org.wildfly.management.executor", "org.wildfly.management.process-state-notifier")
                     .build();
 
     public static final PropertiesAttributeDefinition PROPERTIES = new PropertiesAttributeDefinition.Builder("properties", true)
@@ -118,7 +118,7 @@ public class ProcessStateListenerResourceDefinition extends PersistentResourceDe
             ProcessStateListener listener = newInstance(className, moduleIdentifier);
             Map<String, String> properties = PROPERTIES.unwrap(context, model);
             int timeout = TIMEOUT.resolveModelAttribute(context, model).asInt();
-            ProcessStateListenerService.install(context.getServiceTarget(),
+            ProcessStateListenerService.install(context.getCapabilityServiceTarget(),
                     context.getProcessType(),
                     context.getRunningMode(), context.getCurrentAddress().getLastElement().getValue(),
                     listener,
@@ -136,7 +136,14 @@ public class ProcessStateListenerResourceDefinition extends PersistentResourceDe
             try {
                 module = Module.getContextModuleLoader().loadModule(moduleIdentifier);
                 Class<?> clazz = module.getClassLoader().loadClass(className);
-                Object instance = clazz.getConstructor(null).newInstance(null);
+                ClassLoader currentTccl = WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
+                Object instance;
+                try {
+                    WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(module.getClassLoader());
+                    instance = clazz.getConstructor(null).newInstance(null);
+                } finally {
+                    WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(currentTccl);
+                }
                 return ProcessStateListener.class.cast(instance);
             } catch (ModuleLoadException e) {
                 throw CoreManagementLogger.ROOT_LOGGER.errorToLoadModule(moduleIdentifier);
@@ -151,7 +158,7 @@ public class ProcessStateListenerResourceDefinition extends PersistentResourceDe
     private static class ProcessStateListenerRemoveHandler  extends AbstractRemoveStepHandler {
         @Override
         protected void performRuntime(OperationContext context, ModelNode operation, ModelNode model) throws OperationFailedException {
-            context.removeService(ProcessStateListenerService.SERVICE_NAME);
+            context.removeService(PROCESS_STATE_LISTENER_CAPABILITY.getCapabilityServiceName(context.getCurrentAddressValue()));
         }
     }
 }

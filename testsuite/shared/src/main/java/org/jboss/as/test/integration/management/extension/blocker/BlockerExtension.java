@@ -78,7 +78,7 @@ public class BlockerExtension implements Extension {
     public static final AttributeDefinition TARGET_HOST = SimpleAttributeDefinitionBuilder.create(HOST, ModelType.STRING, true).build();
     public static final AttributeDefinition TARGET_SERVER = SimpleAttributeDefinitionBuilder.create(SERVER, ModelType.STRING, true).build();
     public static final AttributeDefinition BLOCK_POINT = SimpleAttributeDefinitionBuilder.create("block-point", ModelType.STRING)
-            .setValidator(EnumValidator.create(BlockPoint.class, false, false))
+            .setValidator(EnumValidator.create(BlockPoint.class))
             .build();
     public static final AttributeDefinition BLOCK_TIME = SimpleAttributeDefinitionBuilder.create("block-time", ModelType.LONG, true)
             .setDefaultValue(new ModelNode(20000))
@@ -108,7 +108,7 @@ public class BlockerExtension implements Extension {
 
         private final boolean forHost;
         private BlockerSubsystemResourceDefinition(boolean forHost) {
-            super(PathElement.pathElement(SUBSYSTEM, SUBSYSTEM_NAME), new NonResolvingResourceDescriptionResolver(),
+            super(PathElement.pathElement(SUBSYSTEM, SUBSYSTEM_NAME), NonResolvingResourceDescriptionResolver.INSTANCE,
                     new AbstractAddStepHandler(),
                     ModelOnlyRemoveStepHandler.INSTANCE);
             this.forHost = forHost;
@@ -144,7 +144,7 @@ public class BlockerExtension implements Extension {
 
     private static class BlockHandler implements OperationStepHandler {
 
-        private static final OperationDefinition DEFINITION = new SimpleOperationDefinitionBuilder("block", new NonResolvingResourceDescriptionResolver())
+        private static final OperationDefinition DEFINITION = new SimpleOperationDefinitionBuilder("block", NonResolvingResourceDescriptionResolver.INSTANCE)
                 .setParameters(CALLER, TARGET_HOST, TARGET_SERVER, BLOCK_POINT, BLOCK_TIME)
                 .setRuntimeOnly()
                 .build();
@@ -173,7 +173,7 @@ public class BlockerExtension implements Extension {
                     Set<String> hosts = rootResource.getChildrenNames(HOST);
                     String name;
                     if (hosts.size() > 1) {
-                        name = "master";
+                        name = "primary";
                     } else {
                         name = hosts.iterator().next();
                     }

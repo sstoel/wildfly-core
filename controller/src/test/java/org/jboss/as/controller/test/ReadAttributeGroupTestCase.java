@@ -30,7 +30,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REA
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.READ_ATTRIBUTE_GROUP_OPERATION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESOLVE_EXPRESSIONS;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -160,7 +160,7 @@ public class ReadAttributeGroupTestCase extends AbstractControllerTestBase {
         GlobalNotifications.registerGlobalNotifications(registration, processType);
 
         ManagementResourceRegistration basicResourceRegistration = registration.registerSubModel(
-                new SimpleResourceDefinition(PathElement.pathElement("subsystem", "basicSubsystem"), new NonResolvingResourceDescriptionResolver()));
+                new SimpleResourceDefinition(PathElement.pathElement("subsystem", "basicSubsystem"), NonResolvingResourceDescriptionResolver.INSTANCE));
         basicResourceRegistration.registerReadOnlyAttribute(TestUtils.createAttribute("first", ModelType.STRING, "group1", false), null);
         basicResourceRegistration.registerReadOnlyAttribute(TestUtils.createAttribute("second", ModelType.STRING, "group1", false), null);
         basicResourceRegistration.registerReadOnlyAttribute(TestUtils.createAttribute("third", ModelType.STRING, "group2", false), null);

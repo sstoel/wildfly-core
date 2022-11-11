@@ -140,7 +140,7 @@ public abstract class AbstractControllerTestBase {
         if (container != null) {
             container.shutdown();
             try {
-                container.awaitTermination(5, TimeUnit.SECONDS);
+                container.awaitTermination(30, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             } finally {
@@ -161,7 +161,7 @@ public abstract class AbstractControllerTestBase {
 
         ModelControllerService(final ProcessType processType, final ManagedAuditLogger auditLogger) {
             super(processType, new EmptyConfigurationPersister(), new ControlledProcessState(true),
-                    ResourceBuilder.Factory.create(PathElement.pathElement("root"), new NonResolvingResourceDescriptionResolver()).build(),
+                    ResourceBuilder.Factory.create(PathElement.pathElement("root"), NonResolvingResourceDescriptionResolver.INSTANCE).build(),
                     auditLogger);
         }
 

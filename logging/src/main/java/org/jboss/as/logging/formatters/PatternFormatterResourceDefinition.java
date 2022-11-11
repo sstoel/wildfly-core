@@ -59,6 +59,10 @@ public class PatternFormatterResourceDefinition extends TransformerResourceDefin
 
     public static final String DEFAULT_FORMATTER_SUFFIX = "-wfcore-pattern-formatter";
 
+    public static String getDefaultFomatterName(String name) {
+        return name + DEFAULT_FORMATTER_SUFFIX;
+    }
+
     // Pattern formatter options
     public static final PropertyAttributeDefinition COLOR_MAP = PropertyAttributeDefinition.Builder.of("color-map", ModelType.STRING)
             .setAllowExpression(true)
@@ -78,21 +82,22 @@ public class PatternFormatterResourceDefinition extends TransformerResourceDefin
             .setAttributeMarshaller(new DefaultAttributeMarshaller() {
                 @Override
                 public void marshallAsElement(final AttributeDefinition attribute, final ModelNode resourceModel, final boolean marshallDefault, final XMLStreamWriter writer) throws XMLStreamException {
-                    if (isMarshallable(attribute, resourceModel, marshallDefault)) {
-                        writer.writeStartElement(attribute.getXmlName());
-                        final String pattern = resourceModel.get(PATTERN.getName()).asString();
-                        writer.writeAttribute(PATTERN.getXmlName(), pattern);
-                        if (resourceModel.hasDefined(COLOR_MAP.getName())) {
-                            final String colorMap = resourceModel.get(COLOR_MAP.getName()).asString();
-                            writer.writeAttribute(COLOR_MAP.getXmlName(), colorMap);
-                        }
-                        writer.writeEndElement();
+                    // We always want to marshal the element
+                    writer.writeStartElement(attribute.getXmlName());
+                    // We also need to always marshal the pattern has it's a required attribute in the XML.
+                    final String pattern;
+                    if (resourceModel.hasDefined(PATTERN.getName())) {
+                        pattern = resourceModel.get(PATTERN.getName()).asString();
+                    } else {
+                        pattern = PATTERN.getDefaultValue().asString();
                     }
-                }
-
-                @Override
-                public boolean isMarshallable(final AttributeDefinition attribute, final ModelNode resourceModel, final boolean marshallDefault) {
-                    return resourceModel.hasDefined(PATTERN.getName());
+                    writer.writeAttribute(PATTERN.getXmlName(), pattern);
+                    // Only marshal the color-map if defined as this is a newer attribute.
+                    if (resourceModel.hasDefined(COLOR_MAP.getName())) {
+                        final String colorMap = resourceModel.get(COLOR_MAP.getName()).asString();
+                        writer.writeAttribute(COLOR_MAP.getXmlName(), colorMap);
+                    }
+                    writer.writeEndElement();
                 }
             })
             .build();

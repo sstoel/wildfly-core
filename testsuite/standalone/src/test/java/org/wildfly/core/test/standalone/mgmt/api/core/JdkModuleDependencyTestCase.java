@@ -39,9 +39,9 @@ import org.junit.Assume;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ManagementClient;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -57,7 +57,7 @@ import java.util.stream.Stream;
  *
  * @author <a href="mailto:mjurc@redhat.com">Michal Jurc</a> (c) 2018 Red Hat, Inc.
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 public class JdkModuleDependencyTestCase {
 
     public static final String DEPLOYMENT_NAME_SUFFIX = "-test-dep.jar";
@@ -110,14 +110,6 @@ public class JdkModuleDependencyTestCase {
 
     @Inject
     private ManagementClient managementClient;
-
-    @Test
-    public void testJdk8ModuleEmulation() throws Exception {
-        Assume.assumeTrue("Skipping testJdk8ModuleEmulation, test is not ran on JDK 1.8.",
-                System.getProperty("java.specification.version").equals("1.8"));
-
-        testModuleDependencies(REQUIRED_1_8_EMULATED_MODULES);
-    }
 
     @Test
     public void testJdk9ModuleDependencies() throws Exception {

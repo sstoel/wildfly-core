@@ -69,9 +69,8 @@ public class PermissionsValidationProcessor implements DeploymentUnitProcessor {
             // descriptors.
             if (!(factory instanceof ImmediatePermissionFactory)) {
                 Permission permission = factory.construct();
-                boolean implied = this.maxPermissions.implies(permission);
-                if (!implied) {
-                    failedPermissions.append("\n\t\t" + permission);
+                if (permission != null && !this.maxPermissions.implies(permission)) {
+                    failedPermissions.append("\n\t\t").append(permission);
 
                 }
             }
@@ -81,8 +80,5 @@ public class PermissionsValidationProcessor implements DeploymentUnitProcessor {
         }
     }
 
-    @Override
-    public void undeploy(final DeploymentUnit context) {
-    }
 }
 

@@ -31,9 +31,9 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.PathElement;
-import org.jboss.as.controller.PrimitiveListAttributeDefinition;
 import org.jboss.as.controller.ResourceDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
+import org.jboss.as.controller.SimpleMapAttributeDefinition;
 import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.client.helpers.MeasurementUnit;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
@@ -42,6 +42,7 @@ import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.core.security.AccessMechanism;
 import org.jboss.as.domain.management._private.DomainManagementResolver;
 import org.jboss.dmr.ModelType;
+
 
 /**
  * {@code ResourceDefinition} for a currently executing operation.
@@ -57,14 +58,13 @@ public class ActiveOperationResourceDefinition extends SimpleResourceDefinition 
     static final AttributeDefinition OPERATION_NAME =
             SimpleAttributeDefinitionBuilder.create(OP, ModelType.STRING).build();
     static final AttributeDefinition ADDRESS =
-            PrimitiveListAttributeDefinition.Builder.of(OP_ADDR, ModelType.PROPERTY)
-                    .build();
+            new SimpleMapAttributeDefinition.Builder(OP_ADDR, ModelType.STRING, false).build();
     private static final AttributeDefinition CALLER_THREAD =
             SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.CALLER_THREAD, ModelType.STRING).build();
     private static final AttributeDefinition ACCESS_MECHANISM =
             SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.ACCESS_MECHANISM, ModelType.STRING)
                     .setRequired(false)
-                    .setValidator(EnumValidator.create(AccessMechanism.class, true, false))
+                    .setValidator(EnumValidator.create(AccessMechanism.class))
                     .build();
     private static final AttributeDefinition DOMAIN_UUID =
             SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.DOMAIN_UUID, ModelType.STRING, true).build();
@@ -73,7 +73,7 @@ public class ActiveOperationResourceDefinition extends SimpleResourceDefinition 
 
     private static final AttributeDefinition EXECUTION_STATUS =
             SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.EXECUTION_STATUS, ModelType.STRING)
-                    .setValidator(EnumValidator.create(OperationContext.ExecutionStatus.class, false, false))
+                    .setValidator(EnumValidator.create(OperationContext.ExecutionStatus.class))
                     .build();
     private static final AttributeDefinition CANCELLED =
             SimpleAttributeDefinitionBuilder.create(ModelDescriptionConstants.CANCELLED, ModelType.BOOLEAN).build();

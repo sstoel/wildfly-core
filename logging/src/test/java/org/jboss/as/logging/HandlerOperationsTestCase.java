@@ -51,6 +51,7 @@ import org.jboss.as.logging.handlers.PeriodicHandlerResourceDefinition;
 import org.jboss.as.logging.handlers.SizeRotatingHandlerResourceDefinition;
 import org.jboss.as.logging.handlers.SocketHandlerResourceDefinition;
 import org.jboss.as.logging.handlers.Target;
+import org.jboss.as.logging.loggers.LoggerAttributes;
 import org.jboss.as.logging.loggers.LoggerResourceDefinition;
 import org.jboss.as.logging.logmanager.ConfigurationPersistence;
 import org.jboss.as.subsystem.test.KernelServices;
@@ -145,7 +146,7 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         final ModelNode loggerAddress = createLoggerAddress(logger.getName()).toModelNode();
         op = SubsystemOperations.createAddOperation(loggerAddress);
         op.get(LoggerResourceDefinition.USE_PARENT_HANDLERS.getName()).set(false);
-        op.get(CommonAttributes.HANDLERS.getName()).setEmptyList().add(fileHandlerName);
+        op.get(LoggerAttributes.HANDLERS.getName()).setEmptyList().add(fileHandlerName);
         executeOperation(kernelServices, op);
 
         // Log a few records
@@ -216,7 +217,7 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
     public void testCompositeOperations() {
         final ModelNode address = createFileHandlerAddress("FILE").toModelNode();
         final String filename = "test-file.log";
-        final String defaultFormatterName = "FILE" + PatternFormatterResourceDefinition.DEFAULT_FORMATTER_SUFFIX;
+        final String defaultFormatterName = PatternFormatterResourceDefinition.getDefaultFomatterName("FILE");
 
         // Add the handler
         ModelNode addOp = OperationBuilder.createAddOperation(address)
@@ -325,14 +326,14 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         // Write each attribute and check the value
         testWrite(kernelServices, address, CommonAttributes.LEVEL, "INFO");
         testWrite(kernelServices, address, CommonAttributes.ENABLED, true);
-        testWrite(kernelServices, address, CommonAttributes.FILTER_SPEC, "deny");
+        testWrite(kernelServices, address, AbstractHandlerDefinition.FILTER_SPEC, "deny");
         testWrite(kernelServices, address, AsyncHandlerResourceDefinition.OVERFLOW_ACTION, "BLOCK");
         testWrite(kernelServices, address, AsyncHandlerResourceDefinition.SUBHANDLERS, subhandlers);
 
         // Undefine attributes
         testUndefine(kernelServices, address, CommonAttributes.LEVEL);
         testUndefine(kernelServices, address, CommonAttributes.ENABLED);
-        testUndefine(kernelServices, address, CommonAttributes.FILTER_SPEC);
+        testUndefine(kernelServices, address, AbstractHandlerDefinition.FILTER_SPEC);
         testUndefine(kernelServices, address, AsyncHandlerResourceDefinition.OVERFLOW_ACTION);
         testUndefine(kernelServices, address, AsyncHandlerResourceDefinition.SUBHANDLERS);
 
@@ -603,7 +604,7 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         testWrite(kernelServices, address, CommonAttributes.ENABLED, true);
         testWrite(kernelServices, address, CommonAttributes.ENCODING, ENCODING);
         testWrite(kernelServices, address, CommonAttributes.LEVEL, "INFO");
-        testWrite(kernelServices, address, CommonAttributes.FILTER_SPEC, "deny");
+        testWrite(kernelServices, address, AbstractHandlerDefinition.FILTER_SPEC, "deny");
         testWrite(kernelServices, address, SocketHandlerResourceDefinition.PROTOCOL, "UDP");
 
         // Undefine attributes
@@ -612,7 +613,7 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         testUndefine(kernelServices, address, CommonAttributes.ENABLED);
         testUndefine(kernelServices, address, CommonAttributes.ENCODING);
         testUndefine(kernelServices, address, CommonAttributes.LEVEL);
-        testUndefine(kernelServices, address, CommonAttributes.FILTER_SPEC);
+        testUndefine(kernelServices, address, AbstractHandlerDefinition.FILTER_SPEC);
         testUndefine(kernelServices, address, SocketHandlerResourceDefinition.PROTOCOL);
 
         // Clean-up
@@ -631,7 +632,7 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         testWrite(kernelServices, address, CommonAttributes.ENABLED, true);
         testWrite(kernelServices, address, CommonAttributes.ENCODING, ENCODING);
         testWrite(kernelServices, address, AbstractHandlerDefinition.FORMATTER, "[test] %d{HH:mm:ss,SSS} %-5p [%c] %s%e%n");
-        testWrite(kernelServices, address, CommonAttributes.FILTER_SPEC, "deny");
+        testWrite(kernelServices, address, AbstractHandlerDefinition.FILTER_SPEC, "deny");
 
         // Add a pattern-formatter
         addPatternFormatter(kernelServices, LoggingProfileOperations.getLoggingProfileName(PathAddress.pathAddress(address)), "PATTERN");
@@ -645,7 +646,7 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
         testUndefine(kernelServices, address, CommonAttributes.ENABLED);
         testUndefine(kernelServices, address, CommonAttributes.ENCODING);
         testUndefine(kernelServices, address, AbstractHandlerDefinition.FORMATTER);
-        testUndefine(kernelServices, address, CommonAttributes.FILTER_SPEC);
+        testUndefine(kernelServices, address, AbstractHandlerDefinition.FILTER_SPEC);
 
         // Remove a pattern-formatter
         testUndefine(kernelServices, address, AbstractHandlerDefinition.NAMED_FORMATTER);
@@ -678,5 +679,15 @@ public class HandlerOperationsTestCase extends AbstractOperationsTestCase {
 
         // Clean-up
         Files.deleteIfExists(dir);
+    }
+
+    @Override
+    protected void verifyRemoved(KernelServices kernelServices, ModelNode address) {
+        super.verifyRemoved(kernelServices, address);
+        final LogContextConfiguration configuration = ConfigurationPersistence.getConfigurationPersistence(LogContext.getLogContext());
+        final String name = address.get(address.asInt() - 1).asProperty().getValue().asString();
+        final String defaultFormatterName = PatternFormatterResourceDefinition.getDefaultFomatterName(name);
+        assertFalse("Expected the default formatter named " + defaultFormatterName + " to be removed for the handler " + name,
+                configuration.getFormatterNames().contains(defaultFormatterName));
     }
 }

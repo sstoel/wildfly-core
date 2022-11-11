@@ -24,8 +24,10 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.lib.ConfigConstants;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.lib.StoredConfig;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.util.FileUtils;
 import org.jboss.as.repository.PathUtil;
@@ -36,9 +38,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ServerControl;
 import org.wildfly.core.testrunner.UnsuccessfulOperationException;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
 public class RemoteGitRepositoryTestCase extends AbstractGitRepositoryTestCase {
 
@@ -47,7 +49,7 @@ public class RemoteGitRepositoryTestCase extends AbstractGitRepositoryTestCase {
 
     @Before
     public void prepareTest() throws Exception {
-        remoteRoot = new File("target", "remote").toPath();
+        remoteRoot = Files.createTempDirectory("RemoteGitRepositoryTestCase").resolve("remote");
         Path repoConfigDir = remoteRoot.resolve("configuration");
         Files.createDirectories(repoConfigDir);
         File baseDir = remoteRoot.toAbsolutePath().toFile();
@@ -58,7 +60,10 @@ public class RemoteGitRepositoryTestCase extends AbstractGitRepositoryTestCase {
         }
         File gitDir = new File(baseDir, Constants.DOT_GIT);
         if (!gitDir.exists()) {
-            try (Git git = Git.init().setDirectory(baseDir).call()) {
+            try (Git git = Git.init().setDirectory(baseDir).setInitialBranch(Constants.MASTER).call()) {
+                StoredConfig config = git.getRepository().getConfig();
+                config.setBoolean(ConfigConstants.CONFIG_COMMIT_SECTION, null, ConfigConstants.CONFIG_KEY_GPGSIGN, false);
+                config.save();
                 git.add().addFilepattern("configuration").call();
                 git.commit().setMessage("Repository initialized").call();
             }
@@ -86,7 +91,7 @@ public class RemoteGitRepositoryTestCase extends AbstractGitRepositoryTestCase {
         if (remoteRepository != null) {
             remoteRepository.close();
         }
-        FileUtils.delete(remoteRoot.toFile(), FileUtils.RECURSIVE | FileUtils.RETRY);
+        FileUtils.delete(remoteRoot.getParent().toFile(), FileUtils.RECURSIVE | FileUtils.RETRY);
     }
 
     /**
@@ -105,7 +110,7 @@ public class RemoteGitRepositoryTestCase extends AbstractGitRepositoryTestCase {
         commits = listCommits(remoteRepository);
         Assert.assertEquals(3, commits.size());
 
-        // create branch in remote repo and change master for next test
+        // create branch in remote repo and change Primary for next test
         try(Git git = new Git(remoteRepository)) {
             git.checkout().setName("my_branch").setCreateBranch(true).call();
         }

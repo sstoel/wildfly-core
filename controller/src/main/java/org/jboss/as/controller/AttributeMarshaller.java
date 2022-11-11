@@ -96,6 +96,26 @@ public abstract class AttributeMarshaller {
         }
     }
 
+    /**
+     * Applies standard element text formatting such that multiline content is on a new line
+     * from the element wrapping the text and is indented one level. Single-line content is
+     * on the same line as the element.
+     *
+     * @param content the content. Cannot be {@code null}
+     * @param writer the writer. Cannot be {@code null}
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static void marshallElementContent(String content, XMLStreamWriter writer) throws XMLStreamException {
+        if (content.indexOf('\n') > -1) {
+            // Multiline content. Use the overloaded variant that staxmapper will format
+            writer.writeCharacters(content);
+        } else {
+            // Staxmapper will just output the chars without adding newlines if this is used
+            char[] chars = content.toCharArray();
+            writer.writeCharacters(chars, 0, chars.length);
+        }
+    }
+
     static class ListMarshaller extends DefaultAttributeMarshaller {
         private final char delimiter;
 
@@ -263,11 +283,15 @@ public abstract class AttributeMarshaller {
     }
 
     static class WrappedSimpleAttributeMarshaller extends AttributeElementMarshaller {
+        final boolean unwrap;
+        WrappedSimpleAttributeMarshaller(boolean unwrap) {
+            this.unwrap = unwrap;
+        }
 
           @Override
           public void marshallAsElement(AttributeDefinition attribute, ModelNode resourceModel, boolean marshallDefault, XMLStreamWriter writer) throws XMLStreamException {
               writer.writeStartElement(attribute.getXmlName());
-              writer.writeCharacters(resourceModel.get(attribute.getName()).asString());
+              marshallElementContent(unwrap ? resourceModel.asString() : resourceModel.get(attribute.getName()).asString(), writer);
               writer.writeEndElement();
           }
       }

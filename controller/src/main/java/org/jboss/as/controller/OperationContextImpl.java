@@ -47,6 +47,9 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SER
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SERVER_GROUP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.USER;
 import static org.jboss.as.controller.logging.ControllerLogger.MGMT_OP_LOGGER;
+import static org.wildfly.common.Assert.checkNotNullParam;
+import static org.wildfly.common.Assert.checkNotEmptyParam;
+import static org.wildfly.common.Assert.checkNotNullArrayParam;
 
 import java.io.InputStream;
 import java.util.Collections;
@@ -69,7 +72,6 @@ import org.jboss.as.controller.access.Action;
 import org.jboss.as.controller.access.Action.ActionEffect;
 import org.jboss.as.controller.access.AuthorizationResult;
 import org.jboss.as.controller.access.AuthorizationResult.Decision;
-import org.jboss.as.controller.access.Caller;
 import org.jboss.as.controller.access.Environment;
 import org.jboss.as.controller.access.ResourceAuthorization;
 import org.jboss.as.controller.access.ResourceNotAddressableException;
@@ -200,6 +202,7 @@ final class OperationContextImpl extends AbstractOperationContext {
     private final BooleanHolder done = new BooleanHolder();
     private final boolean capabilitiesAlreadyBroken;
     private final boolean partialModel;
+    private final boolean forBoot;
 
     private volatile ExecutionStatus executionStatus = ExecutionStatus.EXECUTING;
 
@@ -211,7 +214,10 @@ final class OperationContextImpl extends AbstractOperationContext {
                          final OperationHeaders operationHeaders,
                          final OperationMessageHandler messageHandler, final OperationAttachments attachments,
                          final ModelControllerImpl.ManagementModelImpl managementModel, final ModelController.OperationTransactionControl transactionControl,
-                         final ControlledProcessState processState, final AuditLogger auditLogger, final boolean booting,
+                         final ControlledProcessState processState,
+                         final AuditLogger auditLogger,
+                         final boolean booting,
+                         final boolean forBoot,
                          final HostServerGroupTracker hostServerGroupTracker,
                          final AccessAuditContext accessAuditContext,
                          final NotificationSupport notificationSupport,
@@ -231,6 +237,7 @@ final class OperationContextImpl extends AbstractOperationContext {
         this.messageHandler = messageHandler;
         this.attachments = attachments;
         this.affectsModel = booting ? new ConcurrentHashMap<>(16 * 16) : new HashMap<>(1);
+        this.forBoot = forBoot;
         this.hostServerGroupTracker = hostServerGroupTracker;
         this.activeOperationResource = new ActiveOperationResource();
         this.accessAuditContext = accessAuditContext;
@@ -262,6 +269,11 @@ final class OperationContextImpl extends AbstractOperationContext {
 
     ModelControllerImpl.ManagementModelImpl getManagementModel() {
         return managementModel;
+    }
+
+    @Override
+    boolean isBootOperation() {
+        return forBoot;
     }
 
     private boolean validateCapabilities() {
@@ -320,7 +332,7 @@ final class OperationContextImpl extends AbstractOperationContext {
                         // Problem wasn't a capability removal.
                         // See what step(s) added this requirement
                         Set<Step> bereft = addedRequirements.get(reqReq);
-                        if (bereft != null && bereft.size() > 0) {
+                        if (bereft != null && !bereft.isEmpty()) {
                             for (Step step : bereft) {
                                 Set<CapabilityId> set = missingForStep.get(step);
                                 if (set == null) {
@@ -382,7 +394,7 @@ final class OperationContextImpl extends AbstractOperationContext {
                 for (RuntimeRequirementRegistration reg : validation.getInconsistentRequirements()) {
                     // See what step(s) added this requirement
                     Set<Step> inconsistent = addedRequirements.get(reg);
-                    if (inconsistent != null && inconsistent.size() > 0) {
+                    if (inconsistent != null && !inconsistent.isEmpty()) {
                         for (Step step : inconsistent) {
                             ModelNode response = step.response;
                             String depConName = reg.getDependentContext().getName();
@@ -430,8 +442,10 @@ final class OperationContextImpl extends AbstractOperationContext {
     private static StringBuilder appendPossibleProviderPoints(StringBuilder sb, String formattedCapability, Set<PathAddress> possible){
         //"you wanted X and it doesn't exist; here's where you can add X"
         sb = sb.append(System.lineSeparator()).append(formattedCapability);
-        if (possible.isEmpty()){
+        if (possible.isEmpty()) {
             return sb.append(ControllerLogger.ROOT_LOGGER.noKnownProviderPoints());
+        } else if (ExpressionResolver.EXPRESSION_PATTERN.matcher(formattedCapability).matches()) {
+            return sb.append(ControllerLogger.ROOT_LOGGER.unsupportedUsageOfExpression());
         }
         StringBuffer points = new StringBuffer();
         for (PathAddress c: possible){
@@ -487,6 +501,8 @@ final class OperationContextImpl extends AbstractOperationContext {
                 // Deliberate log and throw; we want to log this but the caller method passes a slightly different
                 // message to the user as part of the operation response
                 MGMT_OP_LOGGER.timeoutExecutingOperation(timeout / 1000, containerMonitorStep.operationId.name, containerMonitorStep.address);
+                // Produce and log thread dump for diagnostics
+                ThreadDumpUtil.threadDump();
                 throw te;
             } finally {
                 executionStatus = originalExecutionStatus;
@@ -854,6 +870,8 @@ final class OperationContextImpl extends AbstractOperationContext {
                     // in AbstractOperationContext.executeStep is not what I wanted
                     ControllerLogger.MGMT_OP_LOGGER.timeoutAwaitingInitialStability(timeout / 1000, activeStep.operationId.name, activeStep.operationId.address);
                     setRollbackOnly();
+                    // Produce and log thread dump for diagnostics
+                    ThreadDumpUtil.threadDump();
                     throw new OperationFailedRuntimeException(ControllerLogger.ROOT_LOGGER.timeoutAwaitingInitialStability());
                 } finally {
                     executionStatus = origStatus;
@@ -1219,6 +1237,8 @@ final class OperationContextImpl extends AbstractOperationContext {
                     // it's almost certain we never stabilized during execution or we are rolling back and destabilized there.
                     // Either one means there is already a failure message associated with this op.
                     MGMT_OP_LOGGER.timeoutCompletingOperation(timeout / 1000, activeStep.operationId.name, activeStep.operationId.address);
+                    // Produce and log thread dump for diagnostics
+                    ThreadDumpUtil.threadDump();
                 }
             }
 
@@ -1277,7 +1297,7 @@ final class OperationContextImpl extends AbstractOperationContext {
 
     @Override
     public ModelNode resolveExpressions(ModelNode node) throws OperationFailedException {
-        return modelController.resolveExpressions(node);
+        return modelController.resolveExpressions(node, this);
     }
 
     @Override
@@ -1353,7 +1373,7 @@ final class OperationContextImpl extends AbstractOperationContext {
         Environment callEnvironment = getCallEnvironment();
         if (authResp.getResourceResult(ActionEffect.ADDRESS) == null) {
             Action action = authResp.standardAction.limitAction(ActionEffect.ADDRESS);
-            authResp.addResourceResult(ActionEffect.ADDRESS, modelController.getAuthorizer().authorize(getCaller(), callEnvironment, action, authResp.targetResource));
+            authResp.addResourceResult(ActionEffect.ADDRESS, modelController.getAuthorizer().authorize(getSecurityIdentity(), callEnvironment, action, authResp.targetResource));
         }
 
         if (authResp.getResourceResult(ActionEffect.ADDRESS).getDecision() == Decision.PERMIT) {
@@ -1361,7 +1381,7 @@ final class OperationContextImpl extends AbstractOperationContext {
                 AuthorizationResult effectResult = authResp.getResourceResult(requiredEffect);
                 if (effectResult == null) {
                     Action action = authResp.standardAction.limitAction(requiredEffect);
-                    effectResult = modelController.getAuthorizer().authorize(getCaller(), callEnvironment, action, authResp.targetResource);
+                    effectResult = modelController.getAuthorizer().authorize(getSecurityIdentity(), callEnvironment, action, authResp.targetResource);
                     authResp.addResourceResult(requiredEffect, effectResult);
                 }
             }
@@ -1387,7 +1407,7 @@ final class OperationContextImpl extends AbstractOperationContext {
                             if (targetAttribute == null) {
                                 targetAttribute = createTargetAttribute(authResp, attr, isDefaultResponse);
                             }
-                            authResult = modelController.getAuthorizer().authorize(getCaller(), callEnvironment, action, targetAttribute);
+                            authResult = modelController.getAuthorizer().authorize(getSecurityIdentity(), callEnvironment, action, targetAttribute);
                             authResp.addAttributeResult(attr, actionEffect, authResult);
                         }
                     }
@@ -1474,7 +1494,7 @@ final class OperationContextImpl extends AbstractOperationContext {
                 operation.get(OPERATION_HEADERS).set(activeStep.operation.get(OPERATION_HEADERS));
                 Action targetAction = new Action(operation, operationEntry);
 
-                authResult = modelController.getAuthorizer().authorize(getCaller(), getCallEnvironment(), targetAction, authResp.targetResource);
+                authResult = modelController.getAuthorizer().authorize(getSecurityIdentity(), getCallEnvironment(), targetAction, authResp.targetResource);
                 authResp.addOperationResult(operationName, authResult);
 
                 //When authorizing the 'add' operation, make sure that all the attributes are accessible
@@ -1658,12 +1678,12 @@ final class OperationContextImpl extends AbstractOperationContext {
 
     @Override
     public ServiceName getCapabilityServiceName(String capabilityBaseName, String dynamicPart, Class<?> serviceType) {
-        return getCapabilityServiceName(RuntimeCapability.buildDynamicCapabilityName(capabilityBaseName, dynamicPart), serviceType, activeStep.address);
+        return getCapabilityServiceName(capabilityBaseName, serviceType, dynamicPart);
     }
 
     @Override
     public ServiceName getCapabilityServiceName(String capabilityBaseName, Class<?> serviceType, String ... dynamicParts) {
-        return getCapabilityServiceName(RuntimeCapability.buildDynamicCapabilityName(capabilityBaseName, dynamicParts), serviceType, activeStep.address);
+        return getCapabilityServiceName(capabilityBaseName, serviceType).append(dynamicParts);
     }
 
     ServiceName getCapabilityServiceName(String capabilityName, Class<?> serviceType, final PathAddress address) {
@@ -1784,7 +1804,7 @@ final class OperationContextImpl extends AbstractOperationContext {
                 AuthorizationResult effectResult = authResp.getResourceResult(requiredEffect);
                 if (effectResult == null) {
                     Action action = authResp.standardAction.limitAction(requiredEffect);
-                    effectResult = modelController.getAuthorizer().authorize(getCaller(), getCallEnvironment(), action, authResp.targetResource);
+                    effectResult = modelController.getAuthorizer().authorize(getSecurityIdentity(), getCallEnvironment(), action, authResp.targetResource);
                     authResp.addResourceResult(requiredEffect, effectResult);
                 }
                 if (effectResult.getDecision() == AuthorizationResult.Decision.DENY) {
@@ -1831,7 +1851,7 @@ final class OperationContextImpl extends AbstractOperationContext {
                         AttributeAccess attributeAccess = authResp.targetResource.getResourceRegistration().getAttributeAccess(PathAddress.EMPTY_ADDRESS, attribute);
                         targetAttribute = new TargetAttribute(attribute, attributeAccess, currentValue, authResp.targetResource);
                     }
-                    authResult = modelController.getAuthorizer().authorize(getCaller(), getCallEnvironment(), action, targetAttribute);
+                    authResult = modelController.getAuthorizer().authorize(getSecurityIdentity(), getCallEnvironment(), action, targetAttribute);
                     authResp.addAttributeResult(attribute, actionEffect, authResult);
                 }
                 if (authResult.getDecision() == AuthorizationResult.Decision.DENY) {
@@ -1844,7 +1864,7 @@ final class OperationContextImpl extends AbstractOperationContext {
     }
 
     private AuthorizationResponseImpl getBasicAuthorizationResponse(OperationId opId, ModelNode operation) {
-        Caller caller = getCaller();
+        SecurityIdentity identity = getSecurityIdentity();
         ImmutableManagementResourceRegistration mrr = managementModel.getRootResourceRegistration().getSubModel(opId.address);
         if (mrr == null) {
             return null;
@@ -1875,7 +1895,7 @@ final class OperationContextImpl extends AbstractOperationContext {
 
 
         AuthorizationResponseImpl result = new AuthorizationResponseImpl(action, targetResource);
-        AuthorizationResult simple = modelController.getAuthorizer().authorize(caller, getCallEnvironment(), action, targetResource);
+        AuthorizationResult simple = modelController.getAuthorizer().authorize(identity, getCallEnvironment(), action, targetResource);
         if (simple.getDecision() == AuthorizationResult.Decision.PERMIT) {
             for (Action.ActionEffect actionEffect : action.getActionEffects()) {
                 result.addResourceResult(actionEffect, simple);
@@ -2115,15 +2135,6 @@ final class OperationContextImpl extends AbstractOperationContext {
         @Override
         public <T> CapabilityServiceBuilder<T> addService(final ServiceName name, final Service<T> service) throws IllegalArgumentException {
             return new CapabilityServiceBuilderImpl<>(addServiceValue(name, new ImmediateValue<>(service)), targetAddress);
-        }
-
-        @Override
-        public <T> CapabilityServiceBuilder<T> addCapability(final RuntimeCapability<?> capability, final Service<T> service) throws IllegalArgumentException {
-            if (capability.isDynamicallyNamed()){
-                return addService(capability.getCapabilityServiceName(targetAddress), service);
-            }else{
-                return addService(capability.getCapabilityServiceName(), service);
-            }
         }
 
         @Override
@@ -2630,12 +2641,6 @@ final class OperationContextImpl extends AbstractOperationContext {
         }
 
         @Override
-        public <I> CapabilityServiceBuilder<T> addDependency(ServiceName dependency, Class<I> type, Injector<I> target){
-            super.addDependency(dependency, type, target);
-            return this;
-        }
-
-        @Override
         public CapabilityServiceBuilder<T> setInitialMode(ServiceController.Mode mode) {
             super.setInitialMode(mode);
             return this;
@@ -2649,14 +2654,62 @@ final class OperationContextImpl extends AbstractOperationContext {
 
         @Override
         public <V> Consumer<V> provides(final RuntimeCapability<?>... capabilities) {
-            if (capabilities == null || capabilities.length == 0) return null;
-            final ServiceName[] serviceNames = new ServiceName[capabilities.length];
+            checkNotEmptyParam("capabilities", capabilities);
+            return provides(capabilities, null);
+        }
+
+        @Override
+        public <V> Consumer<V> provides(final RuntimeCapability<?> capability, final ServiceName alias, final ServiceName... aliases) {
+            checkNotNullParam("capability", capability);
+            checkNotNullParam("alias", alias);
+            final int aliasesLength = aliases == null ? 0 : aliases.length;
+            final ServiceName[] serviceNames = new ServiceName[2 + aliasesLength];
+            if (capability.isDynamicallyNamed()) {
+                serviceNames[0] = capability.getCapabilityServiceName(targetAddress);
+            } else {
+                serviceNames[0] = capability.getCapabilityServiceName();
+            }
+            serviceNames[1] = alias;
+            for (int i = 0; i < aliasesLength; i++) {
+                serviceNames[i + 2] = aliases[i];
+            }
+            return super.provides(serviceNames);
+        }
+
+        @Override
+        public <V> Consumer<V> provides(final RuntimeCapability<?>[] capabilities, final ServiceName[] aliases) {
+            if (capabilities == null || capabilities.length == 0) {
+                checkNotEmptyParam("aliases", aliases);
+            }
+
+            if (capabilities == null || capabilities.length == 0) {
+                return super.provides(aliases);
+            }
+
+            if (aliases == null || aliases.length == 0) {
+                final ServiceName[] serviceNames = new ServiceName[capabilities.length];
+                for (int i = 0; i < capabilities.length; i++) {
+                    checkNotNullArrayParam("capabilities", i, capabilities[i]);
+                    if (capabilities[i].isDynamicallyNamed()) {
+                        serviceNames[i] = capabilities[i].getCapabilityServiceName(targetAddress);
+                    } else {
+                        serviceNames[i] = capabilities[i].getCapabilityServiceName();
+                    }
+                }
+                return super.provides(serviceNames);
+            }
+
+            final ServiceName[] serviceNames = new ServiceName[capabilities.length + aliases.length];
             for (int i = 0; i < capabilities.length; i++) {
+                checkNotNullArrayParam("capabilities", i, capabilities[i]);
                 if (capabilities[i].isDynamicallyNamed()) {
                     serviceNames[i] = capabilities[i].getCapabilityServiceName(targetAddress);
                 } else {
                     serviceNames[i] = capabilities[i].getCapabilityServiceName();
                 }
+            }
+            for (int i = 0; i < aliases.length; i++) {
+                serviceNames[i + capabilities.length] = checkNotNullArrayParam("aliases", i, aliases[i]);
             }
             return super.provides(serviceNames);
         }
@@ -2671,12 +2724,6 @@ final class OperationContextImpl extends AbstractOperationContext {
             }
             final ServiceName serviceName = getCapabilityServiceName(capabilityName, dependencyType);
             return requires(serviceName);
-        }
-
-        @Override
-        public <I> CapabilityServiceBuilder<T> addInjection(Injector<? super I> target, I value) {
-            super.addInjection(target, value);
-            return this;
         }
 
         private ServiceName getCapabilityServiceName(String capabilityName, Class<?> serviceType) {

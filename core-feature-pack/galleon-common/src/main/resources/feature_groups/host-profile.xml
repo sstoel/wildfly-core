@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feature-group-spec name="host-profile" xmlns="urn:jboss:galleon:feature-group:1.0">
+    <feature spec="subsystem.core-management"/>
+    <feature spec="subsystem.elytron">
+        <param name="final-providers" value="combined-providers"/>
+        <param name="disallowed-providers" value="[OracleUcrypto]"/>
+        <feature-group name="elytron-common">
+            <include feature-id="subsystem.elytron.file-audit-log:file-audit-log=local-audit">
+                <param name="relative-to" value="jboss.domain.log.dir"/>
+            </include>
+        </feature-group>
+        <feature-group name="elytron-management">
+            <include feature-id="subsystem.elytron.properties-realm:properties-realm=ManagementRealm">
+                <param name="users-properties" value="{path=mgmt-users.properties,relative-to=jboss.domain.config.dir,digest-realm-name=ManagementRealm}"/>
+                <feature spec="subsystem.elytron.properties-realm.groups-properties">
+                    <param name="path" value="mgmt-groups.properties"/>
+                    <param name="relative-to" value="jboss.domain.config.dir"/>
+                </feature>
+            </include>
+            <include feature-id="subsystem.elytron.http-authentication-factory:http-authentication-factory=management-http-authentication">
+                <param name="mechanism-configurations" value="[{mechanism-name=DIGEST,mechanism-realm-configurations=[{realm-name=ManagementRealm}]}]"/>
+            </include>
+            <include feature-id="subsystem.elytron.configurable-sasl-server-factory:configurable-sasl-server-factory=configured">
+                <param name="sasl-server-factory" value="elytron" />
+                <param name="properties" value="{wildfly.sasl.local-user.default-user=&quot;\$local&quot;,wildfly.sasl.local-user.challenge-path=&quot;${jboss.domain.temp.dir}/auth&quot;}" />
+            </include>
+        </feature-group>
+    </feature>
+    <feature-group name="jmx"/>
+</feature-group-spec>

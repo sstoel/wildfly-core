@@ -122,7 +122,7 @@ public interface RemotingLogger extends BasicLogger {
     @Message(id = 25, value = "Can't remove %s as JMX uses it as a remoting endpoint")
     OperationFailedException couldNotRemoveResource(PathAddress address);
 
-    @Message(id = 26, value = "Change of worker to '%s' in remoting might require the same change in resources depending on remoting.")
+    @Message(id = 26, value = "Change of worker to '%s' in remoting might require the same change in linked resources depending on remoting and in definition of http(s) listeners.")
     String warningOnWorkerChange(String worker);
 
     @Message(id = 27, value = "Failed to obtain SSLContext")
@@ -130,4 +130,7 @@ public interface RemotingLogger extends BasicLogger {
 
     @Message(id = 28, value = "Invalid option '%s'.")
     OperationFailedException invalidOption(String message);
+
+    @Message(id = 29, value = "The use of security realms at runtime is unsupported.")
+    OperationFailedException runtimeSecurityRealmUnsupported();
 }

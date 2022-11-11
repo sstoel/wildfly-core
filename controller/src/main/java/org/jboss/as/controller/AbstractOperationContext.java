@@ -78,7 +78,6 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 
 import org.jboss.as.controller.ConfigurationChangesCollector.ConfigurationChange;
-import org.jboss.as.controller.access.Caller;
 import org.jboss.as.controller.access.Environment;
 import org.jboss.as.controller.audit.AuditLogger;
 import org.jboss.as.controller.capability.registry.RuntimeCapabilityRegistry;
@@ -88,6 +87,7 @@ import org.jboss.as.controller.logging.ControllerLogger;
 import org.jboss.as.controller.notification.Notification;
 import org.jboss.as.controller.notification.NotificationSupport;
 import org.jboss.as.controller.operations.common.Util;
+import org.jboss.as.controller.operations.global.ReadResourceHandler;
 import org.jboss.as.controller.persistence.ConfigurationPersistenceException;
 import org.jboss.as.controller.persistence.ConfigurationPersister;
 import org.jboss.as.controller.registry.AttributeAccess;
@@ -162,7 +162,6 @@ abstract class AbstractOperationContext implements OperationContext {
     boolean cancelled;
     /** Currently executing step */
     Step activeStep;
-    Caller caller;
     private final Supplier<SecurityIdentity> securityIdentitySupplier;
     /** Whether operation execution has begun; i.e. whether completeStep() has been called */
     private boolean executing;
@@ -540,6 +539,41 @@ abstract class AbstractOperationContext implements OperationContext {
         return pa.getLastElement().getValue();
     }
 
+    @Override
+    public final String getCurrentOperationName() {
+        assert activeStep != null;
+        ModelNode operation = activeStep.operation;
+
+        assert operation != null;
+        return operation.get(OP).asString();
+    }
+
+    @Override
+    public final ModelNode getCurrentOperationParameter(final String parameterName) {
+        return getCurrentOperationParameter(parameterName, true);
+    }
+
+    @Override
+    public final ModelNode getCurrentOperationParameter(final String parameterName, boolean nullable) {
+        if (isLegalParameterName(parameterName)) {
+            assert activeStep != null;
+            ModelNode operation = activeStep.operation;
+
+            assert operation != null;
+            if (!operation.has(parameterName) && nullable) {
+                return null;
+            } else {
+                return operation.get(parameterName);
+            }
+        } else {
+            throw ControllerLogger.ROOT_LOGGER.invalidParameterName(parameterName);
+        }
+    }
+
+    private boolean isLegalParameterName(final String parameterName) {
+        return !(parameterName.equals(OP) || parameterName.equals(OP_ADDR) || parameterName.equals(OPERATION_HEADERS));
+    }
+
     /**
      * Notification that all steps in a stage have been executed.
      * <p>This default implementation always returns {@code true}.</p>
@@ -623,11 +657,11 @@ abstract class AbstractOperationContext implements OperationContext {
         if (!auditLogged) {
             try {
                 AccessAuditContext accessContext = SecurityActions.currentAccessAuditContext();
-                Caller caller = getCaller();
+                SecurityIdentity identity = getSecurityIdentity();
                 auditLogger.log(
                         isReadOnly(),
                         resultAction,
-                        caller == null ? null : caller.getName(),
+                        identity == null ? null : identity.getPrincipal().getName(),
                         accessContext == null ? null : accessContext.getDomainUuid(),
                         accessContext == null ? null : accessContext.getAccessMechanism(),
                         accessContext == null ? null : accessContext.getRemoteAddress(),
@@ -652,9 +686,9 @@ abstract class AbstractOperationContext implements OperationContext {
         if (!isBooting() && !isReadOnly() && configurationChangesCollector.trackAllowed()) {
             try {
                 AccessAuditContext accessContext = SecurityActions.currentAccessAuditContext();
-                Caller currentCaller = getCaller();
+                SecurityIdentity identity = getSecurityIdentity();
                 configurationChangesCollector.addConfigurationChanges(new ConfigurationChange(resultAction,
-                        currentCaller == null ? null : currentCaller.getName(),
+                        identity == null ? null : identity.getPrincipal().getName(),
                         accessContext == null ? null : accessContext.getDomainUuid(),
                         accessContext == null ? null : accessContext.getAccessMechanism(),
                         accessContext == null ? null : accessContext.getRemoteAddress(),
@@ -946,10 +980,12 @@ abstract class AbstractOperationContext implements OperationContext {
     }
 
     private void addBootFailureDescription() {
-        if (isBooting() && activeStep != null && activeStep.response.hasDefined(FAILURE_DESCRIPTION)) {
+        if (isBootOperation() && activeStep != null && activeStep.response.hasDefined(FAILURE_DESCRIPTION)) {
             controller.addFailureDescription(activeStep.operation.clone(), activeStep.response.get(FAILURE_DESCRIPTION).clone());
         }
     }
+
+    abstract boolean isBootOperation();
 
     private boolean canContinueProcessing() {
 
@@ -976,7 +1012,17 @@ abstract class AbstractOperationContext implements OperationContext {
                 && (isRollbackOnRuntimeFailure() || currentStage == Stage.MODEL || currentStage == Stage.DOMAIN)) {
             activeStep.response.get(OUTCOME).set(FAILED);
             activeStep.response.get(ROLLED_BACK).set(true);
-            resultAction = ResultAction.ROLLBACK;
+
+            // runtime failure description needs to be attached to context to roll back in previous stage.
+            if (isRollbackOnRuntimeFailure() && activeStep.response.hasDefined(FAILURE_DESCRIPTION)) {
+                attach(ReadResourceHandler.ROLLBACKED_FAILURE_DESC, activeStep.response.get(FAILURE_DESCRIPTION));
+            }
+
+            if (getAttachment(ServiceVerificationHelper.DEFFERED_ROLLBACK_ATTACHMENT) == null) {
+                resultAction = ResultAction.ROLLBACK;
+            } else {
+                detach(ServiceVerificationHelper.DEFFERED_ROLLBACK_ATTACHMENT);
+            }
             ControllerLogger.MGMT_OP_LOGGER.tracef("Rolling back on failed response %s to operation %s on address %s in stage %s",
                     activeStep.response, activeStep.operationId.name, activeStep.operationId.address, currentStage);
         } else if (activeStep != null && activeStep.hasFailed()) {
@@ -1262,15 +1308,6 @@ abstract class AbstractOperationContext implements OperationContext {
     }
 
     @Override
-    public Caller getCaller() {
-        // TODO Consider threading but in general no harm in multiple instances being created rather than adding synchronization.
-        Caller response = SecurityActions.getCaller(caller, getSecurityIdentity()); // This allows for a change of SecurityIdentity whilst the same OperationContext is in use.
-        caller = response;
-
-        return response;
-    }
-
-    @Override
     public SecurityIdentity getSecurityIdentity() {
         // We don't cache the result as the identity could be switched mid-call.
         return securityIdentitySupplier.get();
@@ -1304,7 +1341,7 @@ abstract class AbstractOperationContext implements OperationContext {
             return false;
         }
         synchronized (modifiedResourcesForModelValidation) {
-            if (modifiedResourcesForModelValidation.size() == 0) {
+            if (modifiedResourcesForModelValidation.isEmpty()) {
                 return false;
             }
             ModelNode op = Util.createOperation(ValidateModelStepHandler.INTERNAL_MODEL_VALIDATION_NAME, PathAddress.EMPTY_ADDRESS);
@@ -1521,7 +1558,7 @@ abstract class AbstractOperationContext implements OperationContext {
                 }
             } catch (Exception e) {
                 final String failedRollbackMessage =
-                        MGMT_OP_LOGGER.stepHandlerFailedRollback(handler, operation.get(OP).asString(), address, e);
+                        MGMT_OP_LOGGER.stepHandlerFailed(handler, operation.get(OP).asString(), address, e);
                 MGMT_OP_LOGGER.errorf(e, failedRollbackMessage);
                 report(MessageSeverity.ERROR, failedRollbackMessage);
             }

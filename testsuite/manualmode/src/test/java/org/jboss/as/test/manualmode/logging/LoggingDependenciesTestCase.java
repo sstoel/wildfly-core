@@ -35,7 +35,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ServerControl;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  * Create a deployment with dependency to log4j module.
@@ -45,7 +45,7 @@ import org.wildfly.core.testrunner.WildflyTestRunner;
  *
  * @author <a href="mailto:pkremens@redhat.com">Petr Kremensky</a>
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
 public class LoggingDependenciesTestCase extends AbstractLoggingTestCase {
     private static final Logger log = Logger.getLogger(LoggingDependenciesTestCase.class.getName());
@@ -59,6 +59,7 @@ public class LoggingDependenciesTestCase extends AbstractLoggingTestCase {
 
     @After
     public void stopContainer() throws Exception {
+        executeOperation(Operations.createUndefineAttributeOperation(createAddress(), API_DEPENDENCIES));
         // No need to undeploy the deployment should be in error, but check the deployments and undeploy if necessary,
         // for example if the test failed
         final ModelNode op = Operations.createReadResourceOperation(PathAddress.pathAddress("deployment", "*").toModelNode());
@@ -70,14 +71,12 @@ public class LoggingDependenciesTestCase extends AbstractLoggingTestCase {
                 log.warn("Error undeploying", e);
             }
         }
-
-        executeOperation(Operations.createWriteAttributeOperation(createAddress(), API_DEPENDENCIES, true));
         container.stop();
     }
 
     @Test(expected = ServerDeploymentException.class)
     public void disableLoggingDependencies() throws Exception {
-        final JavaArchive archive = createDeployment(Log4jServiceActivator.class, Log4jServiceActivator.DEPENDENCIES);
+        final JavaArchive archive = createDeployment(Log4j2ServiceActivator.class, Log4j2ServiceActivator.DEPENDENCIES);
         // Ensure the log4j deployment can be deployed
         deploy(archive);
         undeploy();

@@ -1,4 +1,4 @@
-/*
+    /*
  * JBoss, Home of Professional Open Source.
  * Copyright 2011, Red Hat, Inc., and individual contributors
  * as indicated by the @author tags. See the copyright.txt file in the
@@ -22,10 +22,12 @@
 
 package org.jboss.as.remoting;
 
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
+import static org.jboss.as.remoting.AbstractOutboundConnectionResourceDefinition.OUTBOUND_CONNECTION_CAPABILITY;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+
+import java.util.function.Consumer;
 
 import org.jboss.as.controller.AbstractAddStepHandler;
 import org.jboss.as.controller.OperationContext;
@@ -35,13 +37,13 @@ import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.remoting.logging.RemotingLogger;
 import org.jboss.dmr.ModelNode;
+import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceName;
-import org.jboss.remoting3.Endpoint;
 import org.wildfly.common.Assert;
-import org.xnio.OptionMap;
 
 /**
  * @author Jaikiran Pai
+ * @author <a href="mailto:ropalka@redhat.com">Richard Opalka</a>
  */
 class GenericOutboundConnectionAdd extends AbstractAddStepHandler {
 
@@ -70,28 +72,27 @@ class GenericOutboundConnectionAdd extends AbstractAddStepHandler {
     protected void performRuntime(OperationContext context, ModelNode operation, Resource resource)
             throws OperationFailedException {
         final ModelNode fullModel = Resource.Tools.readModel(resource);
-        installRuntimeService(context, operation, fullModel);
+        installRuntimeService(context, fullModel);
     }
 
-    void installRuntimeService(final OperationContext context, final ModelNode operation, final ModelNode fullModel) throws OperationFailedException {
+    void installRuntimeService(final OperationContext context, final ModelNode fullModel) throws OperationFailedException {
 
-        final PathAddress pathAddress = PathAddress.pathAddress(operation.require(OP_ADDR));
-        final String connectionName = pathAddress.getLastElement().getValue();
-        final OptionMap connectionCreationOptions = ConnectorUtils.getOptions(context, fullModel.get(CommonAttributes.PROPERTY));
+        final String connectionName = context.getCurrentAddressValue();
 
-
-        //final OptionMap connectionCreationOptions = getConnectionCreationOptions(outboundConnection);
         // Get the destination URI
-        final URI uri = getDestinationURI(context, operation);
+        final URI uri = getDestinationURI(context, fullModel);
+
         // create the service
-        final GenericOutboundConnectionService outboundRemotingConnectionService = new GenericOutboundConnectionService(connectionName, uri, connectionCreationOptions);
-        final ServiceName serviceName = AbstractOutboundConnectionService.OUTBOUND_CONNECTION_BASE_SERVICE_NAME.append(connectionName);
+        final ServiceName serviceName = OUTBOUND_CONNECTION_CAPABILITY.getCapabilityServiceName(connectionName);
         // also add an alias service name to easily distinguish between a generic, remote and local type of connection services
         final ServiceName aliasServiceName = GenericOutboundConnectionService.GENERIC_OUTBOUND_CONNECTION_BASE_SERVICE_NAME.append(connectionName);
-        context.getServiceTarget().addService(serviceName, outboundRemotingConnectionService)
-                .addAliases(aliasServiceName)
-                .addDependency(RemotingServices.SUBSYSTEM_ENDPOINT, Endpoint.class, outboundRemotingConnectionService.getEndpointInjector())
-                .install();
+        final ServiceName deprecatedServiceName = AbstractOutboundConnectionService.OUTBOUND_CONNECTION_BASE_SERVICE_NAME.append(connectionName);
+
+        final ServiceBuilder<?> builder = context.getServiceTarget().addService(serviceName);
+        final Consumer<GenericOutboundConnectionService> serviceConsumer = builder.provides(deprecatedServiceName, aliasServiceName);
+        builder.setInstance(new GenericOutboundConnectionService(serviceConsumer, uri));
+        builder.requires(RemotingServices.SUBSYSTEM_ENDPOINT);
+        builder.install();
     }
 
     URI getDestinationURI(final OperationContext context, final ModelNode outboundConnection) throws OperationFailedException {
@@ -102,4 +103,5 @@ class GenericOutboundConnectionAdd extends AbstractAddStepHandler {
             throw RemotingLogger.ROOT_LOGGER.couldNotCreateURI(uri,e.toString());
         }
     }
+
 }

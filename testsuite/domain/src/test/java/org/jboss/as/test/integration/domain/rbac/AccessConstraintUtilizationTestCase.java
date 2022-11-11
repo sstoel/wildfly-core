@@ -56,8 +56,8 @@ public class AccessConstraintUtilizationTestCase extends AbstractRbacTestCase {
         // Launch the domain
 
         testSupport = SimpleRbacProviderTestSuite.createSupport(AccessConstraintUtilizationTestCase.class.getSimpleName());
-        masterClientConfig = testSupport.getDomainMasterConfiguration();
-        DomainClient domainClient = testSupport.getDomainMasterLifecycleUtil().getDomainClient();
+        primaryClientConfig = testSupport.getDomainPrimaryConfiguration();
+        DomainClient domainClient = testSupport.getDomainPrimaryLifecycleUtil().getDomainClient();
     }
 
     @AfterClass
@@ -110,9 +110,9 @@ public class AccessConstraintUtilizationTestCase extends AbstractRbacTestCase {
         new ExpectedDef(SensitiveTargetAccessConstraintDefinition.READ_WHOLE_CONFIG.getKey(), false, false, true),
         new ExpectedDef(SensitiveTargetAccessConstraintDefinition.SECURITY_DOMAIN.getKey(), true, false, false),
         new ExpectedDef(SensitiveTargetAccessConstraintDefinition.SECURITY_DOMAIN_REF.getKey(), false, true, false),
-        new ExpectedDef(SensitiveTargetAccessConstraintDefinition.SECURITY_REALM.getKey(), true, false, false),
-        new ExpectedDef(SensitiveTargetAccessConstraintDefinition.SECURITY_REALM_REF.getKey(), false, true, false),
-        new ExpectedDef(SensitiveTargetAccessConstraintDefinition.SECURITY_VAULT.getKey(), true, false, false),
+        //new ExpectedDef(SensitiveTargetAccessConstraintDefinition.SECURITY_REALM.getKey(), true, false, false),
+        //new ExpectedDef(SensitiveTargetAccessConstraintDefinition.SECURITY_REALM_REF.getKey(), false, true, false),
+        //new ExpectedDef(SensitiveTargetAccessConstraintDefinition.SECURITY_VAULT.getKey(), true, false, false),
         new ExpectedDef(SensitiveTargetAccessConstraintDefinition.SERVER_SSL.getKey(), true, false, false),
         new ExpectedDef(SensitiveTargetAccessConstraintDefinition.SSL_REF.getKey(), false, true, false),
         /* N/A in domain
@@ -149,7 +149,7 @@ public class AccessConstraintUtilizationTestCase extends AbstractRbacTestCase {
 
     @Test
     public void testConstraintUtilization() throws Exception {
-        ModelControllerClient client = testSupport.getDomainMasterLifecycleUtil().getDomainClient();
+        ModelControllerClient client = testSupport.getDomainPrimaryLifecycleUtil().getDomainClient();
         for (ExpectedDef expectedDef : EXPECTED_DEFS) {
             AccessConstraintKey acdKey = expectedDef.key;
             String constraint = ModelDescriptionConstants.SENSITIVE.equals(acdKey.getType())

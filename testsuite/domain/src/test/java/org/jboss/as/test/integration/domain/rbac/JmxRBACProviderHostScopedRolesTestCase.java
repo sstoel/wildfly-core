@@ -33,14 +33,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -50,7 +45,7 @@ import javax.management.MBeanServerConnection;
 import javax.management.ObjectName;
 import javax.management.remote.JMXServiceURL;
 
-import org.apache.commons.lang.ArrayUtils;
+import org.apache.commons.lang3.ArrayUtils;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.client.helpers.Operations;
@@ -68,7 +63,6 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 //import org.junit.Ignore;
 import org.junit.Test;
-import org.wildfly.security.sasl.util.UsernamePasswordHashUtil;
 import org.wildfly.test.jmx.JMXServiceDeploymentSetupTask;
 
 /**
@@ -80,39 +74,33 @@ import org.wildfly.test.jmx.JMXServiceDeploymentSetupTask;
 public class JmxRBACProviderHostScopedRolesTestCase extends AbstractHostScopedRolesTestCase {
     private static JMXServiceDeploymentSetupTask jmxTask = new JMXServiceDeploymentSetupTask();
     public static final String  OBJECT_NAME = "jboss.test:service=testdeployments";
-    private static final String SLAVE_HOST_USER = "SlaveHostSuperUser";
-    private static final String SLAVE_HOST_ROLE = "SlaveHostSuperUser";
+    private static final String SECONDARY_HOST_USER = "SecondaryHostSuperUser";
+    private static final String SECONDARY_HOST_ROLE = "SecondaryHostSuperUser";
     private boolean mbeanSensitivity = true;
 
     @BeforeClass
     public static void setupDomain() throws Exception {
         testSupport = FullRbacProviderTestSuite.createSupport(JmxRBACProviderHostScopedRolesTestCase.class.getSimpleName());
-        masterClientConfig = testSupport.getDomainMasterConfiguration();
-        DomainClient domainClient = testSupport.getDomainMasterLifecycleUtil().getDomainClient();
+        primaryClientConfig = testSupport.getDomainPrimaryConfiguration();
+        DomainClient domainClient = testSupport.getDomainPrimaryLifecycleUtil().getDomainClient();
         setupRoles(domainClient);
         setNonCoreMbeanSensitivity(domainClient, true);
         ServerGroupRolesMappingSetup.INSTANCE.setup(domainClient);
         deployDeployment1(domainClient);
         jmxTask.setup(domainClient, SERVER_GROUP_A);
-        List<String> users = new ArrayList<String>(USERS.length);
-        for (int i = 0; i < USERS.length; i++) {
-            users.add(USERS[i] + "=" + new UsernamePasswordHashUtil().generateHashedHexURP(USERS[i], "ApplicationRealm", RbacAdminCallbackHandler.STD_PASSWORD.toCharArray()));
-        }
-        users.add(SLAVE_HOST_USER + "=" + new UsernamePasswordHashUtil().generateHashedHexURP(SLAVE_HOST_USER, "ApplicationRealm", RbacAdminCallbackHandler.STD_PASSWORD.toCharArray()));
-        Files.write((new File(masterClientConfig.getJbossHome()).toPath().resolve("domain").resolve("configuration").resolve("application-users.properties")), users, Charset.forName("UTF-8"));
     }
 
     protected static void setupRoles(DomainClient domainClient) throws IOException {
         AbstractHostScopedRolesTestCase.setupRoles(domainClient);
-        ModelNode op = createOpNode(SCOPED_ROLE + SLAVE_HOST_ROLE, ADD);
+        ModelNode op = createOpNode(SCOPED_ROLE + SECONDARY_HOST_ROLE, ADD);
         op.get(BASE_ROLE).set(RbacUtil.SUPERUSER_USER);
-        op.get(HOSTS).add(SLAVE);
+        op.get(HOSTS).add(SECONDARY);
         RbacUtil.executeOperation(domainClient, op, Outcome.SUCCESS);
     }
 
     protected static void tearDownRoles(DomainClient domainClient) throws IOException {
         AbstractHostScopedRolesTestCase.tearDownRoles(domainClient);
-        ModelNode op = createOpNode(SCOPED_ROLE + SLAVE_HOST_ROLE, REMOVE);
+        ModelNode op = createOpNode(SCOPED_ROLE + SECONDARY_HOST_ROLE, REMOVE);
         RbacUtil.executeOperation(domainClient, op, Outcome.SUCCESS);
     }
 
@@ -132,17 +120,17 @@ public class JmxRBACProviderHostScopedRolesTestCase extends AbstractHostScopedRo
     @After
     public void activateMBeanSensitivity() throws IOException {
         mbeanSensitivity = true;
-        setNonCoreMbeanSensitivity(testSupport.getDomainMasterLifecycleUtil().getDomainClient(), true);
+        setNonCoreMbeanSensitivity(testSupport.getDomainPrimaryLifecycleUtil().getDomainClient(), true);
     }
 
     protected void deactivateMBeanSensitivity() throws IOException {
         mbeanSensitivity = false;
-        setNonCoreMbeanSensitivity(testSupport.getDomainMasterLifecycleUtil().getDomainClient(), false);
+        setNonCoreMbeanSensitivity(testSupport.getDomainPrimaryLifecycleUtil().getDomainClient(), false);
     }
 
     @AfterClass
     public static void tearDownDomain() throws Exception {
-        DomainClient domainClient = testSupport.getDomainMasterLifecycleUtil().getDomainClient();
+        DomainClient domainClient = testSupport.getDomainPrimaryLifecycleUtil().getDomainClient();
         try {
             ServerGroupRolesMappingSetup.INSTANCE.tearDown(domainClient);
         } finally {
@@ -208,8 +196,8 @@ public class JmxRBACProviderHostScopedRolesTestCase extends AbstractHostScopedRo
 
 
     @Test
-    public void testSlaveSuperUser() throws Exception {
-        test(SLAVE_HOST_USER);
+    public void testSecondarySuperUser() throws Exception {
+        test(SECONDARY_HOST_USER);
     }
 
     protected boolean isReadAllowed(String userName) {
@@ -246,7 +234,7 @@ public class JmxRBACProviderHostScopedRolesTestCase extends AbstractHostScopedRo
 
     private void test(String userName) throws Exception {
         String urlString = System.getProperty("jmx.service.url", "service:jmx:remoting-jmx://"
-                        + NetworkUtils.formatPossibleIpv6Address(masterClientConfig.getHostControllerManagementAddress()) + ":12345");
+                        + NetworkUtils.formatPossibleIpv6Address(primaryClientConfig.getHostControllerManagementAddress()) + ":12345");
         JmxManagementInterface jmx = JmxManagementInterface.create(new JMXServiceURL(urlString),
                 userName, RbacAdminCallbackHandler.STD_PASSWORD,
                 null // not needed, as the only thing from JmxManagementInterface used in this test is getConnection()
@@ -372,7 +360,7 @@ public class JmxRBACProviderHostScopedRolesTestCase extends AbstractHostScopedRo
             rolesToUsers.put(ADMINISTRATOR_USER, Collections.singleton(ADMINISTRATOR_USER));
             rolesToUsers.put(AUDITOR_USER, Collections.singleton(AUDITOR_USER));
             rolesToUsers.put(SUPERUSER_USER, Collections.singleton(SUPERUSER_USER));
-            rolesToUsers.put(SLAVE_HOST_ROLE, Collections.singleton(SLAVE_HOST_USER));
+            rolesToUsers.put(SECONDARY_HOST_ROLE, Collections.singleton(SECONDARY_HOST_USER));
             STANDARD_USERS = rolesToUsers;
         }
 

@@ -1,5 +1,5 @@
 <!-- for needs of LdapTestCase -->
-<subsystem xmlns="urn:wildfly:elytron:8.0" initial-providers="elytron">
+<subsystem xmlns="urn:wildfly:elytron:16.0" initial-providers="elytron">
    <authentication-client>
       <authentication-configuration name="ldapAuthConfig" authentication-name="uid=server,dc=users,dc=elytron,dc=wildfly,dc=org">
          <credential-reference clear-text="serverPassword"/>
@@ -43,6 +43,29 @@
          <identity-mapping filter-name="(|(objectclass=referral)(uid={0}))" iterator-filter="(uid=*)" new-identity-parent-dn="dc=users,dc=elytron,dc=wildfly,dc=org" rdn-identifier="uid" search-base-dn="dc=users,dc=elytron,dc=wildfly,dc=org" use-recursive-search="true">
          </identity-mapping>
       </ldap-realm>
+      <ldap-realm name="LdapRealmCharset" dir-context="DirContextSsl" hash-charset="GB2312">
+         <identity-mapping filter-name="(|(objectclass=referral)(uid={0}))" iterator-filter="(|(objectclass=referral)(uid=*))" new-identity-parent-dn="dc=users,dc=elytron,dc=wildfly,dc=org" rdn-identifier="uid" search-base-dn="dc=users,dc=elytron,dc=wildfly,dc=org" use-recursive-search="true" >
+            <attribute-mapping>
+               <attribute to="userDn"/>
+               <attribute from="uid" to="userName"/>
+               <attribute from="cn" to="firstName"/>
+               <attribute from="sn"/>
+            </attribute-mapping>
+            <user-password-mapper from="userPassword" writable="true"/>
+         </identity-mapping>
+      </ldap-realm>
+
+      <ldap-realm name="LdapRealmEncodingCharset" dir-context="DirContextSsl" hash-charset="GB2312" hash-encoding="hex">
+         <identity-mapping filter-name="(|(objectclass=referral)(uid={0}))" iterator-filter="(|(objectclass=referral)(uid=*))" new-identity-parent-dn="dc=users,dc=elytron,dc=wildfly,dc=org" rdn-identifier="uid" search-base-dn="dc=users,dc=elytron,dc=wildfly,dc=org" use-recursive-search="true" >
+            <attribute-mapping>
+               <attribute to="userDn"/>
+               <attribute from="uid" to="userName"/>
+               <attribute from="cn" to="firstName"/>
+               <attribute from="sn"/>
+            </attribute-mapping>
+            <user-password-mapper from="userPassword" writable="true"/>
+         </identity-mapping>
+      </ldap-realm>
    </security-realms>
    <tls>
       <key-stores>
@@ -64,6 +87,11 @@
             <attribute-mapping alias-attribute="sn" certificate-attribute="usercertificate" certificate-chain-attribute="userSMIMECertificate" certificate-chain-encoding="PKCS7" certificate-type="X.509"/>
          </ldap-key-store>
       </key-stores>
+      <key-managers>
+         <key-manager name="LdapKeyManager" key-store="LdapKeyStoreMaximal">
+            <credential-reference clear-text="Elytron"/>
+         </key-manager>
+      </key-managers>
       <trust-managers>
          <trust-manager key-store="ElytronCaTruststore" name="ElytronTrustManager"/>
       </trust-managers>

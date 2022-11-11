@@ -73,7 +73,6 @@ import org.jboss.as.controller.RunningMode;
 import org.jboss.as.controller.access.Action;
 import org.jboss.as.controller.access.Action.ActionEffect;
 import org.jboss.as.controller.access.AuthorizationResult;
-import org.jboss.as.controller.access.Caller;
 import org.jboss.as.controller.access.Environment;
 import org.jboss.as.controller.access.ResourceAuthorization;
 import org.jboss.as.controller.capability.CapabilityServiceSupport;
@@ -225,6 +224,21 @@ public abstract class AbstractOperationTestCase {
         @Override
         public PathAddress getCurrentAddress() {
             return operationAddress;
+        }
+
+        @Override
+        public final String getCurrentOperationName() {
+            return null;
+        }
+
+        @Override
+        public final ModelNode getCurrentOperationParameter(final String parameterName) {
+            return null;
+        }
+
+        @Override
+        public final ModelNode getCurrentOperationParameter(final String parameterName, boolean nullable) {
+            return null;
         }
 
         @Override
@@ -611,11 +625,6 @@ public abstract class AbstractOperationTestCase {
                     return AuthorizationResult.PERMITTED;
                 }
             };
-        }
-
-        @Override
-        public Caller getCaller() {
-            return null;
         }
 
         @Override

@@ -83,53 +83,53 @@ public class WildcardOperationsTestCase {
     private static final PathElement SYS_PROP_ELEMENT = PathElement.pathElement(SYSTEM_PROPERTY, "wildcard-composite-op");
 
     private static DomainTestSupport testSupport;
-    private static DomainLifecycleUtil domainMasterLifecycleUtil;
+    private static DomainLifecycleUtil domainPrimaryLifecycleUtil;
 
     @BeforeClass
     public static void setupDomain() throws Exception {
         testSupport = DomainTestSuite.createSupport(WildcardOperationsTestCase.class.getSimpleName());
-        domainMasterLifecycleUtil = testSupport.getDomainMasterLifecycleUtil();
+        domainPrimaryLifecycleUtil = testSupport.getDomainPrimaryLifecycleUtil();
     }
 
     @AfterClass
     public static void tearDownDomain() throws Exception {
         testSupport = null;
-        domainMasterLifecycleUtil = null;
+        domainPrimaryLifecycleUtil = null;
         DomainTestSuite.stopSupport();
     }
 
     @After
     public void cleanup() throws IOException {
         ModelNode op = Util.createRemoveOperation(PathAddress.pathAddress(SYS_PROP_ELEMENT));
-        domainMasterLifecycleUtil.getDomainClient().execute(op);
+        domainPrimaryLifecycleUtil.getDomainClient().execute(op);
     }
 
     @Test
     public void testBasicWildcardOperations() throws IOException, MgmtOperationException {
         // host=*
         PathAddress hosts = PathAddress.pathAddress(HOST, WILDCARD);
-        executeReadResource(hosts.toModelNode(), domainMasterLifecycleUtil.getDomainClient());
-        executeReadResourceDescription(hosts.toModelNode(), domainMasterLifecycleUtil.getDomainClient());
+        executeReadResource(hosts.toModelNode(), domainPrimaryLifecycleUtil.getDomainClient());
+        executeReadResourceDescription(hosts.toModelNode(), domainPrimaryLifecycleUtil.getDomainClient());
 
         // host=*,server=*
         PathAddress servers = hosts.append(RUNNING_SERVER, WILDCARD);
-        executeReadResource(servers.toModelNode(), domainMasterLifecycleUtil.getDomainClient());
+        executeReadResource(servers.toModelNode(), domainPrimaryLifecycleUtil.getDomainClient());
         ServerWildcardChecker serverChecker = new ServerWildcardChecker(servers);
-        executeReadResourceDescription(servers.toModelNode(), domainMasterLifecycleUtil.getDomainClient(), serverChecker);
+        executeReadResourceDescription(servers.toModelNode(), domainPrimaryLifecycleUtil.getDomainClient(), serverChecker);
         Assert.assertTrue(serverChecker.seenWildcardServer);
         Assert.assertTrue(1 < serverChecker.nonWildcardServers);
 
 
         // host=*,server=*,subsystem=*
         PathAddress subsystems = servers.append(SUBSYSTEM, WILDCARD);
-        executeReadResource(subsystems.toModelNode(), domainMasterLifecycleUtil.getDomainClient());
-        executeReadResourceDescription(subsystems.toModelNode(), domainMasterLifecycleUtil.getDomainClient());
+        executeReadResource(subsystems.toModelNode(), domainPrimaryLifecycleUtil.getDomainClient());
+        executeReadResourceDescription(subsystems.toModelNode(), domainPrimaryLifecycleUtil.getDomainClient());
 
         // host=*,server=*,interface=* (the resource definition here is actually against interface=* unlike the above)
         PathAddress interfaces = servers.append(INTERFACE, WILDCARD);
-        executeReadResource(interfaces.toModelNode(), domainMasterLifecycleUtil.getDomainClient());
+        executeReadResource(interfaces.toModelNode(), domainPrimaryLifecycleUtil.getDomainClient());
         WildcardRegistrationChecker interfaceChecker = new WildcardRegistrationChecker(INTERFACE);
-        executeReadResourceDescription(interfaces.toModelNode(), domainMasterLifecycleUtil.getDomainClient(), interfaceChecker);
+        executeReadResourceDescription(interfaces.toModelNode(), domainPrimaryLifecycleUtil.getDomainClient(), interfaceChecker);
     }
 
     @Test
@@ -137,12 +137,12 @@ public class WildcardOperationsTestCase {
         PathAddress servers = PathAddress.pathAddress(HOST, WILDCARD).append(RUNNING_SERVER, WILDCARD);
 
         PathAddress publicInterface = servers.append(INTERFACE, "public");
-        executeReadResource(publicInterface.toModelNode(), domainMasterLifecycleUtil.getDomainClient());
-        executeReadResourceDescription(publicInterface.toModelNode(), domainMasterLifecycleUtil.getDomainClient());
+        executeReadResource(publicInterface.toModelNode(), domainPrimaryLifecycleUtil.getDomainClient());
+        executeReadResourceDescription(publicInterface.toModelNode(), domainPrimaryLifecycleUtil.getDomainClient());
 
         PathAddress jmxSubsystem = servers.append(SUBSYSTEM, "jmx");
-        executeReadResource(jmxSubsystem.toModelNode(), domainMasterLifecycleUtil.getDomainClient());
-        executeReadResourceDescription(jmxSubsystem.toModelNode(), domainMasterLifecycleUtil.getDomainClient());
+        executeReadResource(jmxSubsystem.toModelNode(), domainPrimaryLifecycleUtil.getDomainClient());
+        executeReadResourceDescription(jmxSubsystem.toModelNode(), domainPrimaryLifecycleUtil.getDomainClient());
     }
 
     @Test
@@ -171,8 +171,8 @@ public class WildcardOperationsTestCase {
         final ModelNode address = new ModelNode();
         address.setEmptyList();
 
-        // Mix in a non-widlcard remote slave op
-        address.add(HOST, "slave");
+        // Mix in a non-widlcard remote secondary op
+        address.add(HOST, "secondary");
         steps.add().set(createReadResourceOperation(address));
 
         address.setEmptyList();
@@ -195,7 +195,7 @@ public class WildcardOperationsTestCase {
         address.setEmptyList();
 
         // Mix in a non-wildcard remote server op
-        address.add(HOST, "master").add(RUNNING_SERVER, "main-one");
+        address.add(HOST, "primary").add(RUNNING_SERVER, "main-one");
         steps.add().set(createReadResourceOperation(address));
 
         // Now repeat the whole thing, but nested
@@ -211,8 +211,8 @@ public class WildcardOperationsTestCase {
 
         address.setEmptyList();
 
-        // Mix in a non-wildcard remote slave op
-        address.add(HOST, "slave");
+        // Mix in a non-wildcard remote secondary op
+        address.add(HOST, "secondary");
         nestedSteps.add().set(createReadResourceOperation(address));
 
         address.setEmptyList();
@@ -235,10 +235,10 @@ public class WildcardOperationsTestCase {
         address.setEmptyList();
 
         // Mix in a non-wildcard remote server op
-        address.add(HOST, "master").add(RUNNING_SERVER, "main-one");
+        address.add(HOST, "primary").add(RUNNING_SERVER, "main-one");
         nestedSteps.add().set(createReadResourceOperation(address));
 
-        final ModelNode response = domainMasterLifecycleUtil.getDomainClient().execute(composite);
+        final ModelNode response = domainPrimaryLifecycleUtil.getDomainClient().execute(composite);
         assertEquals(response.toString(), SUCCESS, response.get(OUTCOME).asString());
         assertTrue(response.toString(), response.hasDefined(RESULT));
         if (readonly) {
@@ -275,7 +275,7 @@ public class WildcardOperationsTestCase {
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(MANAGEMENT_MAJOR_VERSION));
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(RUNNING_SERVER));
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(DIRECTORY_GROUPING));
-                    assertEquals(property.getName() + " result " + itemResult, "slave", itemResult.get(NAME).asString());
+                    assertEquals(property.getName() + " result " + itemResult, "secondary", itemResult.get(NAME).asString());
                     break;
                 case 2:
                 case 3:
@@ -309,7 +309,7 @@ public class WildcardOperationsTestCase {
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(MANAGEMENT_MAJOR_VERSION));
                     assertTrue(property.getName() + " result " + itemResult, itemResult.hasDefined(SUBSYSTEM));
                     assertEquals(property.getName() + " result " + itemResult, "main-one", itemResult.get(NAME).asString());
-                    assertEquals(property.getName() + " result " + itemResult, "master", itemResult.get(HOST).asString());
+                    assertEquals(property.getName() + " result " + itemResult, "primary", itemResult.get(HOST).asString());
                     break;
                 case 9:
                     if (allowNested) {
@@ -358,7 +358,7 @@ public class WildcardOperationsTestCase {
     private void readOperationDescriptionTest(String opName, PathAddress pa) throws IOException, MgmtOperationException {
         ModelNode op = Util.createEmptyOperation(READ_OPERATION_DESCRIPTION_OPERATION, pa);
         op.get(NAME).set(opName);
-        DomainTestUtils.executeForResult(op, domainMasterLifecycleUtil.getDomainClient());
+        DomainTestUtils.executeForResult(op, domainPrimaryLifecycleUtil.getDomainClient());
     }
 
     static ModelNode executeReadResource(final ModelNode address, final ModelControllerClient client) throws IOException, MgmtOperationException {

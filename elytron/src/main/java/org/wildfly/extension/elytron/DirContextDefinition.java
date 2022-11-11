@@ -18,6 +18,8 @@
 
 package org.wildfly.extension.elytron;
 
+import static org.jboss.as.controller.security.CredentialReference.handleCredentialReferenceUpdate;
+import static org.jboss.as.controller.security.CredentialReference.rollbackCredentialStoreUpdate;
 import static org.wildfly.extension.elytron.Capabilities.AUTHENTICATION_CONTEXT_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.DIR_CONTEXT_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.DIR_CONTEXT_RUNTIME_CAPABILITY;
@@ -45,6 +47,7 @@ import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.operations.validation.EnumValidator;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.OperationEntry;
+import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.controller.security.CredentialReference;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
@@ -103,9 +106,9 @@ class DirContextDefinition extends SimpleResourceDefinition {
             .build();
 
     static final SimpleAttributeDefinition REFERRAL_MODE = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.REFERRAL_MODE, ModelType.STRING, true)
-            .setDefaultValue(new ModelNode(ReferralMode.IGNORE.name()))
-            .setAllowedValues(ReferralMode.FOLLOW.name(), ReferralMode.IGNORE.name(), ReferralMode.THROW.name())
-            .setValidator(EnumValidator.create(ReferralMode.class, true, true))
+            .setDefaultValue(new ModelNode(ReferralMode.IGNORE.toString()))
+            .setAllowedValues(ReferralMode.FOLLOW.toString(), ReferralMode.IGNORE.toString(), ReferralMode.THROW.toString())
+            .setValidator(EnumValidator.create(ReferralMode.class))
             .setAllowExpression(true)
             .setRestartAllServices()
             .build();
@@ -227,6 +230,11 @@ class DirContextDefinition extends SimpleResourceDefinition {
     }
 
     private static final AbstractAddStepHandler ADD = new BaseAddHandler(DIR_CONTEXT_RUNTIME_CAPABILITY, ATTRIBUTES) {
+        protected void populateModel(final OperationContext context, final ModelNode operation, final Resource resource) throws  OperationFailedException {
+            super.populateModel(context, operation, resource);
+            handleCredentialReferenceUpdate(context, resource.getModel());
+        }
+
         protected void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model) throws OperationFailedException {
 
             RuntimeCapability<Void> runtimeCapability = DIR_CONTEXT_RUNTIME_CAPABILITY.fromBaseCapability(context.getCurrentAddressValue());
@@ -260,6 +268,10 @@ class DirContextDefinition extends SimpleResourceDefinition {
             serviceBuilder
                     .setInitialMode(ServiceController.Mode.ACTIVE)
                     .install();
+        }
+
+        protected void rollbackRuntime(OperationContext context, final ModelNode operation, final Resource resource) {
+            rollbackCredentialStoreUpdate(CREDENTIAL_REFERENCE, context, resource);
         }
     };
 

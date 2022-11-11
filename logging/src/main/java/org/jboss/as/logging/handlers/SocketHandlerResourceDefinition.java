@@ -51,7 +51,6 @@ import org.jboss.as.controller.operations.validation.EnumValidator;
 import org.jboss.as.controller.registry.AttributeAccess;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.transform.description.ResourceTransformationDescriptionBuilder;
-import org.jboss.as.logging.CommonAttributes;
 import org.jboss.as.logging.ElementAttributeMarshaller;
 import org.jboss.as.logging.KnownModelVersion;
 import org.jboss.as.logging.Logging;
@@ -93,7 +92,7 @@ public class SocketHandlerResourceDefinition extends TransformerResourceDefiniti
             .setDefaultValue(ModelNode.FALSE)
             .build();
 
-    public static final SimpleAttributeDefinition FILTER_SPEC = SimpleAttributeDefinitionBuilder.create(CommonAttributes.FILTER_SPEC)
+    public static final SimpleAttributeDefinition FILTER_SPEC = SimpleAttributeDefinitionBuilder.create(AbstractHandlerDefinition.FILTER_SPEC)
             .setAlternatives(new String[0])
             .build();
 
@@ -186,7 +185,7 @@ public class SocketHandlerResourceDefinition extends TransformerResourceDefiniti
         }
 
         @Override
-        protected OperationStepHandler afterCommit(final LogContextConfiguration logContextConfiguration, final ModelNode model) {
+        protected OperationStepHandler afterPrepare(final LogContextConfiguration logContextConfiguration, final ModelNode model) {
             return new OperationStepHandler() {
                 @Override
                 public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {
@@ -198,7 +197,6 @@ public class SocketHandlerResourceDefinition extends TransformerResourceDefiniti
                     final boolean blockOnReconnect = BLOCK_ON_RECONNECT.resolveModelAttribute(context, model).asBoolean();
                     final boolean enabled = ENABLED.resolveModelAttribute(context, model).asBoolean();
 
-                    final DelayedHandler delayedHandler = (DelayedHandler) configuration.getInstance();
                     final String socketBindingName = OUTBOUND_SOCKET_BINDING_REF.resolveModelAttribute(context, model).asString();
                     final ModelNode sslContextRef = SSL_CONTEXT.resolveModelAttribute(context, model);
 
@@ -239,6 +237,7 @@ public class SocketHandlerResourceDefinition extends TransformerResourceDefiniti
                         public synchronized void start(final StartContext context) {
                             final ClientSocketFactory clientSocketFactory = new WildFlyClientSocketFactory(socketBindingManager.get(),
                                     outboundSocketBinding.get(), sslContext.get(), name);
+                            final DelayedHandler delayedHandler = (DelayedHandler) configuration.getInstance();
                             delayedHandler.setCloseChildren(true);
                             final SocketHandler socketHandler = new SocketHandler(clientSocketFactory, protocol);
                             socketHandler.setAutoFlush(autoflush);
@@ -354,8 +353,8 @@ public class SocketHandlerResourceDefinition extends TransformerResourceDefiniti
         }
 
         @Override
-        protected OperationStepHandler afterCommit(final LogContextConfiguration logContextConfiguration,
-                                                   final String attributeName, final ModelNode resolvedValue, final ModelNode currentValue) {
+        protected OperationStepHandler afterPrepare(final LogContextConfiguration logContextConfiguration,
+                                                    final String attributeName, final ModelNode resolvedValue, final ModelNode currentValue) {
             return new OperationStepHandler() {
                 @Override
                 public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {

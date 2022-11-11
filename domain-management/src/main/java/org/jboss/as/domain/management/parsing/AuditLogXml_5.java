@@ -57,12 +57,12 @@ import org.jboss.as.domain.management.audit.AuditLogLoggerResourceDefinition;
 import org.jboss.as.domain.management.audit.FileAuditLogHandlerResourceDefinition;
 import org.jboss.as.domain.management.audit.InMemoryAuditLogHandlerResourceDefinition;
 import org.jboss.as.domain.management.audit.JsonAuditLogFormatterResourceDefinition;
+import org.jboss.as.domain.management.audit.KeystoreAttributes;
 import org.jboss.as.domain.management.audit.PeriodicRotatingFileAuditLogHandlerResourceDefinition;
 import org.jboss.as.domain.management.audit.SizeRotatingFileAuditLogHandlerResourceDefinition;
 import org.jboss.as.domain.management.audit.SyslogAuditLogHandlerResourceDefinition;
 import org.jboss.as.domain.management.audit.SyslogAuditLogProtocolResourceDefinition;
 import org.jboss.as.domain.management.logging.DomainManagementLogger;
-import org.jboss.as.domain.management.security.KeystoreAttributes;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
@@ -682,7 +682,7 @@ final class AuditLogXml_5 implements AuditLogXml {
     public void writeAuditLog(XMLExtendedStreamWriter writer, ModelNode auditLog) throws XMLStreamException {
         writer.writeStartElement(Element.AUDIT_LOG.getLocalName());
 
-        if (auditLog.hasDefined(ModelDescriptionConstants.JSON_FORMATTER) && auditLog.get(ModelDescriptionConstants.JSON_FORMATTER).keys().size() > 0) {
+        if (auditLog.hasDefined(ModelDescriptionConstants.JSON_FORMATTER) && !auditLog.get(ModelDescriptionConstants.JSON_FORMATTER).keys().isEmpty()) {
             writer.writeStartElement(Element.FORMATTERS.getLocalName());
             for (Property prop : auditLog.get(ModelDescriptionConstants.JSON_FORMATTER).asPropertyList()) {
                 writer.writeStartElement(Element.JSON_FORMATTER.getLocalName());
@@ -699,10 +699,10 @@ final class AuditLogXml_5 implements AuditLogXml {
         }
 
 
-        if ((auditLog.hasDefined(ModelDescriptionConstants.FILE_HANDLER) && auditLog.get(ModelDescriptionConstants.FILE_HANDLER).keys().size() > 0) ||
-                (auditLog.hasDefined(ModelDescriptionConstants.SYSLOG_HANDLER) && auditLog.get(ModelDescriptionConstants.SYSLOG_HANDLER).keys().size() > 0) ||
-                (auditLog.hasDefined(ModelDescriptionConstants.SIZE_ROTATING_FILE_HANDLER) && auditLog.get(ModelDescriptionConstants.SIZE_ROTATING_FILE_HANDLER).keys().size() > 0) ||
-                (auditLog.hasDefined(ModelDescriptionConstants.PERIODIC_ROTATING_FILE_HANDLER) && auditLog.get(ModelDescriptionConstants.PERIODIC_ROTATING_FILE_HANDLER).keys().size() > 0) ||
+        if ((auditLog.hasDefined(ModelDescriptionConstants.FILE_HANDLER) && !auditLog.get(ModelDescriptionConstants.FILE_HANDLER).keys().isEmpty()) ||
+                (auditLog.hasDefined(ModelDescriptionConstants.SYSLOG_HANDLER) && !auditLog.get(ModelDescriptionConstants.SYSLOG_HANDLER).keys().isEmpty()) ||
+                (auditLog.hasDefined(ModelDescriptionConstants.SIZE_ROTATING_FILE_HANDLER) && !auditLog.get(ModelDescriptionConstants.SIZE_ROTATING_FILE_HANDLER).keys().isEmpty()) ||
+                (auditLog.hasDefined(ModelDescriptionConstants.PERIODIC_ROTATING_FILE_HANDLER) && !auditLog.get(ModelDescriptionConstants.PERIODIC_ROTATING_FILE_HANDLER).keys().isEmpty()) ||
                 (auditLog.hasDefined(ModelDescriptionConstants.IN_MEMORY_HANDLER) && !auditLog.get(ModelDescriptionConstants.IN_MEMORY_HANDLER).keys().isEmpty())) {
             writer.writeStartElement(Element.HANDLERS.getLocalName());
             if (auditLog.hasDefined(ModelDescriptionConstants.FILE_HANDLER)) {
@@ -778,7 +778,7 @@ final class AuditLogXml_5 implements AuditLogXml {
             AuditLogLoggerResourceDefinition.LOG_BOOT.marshallAsAttribute(config, writer);
             AuditLogLoggerResourceDefinition.LOG_READ_ONLY.marshallAsAttribute(config, writer);
             AuditLogLoggerResourceDefinition.ENABLED.marshallAsAttribute(config, writer);
-            if (config.hasDefined(ModelDescriptionConstants.HANDLER) && config.get(ModelDescriptionConstants.HANDLER).keys().size() > 0) {
+            if (config.hasDefined(ModelDescriptionConstants.HANDLER) && !config.get(ModelDescriptionConstants.HANDLER).keys().isEmpty()) {
                 writer.writeStartElement(Element.HANDLERS.getLocalName());
                 for (String name : config.get(ModelDescriptionConstants.HANDLER).keys()) {
                     writer.writeStartElement(Element.HANDLER.getLocalName());

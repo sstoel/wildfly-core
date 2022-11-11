@@ -37,7 +37,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.logging.Level;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
@@ -57,10 +57,10 @@ import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ManagementClient;
 import org.wildfly.core.testrunner.ServerController;
 import org.wildfly.core.testrunner.ServerSetup;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 @ServerSetup({OperationWarningTestCase.SetupExtensions.class,OperationWarningTestCase.SetupWorkers.class})
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 public class OperationWarningTestCase extends AbstractMgmtTestBase {
     @Inject
     private static ServerController serverController;

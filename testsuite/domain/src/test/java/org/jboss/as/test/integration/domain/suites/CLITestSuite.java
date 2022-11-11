@@ -35,6 +35,7 @@ import org.jboss.as.test.integration.domain.management.cli.CloneProfileTestCase;
 import org.jboss.as.test.integration.domain.management.cli.DeployAllDomainTestCase;
 import org.jboss.as.test.integration.domain.management.cli.HelpTestCase;
 import org.jboss.as.test.integration.domain.management.cli.HierarchicalCompositionTestCase;
+import org.jboss.as.test.integration.domain.management.cli.ServerGroupDeploymentManagedAttributeTestCase;
 import org.jboss.as.test.integration.domain.management.cli.UndeployTestCase;
 import org.jboss.as.test.integration.domain.management.cli.UndeployWildcardDomainTestCase;
 import org.jboss.as.test.integration.domain.management.cli.WildCardReadsTestCase;
@@ -60,7 +61,8 @@ import org.junit.runners.Suite;
     HierarchicalCompositionTestCase.class,
     WildCardReadsTestCase.class,
     DeploymentOverlayTestCase.class,
-    DeployAllDomainTestCase.class
+    DeployAllDomainTestCase.class,
+    ServerGroupDeploymentManagedAttributeTestCase.class
 })
 public class CLITestSuite {
 
@@ -109,11 +111,11 @@ public class CLITestSuite {
         initializedLocally = true;
         start(CLITestSuite.class.getSimpleName());
 
-        hostServers.put("master", new String[]{"main-one", "main-two", "other-one"});
-        hostServers.put("slave", new String[]{"main-three", "main-four", "other-two"});
+        hostServers.put("primary", new String[]{"main-one", "main-two", "other-one"});
+        hostServers.put("secondary", new String[]{"main-three", "main-four", "other-two"});
 
-        hostAddresses.put("master", DomainTestSupport.masterAddress);
-        hostAddresses.put("slave", DomainTestSupport.slaveAddress);
+        hostAddresses.put("primary", DomainTestSupport.primaryAddress);
+        hostAddresses.put("secondary", DomainTestSupport.secondaryAddress);
 
         serverGroups.put("main-server-group", new String[]{"main-one", "main-two", "main-three", "main-four"});
         serverGroups.put("other-server-group", new String[]{"other-one", "other-two"});

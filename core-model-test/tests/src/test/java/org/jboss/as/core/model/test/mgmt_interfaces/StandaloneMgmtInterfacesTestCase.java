@@ -41,8 +41,9 @@ public class StandaloneMgmtInterfacesTestCase extends AbstractCoreModelTest {
     }
 
     @Test
-    public void testConfiguration_Legacy() throws Exception {
-        testConfiguration("standalone_legacy.xml");
+    public void testEmptyAllowedOriginsConfiguration() throws Exception {
+        // Test for https://issues.jboss.org/browse/WFCORE-4656
+        testConfiguration("standalone_empty_allowed_origins.xml");
     }
 
     public void testConfiguration(String fileName) throws Exception {

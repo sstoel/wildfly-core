@@ -45,6 +45,7 @@ import org.wildfly.security.x500.cert.X509CertificateBuilder;
 
 import javax.naming.NamingException;
 import javax.naming.directory.DirContext;
+import javax.net.ssl.KeyManager;
 import javax.security.auth.x500.X500Principal;
 
 import java.io.File;
@@ -61,6 +62,7 @@ import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.MessageDigest;
 import java.security.PublicKey;
+import java.security.Security;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
@@ -87,6 +89,7 @@ public class LdapTestCase extends AbstractSubsystemTest {
     private static final X500Principal ISSUER_DN = new X500Principal("O=Root Certificate Authority, EMAILADDRESS=elytron@wildfly.org, C=UK, ST=Elytron, CN=Elytron CA ");
     private static final X500Principal SCARAB_DN = new X500Principal("OU=Elytron, O=Elytron, C=UK, ST=Elytron, CN=Scarab");
     private static X509Certificate SCARAB_CERTIFICATE;
+    private static String keyProtectionAlgorithm;
 
     private static X509Certificate createScarabCertificate() throws Exception {
         KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
@@ -96,14 +99,14 @@ public class LdapTestCase extends AbstractSubsystemTest {
         SelfSignedX509CertificateAndSigningKey issuerSelfSignedX509CertificateAndSigningKey = SelfSignedX509CertificateAndSigningKey.builder()
                 .setDn(ISSUER_DN)
                 .setKeyAlgorithmName("RSA")
-                .setSignatureAlgorithmName("SHA1withRSA")
+                .setSignatureAlgorithmName("SHA256withRSA")
                 .addExtension(false, "BasicConstraints", "CA:true,pathlen:2147483647")
                 .build();
 
         return new X509CertificateBuilder()
                 .setIssuerDn(ISSUER_DN)
                 .setSubjectDn(SCARAB_DN)
-                .setSignatureAlgorithmName("SHA1withRSA")
+                .setSignatureAlgorithmName("SHA256withRSA")
                 .setSigningKey(issuerSelfSignedX509CertificateAndSigningKey.getSigningKey())
                 .setPublicKey(scarabPublicKey)
                 .setSerialNumber(new BigInteger("4"))
@@ -146,12 +149,19 @@ public class LdapTestCase extends AbstractSubsystemTest {
     public static void startLdapService() throws Exception {
         loadResources();
         TestEnvironment.startLdapService();
+        keyProtectionAlgorithm = Security.getProperty("keystore.PKCS12.keyProtectionAlgorithm");
+        Security.setProperty("keystore.PKCS12.keyProtectionAlgorithm", "PBEWithHmacSHA256AndAES_128");
     }
 
     @AfterClass
     public static void restoreLdif() throws Exception {
         Files.copy(Paths.get(WORKING_DIRECTORY_LOCATION + LDIF_LOCATION + ".bak"), Paths.get(WORKING_DIRECTORY_LOCATION + LDIF_LOCATION), StandardCopyOption.REPLACE_EXISTING);
         new File(WORKING_DIRECTORY_LOCATION + LDIF_LOCATION + ".bak").delete();
+        if (keyProtectionAlgorithm != null) {
+            Security.setProperty("keystore.PKCS12.keyProtectionAlgorithm", keyProtectionAlgorithm);
+        } else {
+            Security.setProperty("keystore.PKCS12.keyProtectionAlgorithm", "");
+        }
     }
 
     public LdapTestCase() {
@@ -162,7 +172,10 @@ public class LdapTestCase extends AbstractSubsystemTest {
     public void initializeSubsystem() throws Exception {
         services = super.createKernelServicesBuilder(new TestEnvironment()).setSubsystemXmlResource("ldap.xml").build();
         if (!services.isSuccessfulBoot()) {
-            Assert.fail(services.getBootError().toString());
+            if (services.getBootError() != null) {
+                Assert.fail(services.getBootError().toString());
+            }
+            Assert.fail("Failed to boot, no reason provided");
         }
     }
 
@@ -231,6 +244,32 @@ public class LdapTestCase extends AbstractSubsystemTest {
         RealmIdentity x509User = securityRealm.getRealmIdentity(new NamePrincipal("x509User"));
         Assert.assertTrue(x509User.exists());
         Assert.assertTrue(x509User.verifyEvidence(new X509PeerCertificateChainEvidence(SCARAB_CERTIFICATE)));
+    }
+
+    @Test
+    public void testLdapRealmWithHashCharset() throws Exception {
+        ServiceName serviceName = Capabilities.SECURITY_REALM_RUNTIME_CAPABILITY.getCapabilityServiceName("LdapRealmCharset");
+        ModifiableSecurityRealm securityRealm = (ModifiableSecurityRealm) services.getContainer().getService(serviceName).getValue();
+        Assert.assertNotNull(securityRealm);
+
+        RealmIdentity identity1 = securityRealm.getRealmIdentity(new NamePrincipal("ssha512UserCharset"));
+        Assert.assertTrue(identity1.exists());
+
+        Assert.assertTrue(identity1.verifyEvidence(new PasswordGuessEvidence("password密码".toCharArray())));
+        identity1.dispose();
+    }
+
+    @Test
+    public void testLdapRealmWithHashCharsetAndHexEncoding() throws Exception {
+        ServiceName serviceName = Capabilities.SECURITY_REALM_RUNTIME_CAPABILITY.getCapabilityServiceName("LdapRealmEncodingCharset");
+        ModifiableSecurityRealm securityRealm = (ModifiableSecurityRealm) services.getContainer().getService(serviceName).getValue();
+        Assert.assertNotNull(securityRealm);
+
+        RealmIdentity identity1 = securityRealm.getRealmIdentity(new NamePrincipal("ssha512UserCharsetHex"));
+        Assert.assertTrue(identity1.exists());
+
+        Assert.assertTrue(identity1.verifyEvidence(new PasswordGuessEvidence("password密码".toCharArray())));
+        identity1.dispose();
     }
 
     @Test
@@ -306,6 +345,13 @@ public class LdapTestCase extends AbstractSubsystemTest {
         Certificate[] chain = keyStore.getCertificateChain(alias);
         Assert.assertEquals("OU=Elytron, O=Elytron, C=UK, ST=Elytron, CN=Firefly", ((X509Certificate) chain[0]).getSubjectDN().getName());
         Assert.assertEquals("O=Root Certificate Authority, EMAILADDRESS=elytron@wildfly.org, C=UK, ST=Elytron, CN=Elytron CA", ((X509Certificate) chain[1]).getSubjectDN().getName());
+    }
+
+    @Test
+    public void testLdapKeyManagerService() {
+        ServiceName keyManagerServiceName = Capabilities.KEY_MANAGER_RUNTIME_CAPABILITY.getCapabilityServiceName("LdapKeyManager");
+        KeyManager keyManager = (KeyManager) services.getContainer().getService(keyManagerServiceName).getValue();
+        Assert.assertNotNull(keyManager);
     }
 
     @Test

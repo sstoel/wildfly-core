@@ -25,7 +25,11 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OPERATION_HEADERS;
 
 import java.io.File;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import org.jboss.as.controller.CurrentOperationIdHolder;
 import org.jboss.as.controller.ModelController;
@@ -42,6 +46,7 @@ import org.jboss.as.controller.remote.ResponseAttachmentInputStreamSupport;
 import org.jboss.as.controller.remote.TransactionalProtocolOperationHandler;
 import org.jboss.as.domain.controller.DomainController;
 import org.jboss.as.domain.controller.HostRegistrations;
+import org.jboss.as.domain.controller.logging.DomainControllerLogger;
 import org.jboss.as.domain.controller.operations.FetchMissingConfigurationHandler;
 import org.jboss.as.domain.controller.operations.coordination.DomainControllerLockIdUtils;
 import org.jboss.as.host.controller.logging.HostControllerLogger;
@@ -60,6 +65,7 @@ import org.jboss.remoting3.Channel;
  * Installs {@link MasterDomainControllerOperationHandlerImpl} which handles requests from slave DC to master DC.
  *
  * @author <a href="kabir.khan@jboss.com">Kabir Khan</a>
+ * @author <a href="mailto:ropalka@redhat.com">Richard Opalka</a>
  */
 public class MasterDomainControllerOperationHandlerService extends AbstractModelControllerOperationHandlerFactoryService {
 
@@ -73,9 +79,15 @@ public class MasterDomainControllerOperationHandlerService extends AbstractModel
     private final HostRegistrations slaveHostRegistrations;
     private final DomainHostExcludeRegistry domainHostExcludeRegistry;
 
-    public MasterDomainControllerOperationHandlerService(final DomainController domainController, final HostControllerRegistrationHandler.OperationExecutor operationExecutor,
-                                                         TransactionalOperationExecutor txOperationExecutor,
-                                                         final File tempDir, final HostRegistrations slaveHostRegistrations, DomainHostExcludeRegistry domainHostExcludeRegistry) {
+    public MasterDomainControllerOperationHandlerService(
+            final Consumer<AbstractModelControllerOperationHandlerFactoryService> serviceConsumer,
+            final Supplier<ModelController> modelControllerSupplier,
+            final Supplier<ExecutorService> executorSupplier,
+            final Supplier<ScheduledExecutorService> scheduledExecutorSupplier,
+            final DomainController domainController, final HostControllerRegistrationHandler.OperationExecutor operationExecutor,
+            final TransactionalOperationExecutor txOperationExecutor,
+            final File tempDir, final HostRegistrations slaveHostRegistrations, DomainHostExcludeRegistry domainHostExcludeRegistry) {
+        super(serviceConsumer, modelControllerSupplier, executorSupplier, scheduledExecutorSupplier);
         this.domainController = domainController;
         this.operationExecutor = operationExecutor;
         this.txOperationExecutor = txOperationExecutor;
@@ -92,6 +104,7 @@ public class MasterDomainControllerOperationHandlerService extends AbstractModel
 
     @Override
     public ManagementChannelHandler startReceiving(final Channel channel) {
+        DomainControllerLogger.ROOT_LOGGER.debugf("Starting receiving from a remote HostController on channel %s", channel);
         final ManagementChannelHandler handler = new ManagementChannelHandler(ManagementClientChannelStrategy.create(channel), getExecutor());
         handler.getAttachments().attach(ManagementChannelHandler.TEMP_DIR, tempDir);
         // Assemble the request handlers for the domain channel
@@ -124,6 +137,7 @@ public class MasterDomainControllerOperationHandlerService extends AbstractModel
             final String operationName = operation.getOperation().require(OP).asString();
             if (operationName.equals(FetchMissingConfigurationHandler.OPERATION_NAME)) {
                 handler = new FetchMissingConfigurationHandler(SlaveChannelAttachments.getHostName(context.getChannel()),
+                        SlaveChannelAttachments.getDomainIgnoredExtensions(context.getChannel()),
                         SlaveChannelAttachments.getTransformers(context.getChannel()),
                         domainController.getExtensionRegistry());
             } else {
@@ -149,7 +163,7 @@ public class MasterDomainControllerOperationHandlerService extends AbstractModel
 
             try {
                 if (domainControllerLockId != null) {
-                    assert operation.getInputStreams().size() == 0; // we don't support associating streams with an active op
+                    assert operation.getInputStreams().isEmpty(); // we don't support associating streams with an active op
                     ModelNode responseNode = executor.joinActiveOperation(operation.getOperation(), messageHandler, control, handler, domainControllerLockId);
                     return OperationResponse.Factory.createSimple(responseNode);
                 } else {

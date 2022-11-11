@@ -102,13 +102,13 @@ public class FullRbacProviderPropertiesRoleMappingTestSuite {
     public static DomainTestSupport createAndStartDefaultSupport(final String testName) {
         try {
             final DomainTestSupport.Configuration configuration = DomainTestSupport.Configuration.create(testName,
-                    "domain-configs/domain-rbac.rbac", "host-configs/host-master-rbac-properties.xml", "host-configs/host-slave-rbac-properties.xml");
+                    "domain-configs/domain-rbac.rbac", "host-configs/host-primary-rbac-properties.xml", "host-configs/host-secondary-rbac-properties.xml");
             String mgmtUserProperties = WildFlyManagedConfiguration.loadConfigFileFromContextClassLoader("mgmt-users/mgmt-users.properties");
             String mgmtGroupsProperties = WildFlyManagedConfiguration.loadConfigFileFromContextClassLoader("mgmt-users/mgmt-groups.properties");
-            configuration.getMasterConfiguration().setMgmtUsersFile(mgmtUserProperties);
-            configuration.getSlaveConfiguration().setMgmtUsersFile(mgmtUserProperties);
-            configuration.getMasterConfiguration().setMgmtGroupsFile(mgmtGroupsProperties);
-            configuration.getSlaveConfiguration().setMgmtGroupsFile(mgmtGroupsProperties);
+            configuration.getPrimaryConfiguration().setMgmtUsersFile(mgmtUserProperties);
+            configuration.getSecondaryConfiguration().setMgmtUsersFile(mgmtUserProperties);
+            configuration.getPrimaryConfiguration().setMgmtGroupsFile(mgmtGroupsProperties);
+            configuration.getSecondaryConfiguration().setMgmtGroupsFile(mgmtGroupsProperties);
             final DomainTestSupport testSupport = DomainTestSupport.create(configuration);
             // Start!
             testSupport.start();

@@ -21,11 +21,15 @@
  */
 package org.jboss.as.cli.impl;
 
+import static org.wildfly.common.Assert.checkNotNullParam;
+import static org.wildfly.common.Assert.checkNotNullParamWithNullPointerException;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -41,12 +45,12 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.UUID;
@@ -283,7 +287,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
     /** The TrustManager in use by the SSLContext, a reference is kept to rejected certificates can be captured. */
     private volatile LazyDelagatingTrustManager trustManager;
     /** various key/value pairs */
-    private Map<Scope, Map<String, Object>> map = new HashMap<>();
+    private final Map<Scope, Map<String, Object>> map = new EnumMap<>(Scope.class);
     /** operation request address prefix */
     private final OperationRequestAddress prefix = new DefaultOperationRequestAddress();
     /** the prefix formatter */
@@ -293,7 +297,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
     /** operation request handler */
     private final OperationRequestHandler operationHandler;
     /** batches */
-    private BatchManager batchManager = new DefaultBatchManager();
+    private final BatchManager batchManager = new DefaultBatchManager();
     /** the default command completer */
     private final CommandLineCompleter cmdCompleter;
     /** the timeout handler */
@@ -301,7 +305,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
     /** the client bind address */
     private final String clientBindAddress;
 
-    private List<CliEventListener> listeners = new ArrayList<CliEventListener>();
+    private final List<CliEventListener> listeners = new ArrayList<>();
 
     /** the value of this variable will be used as the exit code of the vm, it is reset by every command/operation executed */
     private int exitCode;
@@ -333,7 +337,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
 
     private static final short DEFAULT_TIMEOUT = 0;
     private int timeout = DEFAULT_TIMEOUT;
-    private int configTimeout;
+    private final int configTimeout;
     private ControllerAddress connectionAddress;
 
     private boolean redefinedOutput;
@@ -344,12 +348,14 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
 
     private boolean colourOutput;
 
+    private final boolean bootInvoker;
     /**
      * Version mode - only used when --version is called from the command line.
      *
      * @throws CliInitializationException
      */
     CommandContextImpl() throws CliInitializationException {
+        bootInvoker = false;
         this.console = null;
         this.operationCandidatesProvider = null;
         this.cmdCompleter = null;
@@ -388,6 +394,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
      *
      */
     CommandContextImpl(CommandContextConfiguration configuration) throws CliInitializationException {
+        bootInvoker = false;
         config = CliConfigImpl.load(this, configuration);
         addressResolver = ControllerAddressResolver.newInstance(config, configuration.getController());
 
@@ -443,6 +450,53 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
 
         addShutdownHook();
         CliLauncher.runcom(this);
+    }
+
+    /**
+     * Constructor called from Boot invoker, minimal configuration.
+     * public for testing purpose.
+     *
+     */
+    public CommandContextImpl(OutputStream output) throws CliInitializationException {
+        this(output, true);
+    }
+
+    /**
+     * Constructor called from Boot invoker, minimal configuration. Used by test.
+     * public for testing purpose.
+     *
+     */
+    public CommandContextImpl(OutputStream output, boolean enableEchoCommand) throws CliInitializationException {
+        bootInvoker = true;
+        config = CliConfigImpl.newBootConfig(enableEchoCommand);
+        addressResolver = ControllerAddressResolver.newInstance(config, null);
+
+        operationHandler = new OperationRequestHandler();
+
+        this.username = null;
+        this.password = null;
+        this.disableLocalAuth = false;
+        this.clientBindAddress = null;
+
+        SILENT = config.isSilent();
+        ERROR_ON_INTERACT = config.isErrorOnInteract();
+        echoCommand = config.isEchoCommand();
+        configTimeout = config.getCommandTimeout() == null ? DEFAULT_TIMEOUT : config.getCommandTimeout();
+        resolveParameterValues = config.isResolveParameterValues();
+        redefinedOutput = output != null;
+        cliPrintStream = !redefinedOutput ? new CLIPrintStream() : new CLIPrintStream(output);
+
+        aeshCommands = new AeshCommands(this, new OperationCommandContainer(this));
+        this.cmdRegistry = aeshCommands.getRegistry();
+        this.cmdCompleter = null;
+        this.legacyCmdCompleter = null;
+        this.operationCandidatesProvider = null;
+
+        try {
+            initCommands(true);
+        } catch (CommandLineException | CommandLineParserException e) {
+            throw new CliInitializationException("Failed to initialize commands", e);
+        }
     }
 
     protected void addShutdownHook() {
@@ -523,10 +577,16 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
     }
 
     private void initCommands() throws CommandLineException, CommandLineParserException {
+        initCommands(false);
+    }
+
+    private void initCommands(boolean bootInvoker) throws CommandLineException, CommandLineParserException {
         // aesh commands
         cmdRegistry.addCommand(new VersionCommand());
         cmdRegistry.addCommand(new HelpCommand(cmdRegistry));
-        cmdRegistry.addCommand(new ConnectCommand());
+        if (!bootInvoker) {
+            cmdRegistry.addCommand(new ConnectCommand());
+        }
         DeploymentCommand.registerDeploymentCommands(this, aeshCommands.getRegistry());
         // aesh extensions, for now add grep to make | operator
         // usable.
@@ -534,7 +594,9 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
 
         cmdRegistry.registerHandler(new AttachmentHandler(this), "attachment");
         cmdRegistry.registerHandler(new PrefixHandler(), "cd", "cn");
-        cmdRegistry.registerHandler(new ClearScreenHandler(), "clear", "cls");
+        if (!bootInvoker) {
+            cmdRegistry.registerHandler(new ClearScreenHandler(), "clear", "cls");
+        }
         cmdRegistry.registerHandler(new CommandCommandHandler(cmdRegistry), "command");
         cmdRegistry.registerHandler(new EchoDMRHandler(), "echo-dmr");
         cmdRegistry.registerHandler(new HistoryHandler(), "history");
@@ -613,14 +675,18 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
         // supported but hidden from tab-completion until stable implementation
         cmdRegistry.registerHandler(new ArchiveHandler(this), false, "archive");
 
-        final AtomicReference<EmbeddedProcessLaunch> embeddedServerLaunch = EmbeddedControllerHandlerRegistrar.registerEmbeddedCommands(cmdRegistry, this);
-        cmdRegistry.registerHandler(new ReloadHandler(this, embeddedServerLaunch), "reload");
-        cmdRegistry.registerHandler(new ShutdownHandler(this, embeddedServerLaunch), "shutdown");
+        AtomicReference<EmbeddedProcessLaunch> embeddedServerLaunch = null;
+        if (!bootInvoker) {
+            embeddedServerLaunch = EmbeddedControllerHandlerRegistrar.registerEmbeddedCommands(cmdRegistry, this);
+            cmdRegistry.registerHandler(new ReloadHandler(this, embeddedServerLaunch), "reload");
+            cmdRegistry.registerHandler(new ShutdownHandler(this, embeddedServerLaunch), "shutdown");
+        }
 
         cmdRegistry.addCommand(new SecurityCommand(this, embeddedServerLaunch));
 
-        registerExtraHandlers();
-
+        if (!bootInvoker) {
+            registerExtraHandlers();
+        }
         extLoader = new ExtensionsLoader(cmdRegistry, aeshCommands.getRegistry(), this);
     }
 
@@ -746,7 +812,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
 
     private StringBuilder lineBuffer;
     private StringBuilder origLineBuffer;
-    private CommandExecutor executor = new CommandExecutor(this);
+    private final CommandExecutor executor = new CommandExecutor(this);
 
     @Override
     public void handle(String line) throws CommandLineException {
@@ -1141,8 +1207,8 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
 
     @Override
     public void set(Scope scope, String key, Object value) {
-        Objects.requireNonNull(scope);
-        Objects.requireNonNull(key);
+        checkNotNullParamWithNullPointerException("scope", scope);
+        checkNotNullParamWithNullPointerException("key", key);
         Map<String, Object> store = map.get(scope);
         if (store == null) {
             store = new HashMap<>();
@@ -1153,8 +1219,8 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
 
     @Override
     public Object get(Scope scope, String key) {
-        Objects.requireNonNull(scope);
-        Objects.requireNonNull(key);
+        checkNotNullParamWithNullPointerException("scope", scope);
+        checkNotNullParamWithNullPointerException("key", key);
         Map<String, Object> store = map.get(scope);
         Object value = null;
         if (store != null) {
@@ -1165,7 +1231,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
 
     @Override
     public void clear(Scope scope) {
-        Objects.requireNonNull(scope);
+        checkNotNullParamWithNullPointerException("scope", scope);
         Map<String, Object> store = map.remove(scope);
         if (store != null) {
             store.clear();
@@ -1174,7 +1240,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
 
     @Override
     public Object remove(Scope scope, String key) {
-        Objects.requireNonNull(scope);
+        checkNotNullParamWithNullPointerException("scope", scope);
         Map<String, Object> store = map.get(scope);
         Object value = null;
         if (store != null) {
@@ -1303,19 +1369,22 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
             if (connInfoBean != null) {
                 this.connInfoBean.setControllerAddress(address);
             }
+            if (!bootInvoker) {
+                List<String> nodeTypes = Util.getNodeTypes(newClient, new DefaultOperationRequestAddress());
+                // this is present even if the host hasn't been added yet.
+                domainMode = nodeTypes.contains(Util.HOST);
 
-            List<String> nodeTypes = Util.getNodeTypes(newClient, new DefaultOperationRequestAddress());
-            // this is present even if the host hasn't been added yet.
-            domainMode = nodeTypes.contains(Util.HOST);
-
-            // if we're going to add a host manually, don't try to read the extensions,
-            // as they won't be there until after the /host:add()
-            if (! (nodeTypes.size() == 1 && nodeTypes.get(0).equals(Util.HOST))) {
-                try {
-                    extLoader.loadHandlers(currentAddress);
-                } catch (CommandLineException | CommandLineParserException e) {
-                    printLine(Util.getMessagesFromThrowable(e));
+                // if we're going to add a host manually, don't try to read the extensions,
+                // as they won't be there until after the /host:add()
+                if (!(nodeTypes.size() == 1 && nodeTypes.get(0).equals(Util.HOST))) {
+                    try {
+                        extLoader.loadHandlers(currentAddress);
+                    } catch (CommandLineException | CommandLineParserException e) {
+                        printLine(Util.getMessagesFromThrowable(e));
+                    }
                 }
+            } else {
+                domainMode = false;
             }
         }
     }
@@ -1327,10 +1396,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
 
     @Override
     public void setCurrentDir(File dir) {
-        if(dir == null) {
-            throw new IllegalArgumentException("dir is null");
-        }
-        this.currentDir = dir;
+        this.currentDir = checkNotNullParam("dir", dir);
     }
 
     @Override
@@ -1404,7 +1470,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
             builder.addProperty(Util.NAME, Util.NAME);
 
             final long start = System.currentTimeMillis();
-            final long timeoutMillis = config.getConnectionTimeout() + 1000;
+            final long timeoutMillis = config.getConnectionTimeout() + 1000L;
             boolean tryConnection = true;
             while (tryConnection) {
                 final ModelNode response = client.execute(builder.buildRequest());
@@ -1470,7 +1536,10 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
     @Override
     public void disconnectController() {
         if (this.client != null) {
-            StreamUtils.safeClose(client);
+            // Closed by caller
+            if (!bootInvoker) {
+                StreamUtils.safeClose(client);
+            }
             // if(loggingEnabled) {
             // printLine("Closed connection to " + this.controllerHost + ':' +
             // this.controllerPort);
@@ -1480,7 +1549,9 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
             domainMode = false;
             notifyListeners(CliEvent.DISCONNECTED);
             connInfoBean = null;
-            extLoader.resetHandlers();
+            if (extLoader != null) {
+                extLoader.resetHandlers();
+            }
         }
         promptConnectPart = null;
         if(console != null && terminate == RUNNING) {
@@ -1644,9 +1715,6 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
 
             if (parsedCmd.getFormat() == OperationFormat.INSTANCE) {
                 final ModelNode request = this.parsedCmd.toOperationRequest(this);
-                StringBuilder op = new StringBuilder();
-                op.append(prefixFormatter.format(parsedCmd.getAddress()));
-                op.append(line.substring(line.indexOf(':')));
                 return new HandledRequest(request, null);
             }
 
@@ -1715,6 +1783,8 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
                 if (opLine != null && !opLine.equals(line)) {
                     resetArgs(opLine);
                 }
+
+                Throwable originalException = null;
                 try {
                     // Could be an operation.
                     if (exec.isOperation()) {
@@ -1727,7 +1797,13 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
                         handleLegacyCommand(exec.getLine(), handler, false);
                         continue;
                     }
+                } catch (Throwable ex) {
+                    if (ex instanceof InterruptedException) {
+                        Thread.currentThread().interrupt();
+                    }
+                    originalException = ex;
                 } finally {
+                    Throwable suppressed = originalException; //OK to be null
                     // We must close any output redirection, that is automaticaly done
                     // when calling exec.execute something that we are not doing here.
                     if (invContext.getConfiguration().getOutputRedirection() != null) {
@@ -1737,12 +1813,35 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
                             // Message must contain the Exception and the localized message.
                             if (ex instanceof AccessDeniedException) {
                                 String message = ex.getMessage();
-                                throw new CommandLineException((message != null ? message : line) + " (Access denied)");
+                                suppressed = new CommandLineException((message != null ? message : line) + " (Access denied)");
+                            } else {
+                                suppressed = new CommandLineException(ex.toString());
                             }
-                            throw new CommandLineException(ex.toString());
+                            if (originalException != null) {
+                                originalException.addSuppressed(suppressed);
+                                suppressed = originalException;
+                            }
+                        }
+                    }
+                    if (suppressed != null) {
+                        if (suppressed instanceof RuntimeException) {
+                            throw (RuntimeException) suppressed;
+                        }
+                        if (suppressed instanceof Error) {
+                            throw (Error) suppressed;
+                        }
+                        if (suppressed instanceof CommandLineException) {
+                            throw (CommandLineException) suppressed;
+                        }
+                        if (suppressed instanceof CommandLineParserException) {
+                            throw (CommandLineParserException) suppressed;
+                        }
+                        if (suppressed instanceof OptionValidatorException) {
+                            throw (OptionValidatorException) suppressed;
                         }
                     }
                 }
+
                 // Needed to have the command be fully parsed and retrieve the
                 // child command. This is caused by aesh 2.0 behavior.
                 if (isBatchMode()) {
@@ -1862,10 +1961,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
 
     @Override
     public void addEventListener(CliEventListener listener) {
-        if (listener == null) {
-            throw new IllegalArgumentException("Listener is null.");
-        }
-        listeners.add(listener);
+        listeners.add(checkNotNullParam("listener", listener));
     }
 
     @Override
@@ -2042,11 +2138,6 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
             this.password = password;
         }
 
-        private AuthenticationCallbackHandler(String username, String digest) {
-            this.username = username;
-            this.digest = digest;
-        }
-
         @Override
         public void handle(final Callback[] callbacks) throws IOException, UnsupportedCallbackException {
             try {
@@ -2214,7 +2305,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
         private final String trustStorePassword;
         private final boolean modifyTrustStore;
 
-        private Set<X509Certificate> temporarilyTrusted = new HashSet<X509Certificate>();
+        private final Set<X509Certificate> temporarilyTrusted = new HashSet<X509Certificate>();
         private X509TrustManager delegate;
 
         LazyDelagatingTrustManager(String trustStore, String trustStorePassword, boolean modifyTrustStore) {
@@ -2402,10 +2493,7 @@ public class CommandContextImpl implements CommandContext, ModelControllerClient
         CommandLineRedirection target;
 
         CommandLineRedirectionRegistration(CommandLineRedirection redirection) {
-            if(redirection == null) {
-                throw new IllegalArgumentException("Redirection is null");
-            }
-            this.target = redirection;
+            this.target = checkNotNullParam("redirection", redirection);
         }
 
         @Override

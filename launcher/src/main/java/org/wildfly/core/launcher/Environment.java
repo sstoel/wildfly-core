@@ -240,4 +240,22 @@ class Environment {
         }
         return result;
     }
+
+    static Path validateJar(final Path jarPath) {
+        if (jarPath == null || Files.notExists(jarPath)) {
+            throw LauncherMessages.MESSAGES.pathDoesNotExist(jarPath);
+        }
+        if (Files.isDirectory(jarPath)) {
+            throw LauncherMessages.MESSAGES.pathNotAFile(jarPath);
+        }
+        final Path result = jarPath.toAbsolutePath().normalize();
+        return result;
+    }
+
+    static Path validateJar(final String jarPath) {
+        if (jarPath == null) {
+            throw LauncherMessages.MESSAGES.pathDoesNotExist(null);
+        }
+        return validateJar(Paths.get(jarPath));
+    }
 }

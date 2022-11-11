@@ -48,7 +48,6 @@ import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.dmr.ModelNode;
 import org.jboss.msc.service.Service;
-import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceContainer;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceTarget;
@@ -85,8 +84,7 @@ public class OperationTimeoutUnitTestCase {
         container = ServiceContainer.Factory.create("test");
         ServiceTarget target = container.subTarget();
         controllerService = new ModelControllerService();
-        ServiceBuilder<ModelController> builder = target.addService(ServiceName.of("ModelController"), controllerService);
-        builder.install();
+        target.addService(ServiceName.of("ModelController")).setInstance(controllerService).install();
         controllerService.awaitStartup(30, TimeUnit.SECONDS);
         ModelController controller = controllerService.getValue();
 
@@ -244,7 +242,7 @@ public class OperationTimeoutUnitTestCase {
     }
 
     public static class BlockingServiceHandler implements OperationStepHandler {
-        static final SimpleOperationDefinition DEFINITION = new SimpleOperationDefinitionBuilder("block", new NonResolvingResourceDescriptionResolver())
+        static final SimpleOperationDefinition DEFINITION = new SimpleOperationDefinitionBuilder("block", NonResolvingResourceDescriptionResolver.INSTANCE)
                 // this isn't really runtime-only but we lie and say it is to let
                 // testBlockAwaitingRuntimeLock() work. That test relies on first
                 // messing up MSC in order to how the next op that blocks waiting
@@ -272,7 +270,7 @@ public class OperationTimeoutUnitTestCase {
                                                 : (stop ? BlockingService.STOP : BlockingService.NEITHER);
 
                     final ServiceName svcName = ServiceName.JBOSS.append("bad-service");
-                    context.getServiceTarget().addService(svcName, bad).install();
+                    context.getServiceTarget().addService(svcName).setInstance(bad).install();
 
                     try {
                         bad.startLatch.await(20, TimeUnit.SECONDS);

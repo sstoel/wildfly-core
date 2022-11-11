@@ -348,7 +348,7 @@ public class HostControllerRegistrationHandler implements ManagementRequestHandl
                         ModelVersion.create(major, minor, micro), Collections.<PathAddress, ModelVersion>emptyMap(), hostInfo);
                 final Transformers transformers = Transformers.Factory.create(target);
                 try {
-                    SlaveChannelAttachments.attachSlaveInfo(handler.getChannel(), registrationContext.hostName, transformers);
+                    SlaveChannelAttachments.attachSlaveInfo(handler.getChannel(), registrationContext.hostName, transformers, hostInfo.getDomainIgnoredExtensions());
                 } catch (IOException e) {
                     throw new OperationFailedException(e.getLocalizedMessage());
                 }
@@ -568,13 +568,13 @@ public class HostControllerRegistrationHandler implements ManagementRequestHandl
         }
 
         private boolean sendResultToHost(ModelController.OperationTransaction transaction, final ModelNode result) {
-            final Boolean registered = executeBlocking(new IOTask<Boolean>() {
+            final boolean registered = executeBlocking(new IOTask<Boolean>() {
                 @Override
                 void sendMessage(final FlushableDataOutput output) throws IOException {
                     sendResponse(output, DomainControllerProtocol.PARAM_OK, result);
                 }
             });
-            if(! registered) {
+            if (!registered) {
                 transaction.rollback();
                 return true;
             }

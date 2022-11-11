@@ -52,7 +52,6 @@ import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.protocol.StreamUtils;
 import org.jboss.as.repository.ContentRepository;
 import org.jboss.as.server.logging.ServerLogger;
-import org.jboss.as.server.services.security.AbstractVaultReader;
 import org.jboss.dmr.ModelNode;
 
 import static org.jboss.as.server.deployment.DeploymentHandlerUtils.createFailureException;
@@ -68,16 +67,17 @@ public class DeploymentAddHandler implements OperationStepHandler {
 
     protected final ContentRepository contentRepository;
 
-    private final AbstractVaultReader vaultReader;
+    private final DeploymentTransformation deploymentTransformation;
 
-    protected DeploymentAddHandler(final ContentRepository contentRepository, final AbstractVaultReader vaultReader) {
+
+    protected DeploymentAddHandler(final ContentRepository contentRepository) {
         assert contentRepository != null : "Null contentRepository";
         this.contentRepository = contentRepository;
-        this.vaultReader = vaultReader;
+        this.deploymentTransformation = new DeploymentTransformation();
     }
 
-    public static DeploymentAddHandler create(final ContentRepository contentRepository, final AbstractVaultReader vaultReader) {
-        return new DeploymentAddHandler(contentRepository, vaultReader);
+    public static DeploymentAddHandler create(final ContentRepository contentRepository) {
+        return new DeploymentAddHandler(contentRepository);
     }
 
     /**
@@ -123,7 +123,7 @@ public class DeploymentAddHandler implements OperationStepHandler {
             content.add(contentItemNode);
             newModel.get(CONTENT_RESOURCE_ALL.getName()).set(content);
         } else if(hasValidContentAdditionParameterDefined(contentItemNode)) {
-            contentItem = addFromContentAdditionParameter(context, contentItemNode);
+            contentItem = addFromContentAdditionParameter(context, contentItemNode, name);
             // Store a hash-based contentItemNode back to the model
             contentItemNode = new ModelNode();
             contentItemNode.get(CONTENT_HASH.getName()).set(contentItem.getHash());
@@ -145,7 +145,7 @@ public class DeploymentAddHandler implements OperationStepHandler {
         }
 
         if (ENABLED.resolveModelAttribute(context, newModel).asBoolean() && context.isNormalServer()) {
-            DeploymentHandlerUtil.deploy(context, operation, runtimeName, name, vaultReader, contentItem);
+            DeploymentHandlerUtil.deploy(context, operation, runtimeName, name, contentItem);
             DeploymentUtils.enableAttribute(newModel);
         }
 
@@ -200,18 +200,21 @@ public class DeploymentAddHandler implements OperationStepHandler {
         }
     }
 
-    DeploymentHandlerUtil.ContentItem addFromContentAdditionParameter(OperationContext context, ModelNode contentItemNode) throws OperationFailedException {
+    DeploymentHandlerUtil.ContentItem addFromContentAdditionParameter(OperationContext context, ModelNode contentItemNode, String name) throws OperationFailedException {
         byte[] hash;
         InputStream in = getInputStream(context, contentItemNode);
+        InputStream transformed = null;
         try {
             try {
-                hash = contentRepository.addContent(in);
+                transformed = deploymentTransformation.doTransformation(context, contentItemNode, name, in);
+                hash = contentRepository.addContent(transformed);
             } catch (IOException e) {
                 throw createFailureException(e.toString());
             }
 
         } finally {
             StreamUtils.safeClose(in);
+            StreamUtils.safeClose(transformed);
         }
         return new DeploymentHandlerUtil.ContentItem(hash);
     }

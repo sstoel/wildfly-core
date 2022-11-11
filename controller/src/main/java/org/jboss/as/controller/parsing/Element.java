@@ -54,6 +54,7 @@ public enum Element {
     CLIENT_CERT_STORE("client-certificate-store"),
     CLIENT_MAPPING("client-mapping"),
     CONFIGURATION_CHANGES("configuration-changes"),
+    CONSTANT_HEADERS("constant-headers"),
     CONSTRAINTS("constraints"),
     CONTENT("content"),
     CREDENTIAL_REFERENCE("credential-reference"),
@@ -88,6 +89,8 @@ public enum Element {
 
     HANDLER("handler"),
     HANDLERS("handlers"),
+    HEADER("header"),
+    HEADER_MAPPING("header-mapping"),
     HEAP("heap"),
     HOST("host"),
     HOSTS("hosts"),
@@ -135,6 +138,7 @@ public enum Element {
     MANAGEMENT_CLIENT_CONTENT("management-client-content"),
     MANAGEMENT_INTERFACES("management-interfaces"),
     MEMBERSHIP_FILTER("membership-filter"),
+    MODULE_OPTIONS("module-options"),
     MULTICAST("multicast"),
 
     NAME("name"),

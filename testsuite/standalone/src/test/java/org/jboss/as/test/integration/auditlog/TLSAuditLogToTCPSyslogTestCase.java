@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.operations.common.Util;
@@ -45,7 +45,7 @@ import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 import org.productivity.java.syslog4j.server.SyslogServerIF;
 import org.wildfly.core.testrunner.ManagementClient;
 import org.wildfly.core.testrunner.ServerSetup;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  * Tests that plain TCP messages are not sent when TLS syslog-handler is selected in Audit Log settings. <br>
@@ -53,7 +53,7 @@ import org.wildfly.core.testrunner.WildflyTestRunner;
  *
  * @author: Josef Cacek
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerSetup(TLSAuditLogToTCPSyslogTestCase.AuditLogToTCPSyslogTestCaseSetup.class)
 public class TLSAuditLogToTCPSyslogTestCase {
 

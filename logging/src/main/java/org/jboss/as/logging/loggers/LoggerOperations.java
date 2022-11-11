@@ -20,12 +20,12 @@
 package org.jboss.as.logging.loggers;
 
 import static org.jboss.as.logging.CommonAttributes.FILTER;
-import static org.jboss.as.logging.CommonAttributes.FILTER_SPEC;
-import static org.jboss.as.logging.CommonAttributes.HANDLER;
-import static org.jboss.as.logging.CommonAttributes.HANDLERS;
 import static org.jboss.as.logging.CommonAttributes.HANDLER_NAME;
 import static org.jboss.as.logging.CommonAttributes.LEVEL;
 import static org.jboss.as.logging.Logging.createOperationFailure;
+import static org.jboss.as.logging.loggers.LoggerAttributes.FILTER_SPEC;
+import static org.jboss.as.logging.loggers.LoggerAttributes.HANDLER;
+import static org.jboss.as.logging.loggers.LoggerAttributes.HANDLERS;
 import static org.jboss.as.logging.loggers.LoggerResourceDefinition.USE_PARENT_HANDLERS;
 import static org.jboss.as.logging.loggers.RootLoggerResourceDefinition.RESOURCE_NAME;
 
@@ -40,8 +40,8 @@ import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.logging.CommonAttributes;
-import org.jboss.as.logging.Filters;
 import org.jboss.as.logging.LoggingOperations;
+import org.jboss.as.logging.filters.Filters;
 import org.jboss.as.logging.logging.LoggingLogger;
 import org.jboss.dmr.ModelNode;
 import org.jboss.logmanager.config.LogContextConfiguration;
@@ -104,7 +104,7 @@ final class LoggerOperations {
                     final ModelNode filter = CommonAttributes.FILTER.validateOperation(operation);
                     if (filter.isDefined()) {
                         final String value = Filters.filterToFilterSpec(filter);
-                        model.get(CommonAttributes.FILTER_SPEC.getName()).set(value.isEmpty() ? new ModelNode() : new ModelNode(value));
+                        model.get(LoggerAttributes.FILTER_SPEC.getName()).set(value.isEmpty() ? new ModelNode() : new ModelNode(value));
                     }
                 } else {
                     attribute.validateAndSet(operation, model);
@@ -168,7 +168,7 @@ final class LoggerOperations {
                 final String filterSpec = Filters.filterToFilterSpec(newValue);
                 final ModelNode filterSpecValue = (filterSpec.isEmpty() ? new ModelNode() : new ModelNode(filterSpec));
                 // Undefine the filter-spec
-                model.getModel().get(CommonAttributes.FILTER_SPEC.getName()).set(filterSpecValue);
+                model.getModel().get(LoggerAttributes.FILTER_SPEC.getName()).set(filterSpecValue);
             }
         }
     }
@@ -207,7 +207,7 @@ final class LoggerOperations {
             handlers.add(handlerName);
             HANDLERS.getValidator().validateParameter(HANDLERS.getName(), handlers);
             model.get(HANDLERS.getName()).add(handlerName);
-            recordCapabilitiesAndRequirements(context, resource, HANDLERS, new ModelNode().setEmptyList().add(handlerName), new ModelNode());
+            HANDLER.addCapabilityRequirements(context, resource, handlerName);
         }
 
         @Override
@@ -239,7 +239,7 @@ final class LoggerOperations {
             final List<ModelNode> newHandlers = new ArrayList<>(handlers.size());
             for (ModelNode handler : handlers) {
                 if (handlerName.equals(handler.asString())) {
-                    HANDLER.removeCapabilityRequirements(context, resource, new ModelNode().setEmptyList().add(handlerName));
+                    HANDLER.removeCapabilityRequirements(context, resource, handler);
                     found = true;
                 } else {
                     newHandlers.add(handler);

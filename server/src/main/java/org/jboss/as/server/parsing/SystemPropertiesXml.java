@@ -37,6 +37,7 @@ import static org.jboss.as.controller.parsing.ParseUtils.unexpectedElement;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.xml.stream.XMLStreamException;
 
@@ -136,23 +137,30 @@ class SystemPropertiesXml {
                 throw ParseUtils.missingRequired(reader, Collections.singleton(NAME));
             }
 
+            AtomicReference<String> newPropertyValue = null;
             try {
-                String newPropertyValue = SystemPropertyResourceDefinition.VALUE.resolveValue(ExpressionResolver.SIMPLE, op.get(VALUE)).asString();
+                String resolved = SystemPropertyResourceDefinition.VALUE.resolveValue(ExpressionResolver.EXTENSION_REJECTING, op.get(VALUE)).asStringOrNull();
+                newPropertyValue = new AtomicReference<>(resolved);
                 String oldPropertyValue = properties.getProperty(name);
-                if (oldPropertyValue != null && !oldPropertyValue.equals(newPropertyValue)) {
-                    ControllerLogger.ROOT_LOGGER.systemPropertyAlreadyExist(name, oldPropertyValue, newPropertyValue);
+                if (oldPropertyValue != null && !oldPropertyValue.equals(resolved)) {
+                    ControllerLogger.ROOT_LOGGER.systemPropertyAlreadyExist(name);
                 }
-            } catch (OperationFailedException e) {
+            } catch (OperationFailedException | ExpressionResolver.ExpressionResolutionUserException | ExpressionResolver.ExpressionResolutionServerException e) {
                 ServerLogger.AS_ROOT_LOGGER.tracef(e, "Failed to resolve value for system property %s at parse time.", name);
             }
 
             if(standalone) {
                 //eagerly set the property so it can potentially be used by jboss modules
                 //only do this for standalone servers
-                try {
-                    System.setProperty(name, SystemPropertyResourceDefinition.VALUE.resolveValue(ExpressionResolver.SIMPLE, op.get(VALUE)).asString());
-                } catch (OperationFailedException e) {
-                    ServerLogger.AS_ROOT_LOGGER.tracef(e, "Failed to set property %s at parse time, it will be set later in the boot process", name);
+                if (newPropertyValue != null) {
+                    String val = newPropertyValue.get();
+                    if (val != null) {
+                        System.setProperty(name, newPropertyValue.get());
+                    } else {
+                        System.clearProperty(name);
+                    }
+                } else {
+                    ServerLogger.AS_ROOT_LOGGER.tracef("Failed to set property %s at parse time, it will be set later in the boot process", name);
                 }
             }
 
@@ -163,7 +171,7 @@ class SystemPropertiesXml {
     void writeProperties(final XMLExtendedStreamWriter writer, final ModelNode modelNode, Element element,
             boolean standalone) throws XMLStreamException {
         final List<Property> properties = modelNode.asPropertyList();
-        if (properties.size() > 0) {
+        if (!properties.isEmpty()) {
             writer.writeStartElement(element.getLocalName());
             for (Property prop : properties) {
                 writer.writeStartElement(Element.PROPERTY.getLocalName());

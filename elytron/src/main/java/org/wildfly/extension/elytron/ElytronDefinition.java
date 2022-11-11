@@ -42,12 +42,13 @@ import java.security.PrivilegedAction;
 import java.security.Provider;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 import javax.net.ssl.SSLContext;
-import javax.security.auth.message.config.AuthConfigFactory;
+import jakarta.security.auth.message.config.AuthConfigFactory;
 
 import org.jboss.as.controller.AbstractBoottimeAddStepHandler;
 import org.jboss.as.controller.AttributeMarshaller;
@@ -68,6 +69,7 @@ import org.jboss.as.controller.access.constraint.ApplicationTypeConfig;
 import org.jboss.as.controller.access.constraint.SensitivityClassification;
 import org.jboss.as.controller.access.management.ApplicationTypeAccessConstraintDefinition;
 import org.jboss.as.controller.access.management.SensitiveTargetAccessConstraintDefinition;
+import org.jboss.as.controller.extension.ExpressionResolverExtension;
 import org.jboss.as.controller.operations.validation.StringLengthValidator;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
@@ -84,18 +86,18 @@ import org.jboss.msc.service.ServiceController.Mode;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceRegistry;
 import org.jboss.msc.service.ServiceTarget;
-import org.jboss.security.SecurityContextAssociation;
 import org.wildfly.extension.elytron.capabilities.CredentialSecurityFactory;
 import org.wildfly.extension.elytron.capabilities.PrincipalTransformer;
 import org.wildfly.extension.elytron.capabilities._private.SecurityEventListener;
+import org.wildfly.extension.elytron.expression.DeploymentExpressionResolverProcessor;
 import org.wildfly.security.Version;
 import org.wildfly.security.auth.client.AuthenticationContext;
-import org.wildfly.security.auth.jaspi.DelegatingAuthConfigFactory;
 import org.wildfly.security.auth.jaspi.ElytronAuthConfigFactory;
 import org.wildfly.security.auth.server.EvidenceDecoder;
 import org.wildfly.security.auth.server.ModifiableSecurityRealm;
 import org.wildfly.security.auth.server.PrincipalDecoder;
 import org.wildfly.security.auth.server.RealmMapper;
+import org.wildfly.security.auth.server.SecurityDomain;
 import org.wildfly.security.auth.server.SecurityRealm;
 import org.wildfly.security.authz.PermissionMapper;
 import org.wildfly.security.authz.RoleDecoder;
@@ -160,20 +162,24 @@ class ElytronDefinition extends SimpleResourceDefinition {
     static final PropertiesAttributeDefinition SECURITY_PROPERTIES = new PropertiesAttributeDefinition.Builder("security-properties", true)
             .build();
 
-    public static final ElytronDefinition INSTANCE = new ElytronDefinition();
+    private final AtomicReference<ExpressionResolverExtension> resolverReference;
 
-    private ElytronDefinition() {
+    ElytronDefinition(AtomicReference<ExpressionResolverExtension> resolverReference) {
         super(new Parameters(ElytronExtension.SUBSYSTEM_PATH, ElytronExtension.getResourceDescriptionResolver())
                 .setAddHandler(new ElytronAdd())
                 .setRemoveHandler(new ElytronRemove())
                 .setCapabilities(ELYTRON_RUNTIME_CAPABILITY)
                 .addAccessConstraints(new SensitiveTargetAccessConstraintDefinition(new SensitivityClassification(ElytronExtension.SUBSYSTEM_NAME, ElytronDescriptionConstants.ELYTRON_SECURITY, true, true, true)),
                 new ApplicationTypeAccessConstraintDefinition(new ApplicationTypeConfig(ElytronExtension.SUBSYSTEM_NAME, ElytronDescriptionConstants.ELYTRON_SECURITY, false))));
+        this.resolverReference = resolverReference;
     }
 
     @Override
     public void registerChildren(ManagementResourceRegistration resourceRegistration) {
         final boolean serverOrHostController = isServerOrHostController(resourceRegistration);
+
+        // Expression Resolver
+        resourceRegistration.registerSubModel(ExpressionResolverResourceDefinition.getExpressionResolverDefinition(resourceRegistration.getPathAddress(), resolverReference));
 
         // Provider Loader
         resourceRegistration.registerSubModel(ProviderDefinitions.getAggregateProvidersDefinition());
@@ -209,6 +215,9 @@ class ElytronDefinition extends SimpleResourceDefinition {
         resourceRegistration.registerSubModel(ModifiableRealmDecorator.wrap(new LdapRealmDefinition()));
         resourceRegistration.registerSubModel(ModifiableRealmDecorator.wrap(new FileSystemRealmDefinition()));
         resourceRegistration.registerSubModel(new CachingRealmDefinition());
+        resourceRegistration.registerSubModel(new DistributedRealmDefinition());
+        resourceRegistration.registerSubModel(new FailoverRealmDefinition());
+        resourceRegistration.registerSubModel(new JaasRealmDefinition());
 
         // Security Factories
         resourceRegistration.registerSubModel(new CustomComponentDefinition<>(CredentialSecurityFactory.class, Function.identity(), ElytronDescriptionConstants.CUSTOM_CREDENTIAL_SECURITY_FACTORY, SECURITY_FACTORY_CREDENTIAL_RUNTIME_CAPABILITY));
@@ -237,6 +246,7 @@ class ElytronDefinition extends SimpleResourceDefinition {
         resourceRegistration.registerSubModel(new CustomComponentDefinition<>(PrincipalTransformer.class, Function.identity(), ElytronDescriptionConstants.CUSTOM_PRINCIPAL_TRANSFORMER, PRINCIPAL_TRANSFORMER_RUNTIME_CAPABILITY));
         resourceRegistration.registerSubModel(PrincipalTransformerDefinitions.getRegexPrincipalTransformerDefinition());
         resourceRegistration.registerSubModel(PrincipalTransformerDefinitions.getRegexValidatingPrincipalTransformerDefinition());
+        resourceRegistration.registerSubModel(PrincipalTransformerDefinitions.getCasePrincipalTransformerDefinition());
 
         // Realm Mappers
         resourceRegistration.registerSubModel(RealmMapperDefinitions.getConstantRealmMapper());
@@ -247,6 +257,8 @@ class ElytronDefinition extends SimpleResourceDefinition {
         // Role Decoders
         resourceRegistration.registerSubModel(new CustomComponentDefinition<>(RoleDecoder.class, Function.identity(), ElytronDescriptionConstants.CUSTOM_ROLE_DECODER, ROLE_DECODER_RUNTIME_CAPABILITY));
         resourceRegistration.registerSubModel(RoleDecoderDefinitions.getSimpleRoleDecoderDefinition());
+        resourceRegistration.registerSubModel(RoleDecoderDefinitions.getSourceAddressRoleDecoderDefinition());
+        resourceRegistration.registerSubModel(RoleDecoderDefinitions.getAggregateRoleDecoderDefinition());
 
         // Role Mappers
         resourceRegistration.registerSubModel(RoleMapperDefinitions.getAddSuffixRoleMapperDefinition());
@@ -256,6 +268,7 @@ class ElytronDefinition extends SimpleResourceDefinition {
         resourceRegistration.registerSubModel(new CustomComponentDefinition<>(RoleMapper.class, Function.identity(), ElytronDescriptionConstants.CUSTOM_ROLE_MAPPER, ROLE_MAPPER_RUNTIME_CAPABILITY));
         resourceRegistration.registerSubModel(RoleMapperDefinitions.getLogicalRoleMapperDefinition());
         resourceRegistration.registerSubModel(RoleMapperDefinitions.getMappedRoleMapperDefinition());
+        resourceRegistration.registerSubModel(RoleMapperDefinitions.getRegexRoleMapperDefinition());
 
         // Evidence Decoders
         resourceRegistration.registerSubModel(EvidenceDecoderDefinitions.getX500SubjectEvidenceDecoderDefinition());
@@ -293,6 +306,7 @@ class ElytronDefinition extends SimpleResourceDefinition {
 
         // Credential Store Block
         resourceRegistration.registerSubModel(new CredentialStoreResourceDefinition());
+        resourceRegistration.registerSubModel(new SecretKeyCredentialStoreDefinition());
 
         // Dir-Context
         resourceRegistration.registerSubModel(new DirContextDefinition());
@@ -437,12 +451,6 @@ class ElytronDefinition extends SimpleResourceDefinition {
 
         @Override
         protected void performBoottime(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {
-            //the normal default context manager will attempt to look up wildfly-config.xml on the class path
-            //parse it and store the result in a static. The means that the default can essentially be
-            //random of there are multiple deployments with different configurations
-            //to make sure there is no random behaviour we set the global default to an empty context
-            AuthenticationContext.getContextManager().setGlobalDefault(AuthenticationContext.empty());
-
 
             ModelNode model = resource.getModel();
             final String defaultAuthenticationContext = DEFAULT_AUTHENTICATION_CONTEXT.resolveModelAttribute(context, model).asStringOrNull();
@@ -499,26 +507,24 @@ class ElytronDefinition extends SimpleResourceDefinition {
             }
 
             if (registerJaspiFactory(context, model)) {
-                final AuthConfigFactory authConfigFactory = doPrivileged((PrivilegedAction<AuthConfigFactory>) ElytronDefinition::getAuthConfigFactory);
-                if (authConfigFactory != null) {
-                    // TODO This wrapping is only temporary to allow us to delegate to the PicketBox impl, at a later point there really should only
-                    // be one AuthConfigFactory at a time.
-                    registerAuthConfigFactory(new DelegatingAuthConfigFactory(new ElytronAuthConfigFactory(), authConfigFactory, ALLOW_DELEGATION));
-                } else {
-                    registerAuthConfigFactory(new ElytronAuthConfigFactory());
-                }
+                registerAuthConfigFactory(new ElytronAuthConfigFactory());
             }
 
             if (context.isNormalServer()) {
                 context.addStep(new AbstractDeploymentChainStep() {
                     @Override
                     protected void execute(DeploymentProcessorTarget processorTarget) {
+                        processorTarget.addDeploymentProcessor(ElytronExtension.SUBSYSTEM_NAME, Phase.STRUCTURE, Phase.STRUCTURE_ELYTRON_EXPRESSION_RESOLVER, new DeploymentExpressionResolverProcessor());
+                        processorTarget.addDeploymentProcessor(ElytronExtension.SUBSYSTEM_NAME, Phase.STRUCTURE,  Phase.STRUCTURE_SECURITY_METADATA, new SecurityMetaDataProcessor());
+                        processorTarget.addDeploymentProcessor(ElytronExtension.SUBSYSTEM_NAME, Phase.PARSE, Phase.PARSE_DEFINE_VIRTUAL_DOMAIN_NAME, new VirtualSecurityDomainNameProcessor());
                         processorTarget.addDeploymentProcessor(ElytronExtension.SUBSYSTEM_NAME, Phase.DEPENDENCIES, Phase.DEPENDENCIES_ELYTRON, new DependencyProcessor());
+                        processorTarget.addDeploymentProcessor(ElytronExtension.SUBSYSTEM_NAME, Phase.DEPENDENCIES, Phase.DEPENDENCIES_ELYTRON_EE_SECURITY, new EESecurityDependencyProcessor());
                         processorTarget.addDeploymentProcessor(ElytronExtension.SUBSYSTEM_NAME, Phase.CONFIGURE_MODULE, Phase.CONFIGURE_AUTHENTICATION_CONTEXT, AUTHENITCATION_CONTEXT_PROCESSOR);
                         if (defaultSSLContext != null) {
                             processorTarget.addDeploymentProcessor(ElytronExtension.SUBSYSTEM_NAME, Phase.CONFIGURE_MODULE, Phase.CONFIGURE_DEFAULT_SSL_CONTEXT, new SSLContextDependencyProcessor());
                         }
                         processorTarget.addDeploymentProcessor(ElytronExtension.SUBSYSTEM_NAME, Phase.FIRST_MODULE_USE, Phase.FIRST_MODULE_USE_AUTHENTICATION_CONTEXT, new AuthenticationContextAssociationProcessor());
+                        processorTarget.addDeploymentProcessor(ElytronExtension.SUBSYSTEM_NAME, Phase.INSTALL, Phase.INSTALL_VIRTUAL_SECURITY_DOMAIN, new VirtualSecurityDomainProcessor());
                     }
                 }, Stage.RUNTIME);
             }
@@ -587,9 +593,9 @@ class ElytronDefinition extends SimpleResourceDefinition {
         @Override
         public Boolean get() {
             if (WildFlySecurityManager.isChecking()) {
-                return doPrivileged((PrivilegedAction<Boolean>) () -> SecurityContextAssociation.getSecurityContext() != null);
+                return doPrivileged((PrivilegedAction<Boolean>) () -> SecurityDomain.getCurrent() == null);
             } else {
-                return SecurityContextAssociation.getSecurityContext() != null;
+                return SecurityDomain.getCurrent() == null;
             }
         }
     };

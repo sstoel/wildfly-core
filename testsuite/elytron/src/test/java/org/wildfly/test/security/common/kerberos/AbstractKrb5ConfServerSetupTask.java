@@ -41,10 +41,10 @@ import org.apache.directory.server.kerberos.shared.keytab.Keytab;
 import org.apache.directory.shared.kerberos.KerberosTime;
 import org.apache.directory.shared.kerberos.codec.types.EncryptionType;
 import org.apache.directory.shared.kerberos.components.EncryptionKey;
-import org.apache.log4j.Logger;
 import org.jboss.as.network.NetworkUtils;
 import org.jboss.as.test.integration.security.common.CoreUtils;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
+import org.jboss.logging.Logger;
 import org.wildfly.core.testrunner.ManagementClient;
 import org.wildfly.core.testrunner.ServerSetupTask;
 
@@ -98,7 +98,7 @@ public abstract class AbstractKrb5ConfServerSetupTask implements ServerSetupTask
         final String cannonicalHost = NetworkUtils.formatPossibleIpv6Address(CoreUtils.getCannonicalHost(TestSuiteEnvironment.getServerAddress()));
         final Map<String, String> map = new HashMap<String, String>();
         map.put("hostname", cannonicalHost);
-        final String supportedEncTypes = CoreUtils.IBM_JDK ? getSupportedEncTypes() : "des-cbc-md5,des3-cbc-sha1-kd";
+        final String supportedEncTypes = getSupportedEncTypes();
         map.put("enctypes", supportedEncTypes);
         LOGGER.trace("Supported enctypes in krb5.conf: " + supportedEncTypes);
         FileUtils.write(

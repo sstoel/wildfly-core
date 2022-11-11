@@ -42,6 +42,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SER
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUCCESS;
 import static org.jboss.as.domain.controller.HostConnectionInfo.Events.create;
+import static org.jboss.as.domain.http.server.ConsoleAvailability.CONSOLE_AVAILABILITY_CAPABILITY;
 import static org.jboss.as.host.controller.HostControllerService.HC_EXECUTOR_SERVICE_NAME;
 import static org.jboss.as.host.controller.HostControllerService.HC_SCHEDULED_EXECUTOR_SERVICE_NAME;
 import static org.jboss.as.host.controller.logging.HostControllerLogger.DOMAIN_LOGGER;
@@ -57,10 +58,8 @@ import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -73,7 +72,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
@@ -85,10 +86,11 @@ import org.jboss.as.controller.BootContext;
 import org.jboss.as.controller.Cancellable;
 import org.jboss.as.controller.CapabilityRegistry;
 import org.jboss.as.controller.ControlledProcessState;
+import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.ControlledProcessStateService;
 import org.jboss.as.controller.ExpressionResolver;
 import org.jboss.as.controller.ManagementModel;
-import org.jboss.as.controller.ModelController.OperationTransactionControl;
+import org.jboss.as.controller.ModelController;
 import org.jboss.as.controller.ModelControllerServiceInitialization;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
@@ -102,6 +104,7 @@ import org.jboss.as.controller.ResourceDefinition;
 import org.jboss.as.controller.RunningMode;
 import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.TransformingProxyController;
+import org.jboss.as.controller.ModelController.OperationTransactionControl;
 import org.jboss.as.controller.access.InVmAccess;
 import org.jboss.as.controller.access.management.DelegatingConfigurableAuthorizer;
 import org.jboss.as.controller.access.management.ManagementSecurityIdentitySupplier;
@@ -133,6 +136,8 @@ import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.PlaceholderResource;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.controller.registry.ResourceProvider;
+import org.jboss.as.controller.remote.AbstractModelControllerOperationHandlerFactoryService;
+import org.jboss.as.controller.remote.ModelControllerOperationHandlerFactory;
 import org.jboss.as.controller.services.path.PathManagerService;
 import org.jboss.as.controller.transform.Transformers;
 import org.jboss.as.domain.controller.DomainController;
@@ -141,11 +146,11 @@ import org.jboss.as.domain.controller.HostConnectionInfo.Event;
 import org.jboss.as.domain.controller.HostRegistrations;
 import org.jboss.as.domain.controller.LocalHostControllerInfo;
 import org.jboss.as.domain.controller.SlaveRegistrationException;
-import org.jboss.as.domain.controller.logging.DomainControllerLogger;
 import org.jboss.as.domain.controller.operations.ApplyExtensionsHandler;
 import org.jboss.as.domain.controller.operations.DomainModelIncludesValidator;
 import org.jboss.as.domain.controller.operations.coordination.PrepareStepHandler;
 import org.jboss.as.domain.controller.resources.DomainRootDefinition;
+import org.jboss.as.domain.http.server.ConsoleAvailability;
 import org.jboss.as.domain.management.CoreManagementResourceDefinition;
 import org.jboss.as.domain.management.security.DomainManagedServerCallbackHandler;
 import org.jboss.as.host.controller.RemoteDomainConnectionService.RemoteFileRepository;
@@ -179,7 +184,6 @@ import org.jboss.as.server.RuntimeExpressionResolver;
 import org.jboss.as.server.controller.resources.VersionModelInitializer;
 import org.jboss.as.server.deployment.ContentCleanerService;
 import org.jboss.as.server.mgmt.UndertowHttpManagementService;
-import org.jboss.as.server.services.security.AbstractVaultReader;
 import org.jboss.dmr.ModelNode;
 import org.jboss.msc.service.Service;
 import org.jboss.msc.service.ServiceBuilder;
@@ -198,6 +202,7 @@ import org.wildfly.security.manager.WildFlySecurityManager;
  * Creates the service that acts as the {@link org.jboss.as.controller.ModelController} for a Host Controller process.
  *
  * @author Brian Stansberry (c) 2011 Red Hat Inc.
+ * @author <a href="mailto:ropalka@redhat.com">Richard Opalka</a>
  */
 public class DomainModelControllerService extends AbstractControllerService implements DomainController, HostModelUtil.HostModelRegistrar, HostRegistrations {
 
@@ -229,7 +234,6 @@ public class DomainModelControllerService extends AbstractControllerService impl
     private final PrepareStepHandler prepareStepHandler;
     private final BootstrapListener bootstrapListener;
     private ManagementResourceRegistration modelNodeRegistration;
-    private final AbstractVaultReader vaultReader;
     private final ContentRepository contentRepository;
     private final ExtensionRegistry hostExtensionRegistry;
     private final ExtensionRegistry extensionRegistry;
@@ -255,6 +259,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
     private volatile ScheduledExecutorService pingScheduler;
     private volatile ManagementResourceRegistration hostModelRegistration;
     private volatile MasterDomainControllerClient masterDomainControllerClient;
+    private volatile Supplier<ConsoleAvailability> consoleAvailabilitySupplier;
 
     static void addService(final ServiceTarget serviceTarget,
                                                             final HostControllerEnvironment environment,
@@ -268,8 +273,6 @@ public class DomainModelControllerService extends AbstractControllerService impl
         final ConcurrentMap<String, ProxyController> hostProxies = new ConcurrentHashMap<String, ProxyController>();
         final Map<String, ProxyController> serverProxies = new ConcurrentHashMap<String, ProxyController>();
         final LocalHostControllerInfoImpl hostControllerInfo = new LocalHostControllerInfoImpl(processState, environment);
-        final AbstractVaultReader vaultReader = loadVaultReaderService();
-        ROOT_LOGGER.debugf("Using VaultReader %s", vaultReader);
         final ContentRepository contentRepository = ContentRepository.Factory.create(environment.getDomainContentDir(), environment.getDomainTempDir());
         ContentRepository.Factory.addService(serviceTarget, contentRepository);
         final IgnoredDomainResourceRegistry ignoredRegistry = new IgnoredDomainResourceRegistry(hostControllerInfo);
@@ -282,26 +285,29 @@ public class DomainModelControllerService extends AbstractControllerService impl
         final ExtensionRegistry extensionRegistry = new ExtensionRegistry(processType, runningModeControl, auditLogger, authorizer, securityIdentitySupplier, hostControllerInfoAccessor);
         final PrepareStepHandler prepareStepHandler = new PrepareStepHandler(hostControllerInfo,
                 hostProxies, serverProxies, ignoredRegistry, extensionRegistry);
-        final ExpressionResolver expressionResolver = new RuntimeExpressionResolver(vaultReader);
+        final RuntimeExpressionResolver expressionResolver = new RuntimeExpressionResolver();
+        hostExtensionRegistry.setResolverExtensionRegistry(expressionResolver);
         final DomainHostExcludeRegistry domainHostExcludeRegistry = new DomainHostExcludeRegistry();
-        final DomainModelControllerService service = new DomainModelControllerService(environment, runningModeControl, processState,
-                hostControllerInfo, contentRepository, hostProxies, serverProxies, prepareStepHandler, vaultReader,
+        HostControllerEnvironmentService.addService(environment, serviceTarget);
+
+        final ServiceBuilder<?> sb = serviceTarget.addService(SERVICE_NAME);
+        final Supplier<ExecutorService> esSupplier = sb.requires(HC_EXECUTOR_SERVICE_NAME);
+        final DomainModelControllerService service = new DomainModelControllerService(esSupplier, environment, runningModeControl, processState,
+                hostControllerInfo, contentRepository, hostProxies, serverProxies, prepareStepHandler,
                 ignoredRegistry, bootstrapListener, pathManager, expressionResolver, new DomainDelegatingResourceDefinition(),
                 hostExtensionRegistry, extensionRegistry, auditLogger, authorizer, securityIdentitySupplier, capabilityRegistry, domainHostExcludeRegistry);
-
-        HostControllerEnvironmentService.addService(environment, serviceTarget);
+        sb.setInstance(service);
+        sb.addDependency(ProcessControllerConnectionService.SERVICE_NAME, ProcessControllerConnectionService.class, service.injectedProcessControllerConnection);
+        sb.requires(PATH_MANAGER_CAPABILITY.getCapabilityServiceName()); // ensure this is up
+        service.consoleAvailabilitySupplier = sb.requires(CONSOLE_AVAILABILITY_CAPABILITY.getCapabilityServiceName());
+        sb.install();
 
         ExternalManagementRequestExecutor.install(serviceTarget, threadGroup,
                 EXECUTOR_CAPABILITY.getCapabilityServiceName(), service.getStabilityMonitor());
-
-        final ServiceBuilder sb = serviceTarget.addService(SERVICE_NAME, service);
-        sb.addDependency(HC_EXECUTOR_SERVICE_NAME, ExecutorService.class, service.getExecutorServiceInjector());
-        sb.addDependency(ProcessControllerConnectionService.SERVICE_NAME, ProcessControllerConnectionService.class, service.injectedProcessControllerConnection);
-        sb.requires(PATH_MANAGER_CAPABILITY.getCapabilityServiceName()); // ensure this is up
-        sb.install();
     }
 
-    private DomainModelControllerService(final HostControllerEnvironment environment,
+    private DomainModelControllerService(final Supplier<ExecutorService> executorService,
+                                         final HostControllerEnvironment environment,
                                          final HostRunningModeControl runningModeControl,
                                          final ControlledProcessState processState,
                                          final LocalHostControllerInfoImpl hostControllerInfo,
@@ -309,7 +315,6 @@ public class DomainModelControllerService extends AbstractControllerService impl
                                          final ConcurrentMap<String, ProxyController> hostProxies,
                                          final Map<String, ProxyController> serverProxies,
                                          final PrepareStepHandler prepareStepHandler,
-                                         final AbstractVaultReader vaultReader,
                                          final IgnoredDomainResourceRegistry ignoredRegistry,
                                          final BootstrapListener bootstrapListener,
                                          final PathManagerService pathManager,
@@ -322,8 +327,8 @@ public class DomainModelControllerService extends AbstractControllerService impl
                                          final ManagementSecurityIdentitySupplier securityIdentitySupplier,
                                          final CapabilityRegistry capabilityRegistry,
                                          final DomainHostExcludeRegistry domainHostExcludeRegistry) {
-        super(environment.getProcessType(), runningModeControl, null, processState,
-                rootResourceDefinition, prepareStepHandler, new RuntimeExpressionResolver(vaultReader), auditLogger, authorizer, securityIdentitySupplier, capabilityRegistry);
+        super(executorService, null, environment.getProcessType(), runningModeControl, null, processState,
+                rootResourceDefinition, prepareStepHandler, expressionResolver, auditLogger, authorizer, securityIdentitySupplier, capabilityRegistry, null);
         this.environment = environment;
         this.runningModeControl = runningModeControl;
         this.processState = processState;
@@ -336,7 +341,6 @@ public class DomainModelControllerService extends AbstractControllerService impl
         this.serverProxies = serverProxies;
         this.prepareStepHandler = prepareStepHandler;
         this.prepareStepHandler.setServerInventory(new DelegatingServerInventory());
-        this.vaultReader = vaultReader;
         this.ignoredRegistry = ignoredRegistry;
         this.bootstrapListener = bootstrapListener;
         this.hostExtensionRegistry = hostExtensionRegistry;
@@ -409,13 +413,13 @@ public class DomainModelControllerService extends AbstractControllerService impl
                 if (pinger != null) {
                     pinger.cancel();
                 }
+                final String address = hostRegistration.getAddress();
+                final Event event = cleanShutdown ? create(HostConnectionInfo.EventType.UNREGISTERED, address) : create(HostConnectionInfo.EventType.UNCLEAN_UNREGISTRATION, address);
+                slaveHostRegistrations.unregisterHost(id, event);
                 boolean registered = hostProxies.remove(id) != null;
-                modelNodeRegistration.unregisterProxyController(PathElement.pathElement(HOST, id));
 
                 if (registered) {
-                    final String address = hostRegistration.getAddress();
-                    final Event event = cleanShutdown ? create(HostConnectionInfo.EventType.UNREGISTERED, address) : create(HostConnectionInfo.EventType.UNCLEAN_UNREGISTRATION, address);
-                    slaveHostRegistrations.unregisterHost(id, event);
+                    modelNodeRegistration.unregisterProxyController(PathElement.pathElement(HOST, id));
                     if (!cleanShutdown) {
                         DOMAIN_LOGGER.lostConnectionToRemoteHost(id);
                     } else {
@@ -522,7 +526,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
 
     @Override
     public void start(StartContext context) throws StartException {
-        final ExecutorService executorService = getExecutorServiceInjector().getValue();
+        final ExecutorService executorService = getExecutorService();
         this.hostControllerConfigurationPersister = new HostControllerConfigurationPersister(environment, hostControllerInfo, executorService, hostExtensionRegistry, extensionRegistry);
         setConfigurationPersister(hostControllerConfigurationPersister);
         prepareStepHandler.setExecutorService(executorService);
@@ -565,11 +569,18 @@ public class DomainModelControllerService extends AbstractControllerService impl
         capabilityReg.registerCapability(
                 new RuntimeCapabilityRegistration(PATH_MANAGER_CAPABILITY, CapabilityScope.GLOBAL, new RegistrationPoint(PathAddress.EMPTY_ADDRESS, null)));
         capabilityReg.registerCapability(
-                new RuntimeCapabilityRegistration(EXECUTOR_CAPABILITY, CapabilityScope.GLOBAL, new RegistrationPoint(PathAddress.EMPTY_ADDRESS, null)));
+                        new RuntimeCapabilityRegistration(EXECUTOR_CAPABILITY, CapabilityScope.GLOBAL, new RegistrationPoint(PathAddress.EMPTY_ADDRESS, null)));
+        capabilityReg.registerCapability(
+                new RuntimeCapabilityRegistration(PROCESS_STATE_NOTIFIER_CAPABILITY, CapabilityScope.GLOBAL, new RegistrationPoint(PathAddress.EMPTY_ADDRESS, null)));
+        capabilityReg.registerCapability(
+                new RuntimeCapabilityRegistration(CONSOLE_AVAILABILITY_CAPABILITY, CapabilityScope.GLOBAL, new RegistrationPoint(PathAddress.EMPTY_ADDRESS, null)));
+
         // Record the core capabilities with the root MRR so reads of it will show it as their provider
         // This also gets them recorded as 'possible capabilities' in the capability registry
         rootRegistration.registerCapability(PATH_MANAGER_CAPABILITY);
         rootRegistration.registerCapability(EXECUTOR_CAPABILITY);
+        rootRegistration.registerCapability(PROCESS_STATE_NOTIFIER_CAPABILITY);
+        rootRegistration.registerCapability(CONSOLE_AVAILABILITY_CAPABILITY);
 
         // Register the slave host info
         ResourceProvider.Tool.addResourceProvider(HOST_CONNECTION, new ResourceProvider() {
@@ -723,7 +734,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
                                 // our current setup is good, if we're using --cached-dc, we'll try and load the config below
                                 // if not, we'll start empty.
                                 break;
-                            case FETCH_FROM_MASTER:
+                            case FETCH_FROM_DOMAIN_CONTROLLER:
                                 if (discoveryConfigured) {
                                     // Try and connect.
                                     // If can't connect && !environment.isUseCachedDc(), abort
@@ -791,7 +802,26 @@ public class DomainModelControllerService extends AbstractControllerService impl
                     if (ok && processType != ProcessType.EMBEDDED_HOST_CONTROLLER) {
                         InternalExecutor executor = new InternalExecutor();
                         ManagementRemotingServices.installManagementChannelServices(serviceTarget, ManagementRemotingServices.MANAGEMENT_ENDPOINT,
-                                new MasterDomainControllerOperationHandlerService(this, executor, executor, environment.getDomainTempDir(), this, domainHostExcludeRegistry),
+                                new ModelControllerOperationHandlerFactory() {
+                                    @Override
+                                    public AbstractModelControllerOperationHandlerFactoryService newInstance(
+                                            final Consumer<AbstractModelControllerOperationHandlerFactoryService> serviceConsumer,
+                                            final Supplier<ModelController> modelControllerSupplier,
+                                            final Supplier<ExecutorService> executorSupplier,
+                                            final Supplier<ScheduledExecutorService> scheduledExecutorSupplier) {
+                                        return new MasterDomainControllerOperationHandlerService(
+                                                serviceConsumer,
+                                                modelControllerSupplier,
+                                                executorSupplier,
+                                                scheduledExecutorSupplier,
+                                                DomainModelControllerService.this,
+                                                executor,
+                                                executor,
+                                                environment.getDomainTempDir(),
+                                                DomainModelControllerService.this,
+                                                domainHostExcludeRegistry);
+                                    }
+                                },
                                 DomainModelControllerService.SERVICE_NAME, ManagementRemotingServices.DOMAIN_CHANNEL,
                                 HC_EXECUTOR_SERVICE_NAME, HC_SCHEDULED_EXECUTOR_SERVICE_NAME);
 
@@ -825,7 +855,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
             if (ok && processType != ProcessType.EMBEDDED_HOST_CONTROLLER) {
                 // Install the server > host operation handler
                 ServerToHostOperationHandlerFactoryService.install(serviceTarget, ServerInventoryService.SERVICE_NAME,
-                        getExecutorServiceInjector().getValue(), new InternalExecutor(), this, expressionResolver, environment.getDomainTempDir());
+                        getExecutorService(), new InternalExecutor(), this, expressionResolver, environment.getDomainTempDir());
 
                 // demand native mgmt services
                 final ServiceBuilder nativeSB = serviceTarget.addService(ServiceName.JBOSS.append("native-mgmt-startup"), Service.NULL);
@@ -853,20 +883,42 @@ public class DomainModelControllerService extends AbstractControllerService impl
         } finally {
             if (ok) {
                 try {
-                    finishBoot();
                     if (runningModeControl.getRunningMode() == RunningMode.NORMAL) {
+                        finishBoot(true);
+                        if (hostControllerInfo.isMasterDomainController()) {
+                           //Force the activation of the web console here before starting the servers
+                           consoleAvailabilitySupplier.get().setAvailable();
+                        }
                         startServers(true);
+                        clearBootingReadOnlyFlag();
+                    } else {
+                        finishBoot();
                     }
                 } finally {
                     // Trigger the started message
                     Notification notification = new Notification(ModelDescriptionConstants.BOOT_COMPLETE_NOTIFICATION, PathAddress.pathAddress(PathElement.pathElement(CORE_SERVICE, MANAGEMENT),
                             PathElement.pathElement(SERVICE, MANAGEMENT_OPERATIONS)), ControllerLogger.MGMT_OP_LOGGER.bootComplete());
                     getNotificationSupport().emit(notification);
-                    bootstrapListener.printBootStatistics();
+
+                    String message;
+                    String hostConfig = environment.getHostConfigurationFile().getMainFile().getName();
+                    if (environment.getDomainConfigurationFile() != null) { //for slave HC is null
+                        String domainConfig = environment.getDomainConfigurationFile().getMainFile().getName();
+                        message = ROOT_LOGGER.configFilesInUse(domainConfig, hostConfig);
+                    } else {
+                        message = ROOT_LOGGER.configFileInUse(hostConfig);
+                    }
+                    bootstrapListener.printBootStatistics(message);
                 }
             } else {
                 // Die!
-                String failed = ROOT_LOGGER.unsuccessfulBoot();
+                String message;
+                if (environment.getDomainConfigurationFile() != null) {
+                    message = ROOT_LOGGER.configFilesInUse(environment.getDomainConfigurationFile().getMainFile().getName(), environment.getHostConfigurationFile().getMainFile().getName());
+                } else {
+                    message = ROOT_LOGGER.configFileInUse(environment.getHostConfigurationFile().getMainFile().getName());
+                }
+                String failed = ROOT_LOGGER.unsuccessfulBoot(message);
                 ROOT_LOGGER.fatal(failed);
                 bootstrapListener.bootFailure(failed);
 
@@ -883,7 +935,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
         boolean ok = boot(Collections.singletonList(registerModelControllerServiceInitializationBootStep(context)), true, true);
         // until a host is added with the host add op, there is no root description provider delegate. We just install a non-resolving one for now, so the
         // CLI doesn't get a lot of NPEs from :read-resource-description etc.
-        SimpleResourceDefinition def = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(null, new NonResolvingResourceDescriptionResolver()));
+        SimpleResourceDefinition def = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(null, NonResolvingResourceDescriptionResolver.INSTANCE));
         rootResourceDefinition.setFakeDelegate(def);
         // just initialize the persister and return, we have to wait for /host=foo:add()
         hostControllerConfigurationPersister.initializeDomainConfigurationPersister(false);
@@ -946,14 +998,13 @@ public class DomainModelControllerService extends AbstractControllerService impl
                 extensionRegistry,
                 hostControllerInfo,
                 hostControllerInfo.getAuthenticationContext(),
-                hostControllerInfo.getRemoteDomainControllerSecurityRealm(),
                 remoteFileRepository,
                 contentRepository,
                 ignoredRegistry,
                 new DomainModelControllerService.InternalExecutor(),
                 this,
                 environment,
-                getExecutorServiceInjector().getValue(),
+                getExecutorService(),
                 currentRunningMode,
                 serverProxies,
                 domainConfigAvailable);
@@ -1073,7 +1124,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
         hostModelRegistration =
                 HostModelUtil.createHostRegistry(hostName, root, hostControllerConfigurationPersister, environment, runningModeControl,
                         localFileRepository, hostControllerInfo, new DelegatingServerInventory(), remoteFileRepository, contentRepository,
-                        this, hostExtensionRegistry, extensionRegistry, vaultReader, ignoredRegistry, processState, pathManager, authorizer,
+                        this, hostExtensionRegistry, extensionRegistry, ignoredRegistry, processState, pathManager, authorizer,
                         securityIdentitySupplier, getAuditLogger(), getBootErrorCollector());
     }
 
@@ -1328,25 +1379,6 @@ public class DomainModelControllerService extends AbstractControllerService impl
         }
     }
 
-    private static AbstractVaultReader loadVaultReaderService() {
-        final ServiceLoader<AbstractVaultReader> serviceLoader = ServiceLoader.load(AbstractVaultReader.class,
-                DomainModelControllerService.class.getClassLoader());
-        final Iterator<AbstractVaultReader> it = serviceLoader.iterator();
-        // TODO WFCORE-114 get rid of catching/suppressing errors once we have a complete impl in WFCORE
-        ServiceConfigurationError sce = null;
-        try {
-            while (it.hasNext()) {
-                return it.next();
-            }
-        } catch (ServiceConfigurationError e) {
-            sce = e;
-        }
-        if (sce != null) {
-            DomainControllerLogger.HOST_CONTROLLER_LOGGER.debugf(sce, "Cannot instantiate provider of service %s", AbstractVaultReader.class);
-        }
-        return null;
-    }
-
     @Override
     public ExtensionRegistry getExtensionRegistry() {
         return extensionRegistry;
@@ -1526,9 +1558,6 @@ public class DomainModelControllerService extends AbstractControllerService impl
             super.setResult(inventory);
         }
 
-        private void setFailure(final Throwable t) {
-            super.setFailed(t);
-        }
     }
 
     // this is a placeholder object used in certain cases where the live inventory is not available
@@ -1719,14 +1748,14 @@ public class DomainModelControllerService extends AbstractControllerService impl
 
     private static class DeferredDomainConnectService implements Service<Void>, PropertyChangeListener {
         private final MasterDomainControllerClient domainControllerClient;
-        private final InjectedValue<ControlledProcessStateService> injectedValue = new InjectedValue<>();
+        private final InjectedValue<ProcessStateNotifier> injectedValue = new InjectedValue<>();
         private boolean activated;
         private volatile Cancellable connectionFuture;
 
         private static void install(ServiceTarget target, MasterDomainControllerClient domainControllerClient) {
             DeferredDomainConnectService service = new DeferredDomainConnectService(domainControllerClient);
             target.addService(DomainModelControllerService.SERVICE_NAME.append("deferred-domain-connect"), service)
-                    .addDependency(ControlledProcessStateService.SERVICE_NAME, ControlledProcessStateService.class, service.injectedValue)
+                    .addDependency(ControlledProcessStateService.INTERNAL_SERVICE_NAME, ProcessStateNotifier.class, service.injectedValue)
                     .install();
         }
 
@@ -1736,8 +1765,8 @@ public class DomainModelControllerService extends AbstractControllerService impl
 
         @Override
         public void start(StartContext context) throws StartException {
-            ControlledProcessStateService cpss = injectedValue.getValue();
-            cpss.addPropertyChangeListener(this);
+            ProcessStateNotifier cpsn = injectedValue.getValue();
+            cpsn.addPropertyChangeListener(this);
         }
 
         @Override

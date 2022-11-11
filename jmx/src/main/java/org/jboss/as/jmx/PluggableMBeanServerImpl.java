@@ -44,7 +44,6 @@ import static org.jboss.as.jmx.MBeanServerSignature.REMOVE_NOTIFICATION_LISTENER
 import static org.jboss.as.jmx.MBeanServerSignature.SET_ATTRIBUTE;
 import static org.jboss.as.jmx.MBeanServerSignature.SET_ATTRIBUTES;
 import static org.jboss.as.jmx.MBeanServerSignature.UNREGISTER_MBEAN;
-import static org.jboss.as.jmx.SecurityActions.createCaller;
 
 import java.io.ObjectInputStream;
 import java.lang.reflect.UndeclaredThrowableException;
@@ -53,6 +52,7 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -66,6 +66,7 @@ import javax.management.InstanceNotFoundException;
 import javax.management.IntrospectionException;
 import javax.management.InvalidAttributeValueException;
 import javax.management.ListenerNotFoundException;
+import java.util.Map;
 import javax.management.MBeanException;
 import javax.management.MBeanInfo;
 import javax.management.MBeanOperationInfo;
@@ -74,6 +75,7 @@ import javax.management.MBeanRegistrationException;
 import javax.management.MBeanServer;
 import javax.management.MBeanServerDelegate;
 import javax.management.NotCompliantMBeanException;
+import javax.management.Notification;
 import javax.management.NotificationFilter;
 import javax.management.NotificationListener;
 import javax.management.ObjectInstance;
@@ -512,7 +514,7 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
         try {
             //No authorization needed to get the names of the domains
             ArrayList<String> result = new ArrayList<String>();
-            if (delegates.size() > 0) {
+            if (!delegates.isEmpty()) {
                 for (MBeanServerPlugin delegate : delegates) {
                     String[] domains = delegate.getDomains();
                     if (domains.length > 0) {
@@ -538,7 +540,7 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
         boolean shouldLog = false;
         try {
             int i = 0;
-            if (delegates.size() > 0) {
+            if (!delegates.isEmpty()) {
                 for (MBeanServerPlugin delegate : delegates) {
                     //Only include the count if the user is authorized to see the beans in the domain
                     if (authorizeMBeanOperation(delegate, ObjectName.WILDCARD, GET_MBEAN_COUNT, null, JmxAction.Impact.READ_ONLY, false)) {
@@ -761,7 +763,7 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
         Boolean shouldAuditLog = null;
         final boolean readOnly = true;
         try {
-            if (delegates.size() > 0) {
+            if (!delegates.isEmpty()) {
                 for (MBeanServerPlugin delegate : delegates) {
                     if (delegate.accepts(name) && delegate.isRegistered(name)) {
                         authorizeMBeanOperation(delegate, name, IS_REGISTERED, null, JmxAction.Impact.READ_ONLY);
@@ -794,7 +796,7 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
         boolean shouldAuditLog = false;
         try {
             Set<ObjectInstance> result = new HashSet<ObjectInstance>();
-            if (delegates.size() > 0) {
+            if (!delegates.isEmpty()) {
                 for (MBeanServerPlugin delegate : delegates) {
                     if (name == null || (name.getDomain() != null && delegate.accepts(name))) {
                         //Only include the mbeans if the user is authorized to see the beans in the domain
@@ -830,7 +832,7 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
         boolean shouldAuditLog = false;
         try {
             Set<ObjectName> result = new HashSet<ObjectName>();
-            if (delegates.size() > 0) {
+            if (!delegates.isEmpty()) {
                 for (MBeanServerPlugin delegate : delegates) {
                     if (name == null || (name.getDomain() != null && delegate.accepts(name))) {
                         //Only include the mbeans if the user is authorized to see the beans in the domain
@@ -1097,7 +1099,7 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
         if (name == null) {
             throw JmxLogger.ROOT_LOGGER.objectNameCantBeNull();
         }
-        if (delegates.size() > 0) {
+        if (!delegates.isEmpty()) {
             for (MBeanServerPlugin delegate : delegates) {
                 if (delegate.accepts(name) && delegate.isRegistered(name)) {
                     return delegate;
@@ -1115,7 +1117,7 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
             return rootMBeanServer;
         }
 
-        if (delegates.size() > 0) {
+        if (!delegates.isEmpty()) {
             for (MBeanServerPlugin delegate : delegates) {
                 if (delegate.accepts(name)) {
                     return delegate;
@@ -1198,7 +1200,7 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
             JmxAction action = new JmxAction(methodName, impact, attributeName);
             //TODO populate the 'environment' variable
             SecurityIdentity securityIdentity = securityIdentitySupplier != null ? securityIdentitySupplier.get() : null;
-            AuthorizationResult authorizationResult = authorizer.authorizeJmxOperation(createCaller(securityIdentity), null, action, target);
+            AuthorizationResult authorizationResult = authorizer.authorizeJmxOperation(securityIdentity, null, action, target);
             if (authorizationResult.getDecision() != Decision.PERMIT) {
                 if (exception) {
                     throw JmxLogger.ROOT_LOGGER.unauthorized();
@@ -1220,7 +1222,7 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
             JmxAction action = new JmxAction(methodName, JmxAction.Impact.CLASSLOADING);
             //TODO populate the 'environment' variable
             SecurityIdentity securityIdentity = securityIdentitySupplier != null ? securityIdentitySupplier.get() : null;
-            AuthorizationResult authorizationResult = authorizer.authorizeJmxOperation(createCaller(securityIdentity), null, action, target);
+            AuthorizationResult authorizationResult = authorizer.authorizeJmxOperation(securityIdentity, null, action, target);
             if (authorizationResult.getDecision() != Decision.PERMIT) {
                 throw JmxLogger.ROOT_LOGGER.unauthorized();
             }
@@ -1296,6 +1298,8 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
 
         private final MBeanServer delegate;
 
+        private final Map<NotificationListener, NotificationListener> listeners = new HashMap<>();
+
         public TcclMBeanServer(MBeanServer delegate) {
             this.delegate = delegate;
         }
@@ -1320,7 +1324,21 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
                 throws InstanceNotFoundException {
             ClassLoader old = pushClassLoader(name);
             try {
-                delegate.addNotificationListener(name, listener, filter, handback);
+                NotificationListener notificationListener = new NotificationListener() {
+                    @Override
+                    public void handleNotification(Notification notification, Object handback) {
+                        ClassLoader previous = null;
+                        try {
+                            previous = WildFlySecurityManager.getCurrentContextClassLoaderPrivileged();
+                            WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(listener.getClass().getClassLoader());
+                            listener.handleNotification(notification, handback);
+                        } finally {
+                            WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(previous);
+                        }
+                    }
+                };
+                listeners.put(listener, notificationListener);
+                delegate.addNotificationListener(name, notificationListener, filter, handback);
             } finally {
                 resetClassLoader(old);
             }
@@ -1503,7 +1521,12 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
                 throws InstanceNotFoundException, ListenerNotFoundException {
             ClassLoader old = pushClassLoader(name);
             try {
-                delegate.removeNotificationListener(name, listener, filter, handback);
+                if (listeners.containsKey(listener)) {
+                    delegate.removeNotificationListener(name, listeners.get(listener), filter, handback);
+                    listeners.remove(listener);
+                } else {
+                    delegate.removeNotificationListener(name, listener, filter, handback);
+                }
             } finally {
                 resetClassLoader(old);
             }
@@ -1513,7 +1536,12 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
                 ListenerNotFoundException {
             ClassLoader old = pushClassLoader(name);
             try {
-                delegate.removeNotificationListener(name, listener);
+                if (listeners.containsKey(listener)) {
+                    delegate.removeNotificationListener(name, listeners.get(listener));
+                    listeners.remove(listener);
+                } else {
+                    delegate.removeNotificationListener(name, listener);
+                }
             } finally {
                 resetClassLoader(old);
             }

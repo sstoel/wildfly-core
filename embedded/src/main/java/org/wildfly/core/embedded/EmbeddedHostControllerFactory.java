@@ -43,6 +43,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import org.jboss.as.controller.ControlledProcessState;
+import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.ControlledProcessStateService;
 import org.jboss.as.controller.ModelControllerClientFactory;
 import org.jboss.as.controller.ProcessType;
@@ -226,10 +227,10 @@ public class EmbeddedHostControllerFactory {
         private final ModuleLoader moduleLoader;
         private final ClassLoader embeddedModuleCL;
         private ServiceContainer serviceContainer;
-        private ControlledProcessState.State currentProcessState;
+        private volatile ControlledProcessState.State currentProcessState;
         private ModelControllerClient modelControllerClient;
         private ExecutorService executorService;
-        private ControlledProcessStateService controlledProcessStateService;
+        private ProcessStateNotifier processStateNotifier;
 
         public HostControllerImpl(final File jbossHomeDir, String[] cmdargs, Properties systemProps, Map<String, String> systemEnv, ModuleLoader moduleLoader, ClassLoader embeddedModuleCL) {
             this.cmdargs = cmdargs;
@@ -252,9 +253,9 @@ public class EmbeddedHostControllerFactory {
 
         @Override
         public void start() throws EmbeddedProcessStartException {
-            ClassLoader tccl = EmbeddedManagedProcess.getTccl();
+            ClassLoader tccl = SecurityActions.getTccl();
             try {
-                EmbeddedManagedProcess.setTccl(embeddedModuleCL);
+                SecurityActions.setTccl(embeddedModuleCL);
                 EmbeddedHostControllerBootstrap hostControllerBootstrap = null;
                 try {
                     final long startTime = System.currentTimeMillis();
@@ -274,13 +275,13 @@ public class EmbeddedHostControllerFactory {
                     new Random(new SecureRandom().nextLong()).nextBytes(authBytes);
                     final String authCode = Base64.getEncoder().encodeToString(authBytes);
                     hostControllerBootstrap = new EmbeddedHostControllerBootstrap(futureContainer, environment, authCode);
-                    hostControllerBootstrap.bootstrap();
+                    hostControllerBootstrap.bootstrap(processStateListener);
                     serviceContainer = futureContainer.get();
                     executorService = Executors.newCachedThreadPool();
-                    @SuppressWarnings("unchecked") final Value<ControlledProcessStateService> processStateServiceValue = (Value<ControlledProcessStateService>) serviceContainer.getRequiredService(ControlledProcessStateService.SERVICE_NAME);
-                    controlledProcessStateService = processStateServiceValue.getValue();
-                    controlledProcessStateService.addPropertyChangeListener(processStateListener);
-                    establishModelControllerClient(controlledProcessStateService.getCurrentState(), true);
+                    @SuppressWarnings({"unchecked", "deprecation"})
+                    final Value<ProcessStateNotifier> processStateNotifierValue = (Value<ProcessStateNotifier>) serviceContainer.getRequiredService(ControlledProcessStateService.SERVICE_NAME);
+                    processStateNotifier = processStateNotifierValue.getValue();
+                    establishModelControllerClient(currentProcessState, false);
                 } catch (RuntimeException rte) {
                     if (hostControllerBootstrap != null) {
                         hostControllerBootstrap.failed();
@@ -293,7 +294,7 @@ public class EmbeddedHostControllerFactory {
                     throw EmbeddedLogger.ROOT_LOGGER.cannotStartEmbeddedServer(ex);
                 }
             } finally {
-                EmbeddedManagedProcess.setTccl(tccl);
+                SecurityActions.setTccl(tccl);
             }
         }
 
@@ -359,13 +360,26 @@ public class EmbeddedHostControllerFactory {
 
         @Override
         public void stop() {
-            ClassLoader tccl = EmbeddedManagedProcess.getTccl();
+            ClassLoader tccl = SecurityActions.getTccl();
             try {
-                EmbeddedManagedProcess.setTccl(embeddedModuleCL);
+                SecurityActions.setTccl(embeddedModuleCL);
                 exit();
             } finally {
-                EmbeddedManagedProcess.setTccl(tccl);
+                SecurityActions.setTccl(tccl);
             }
+        }
+
+        @Override
+        public String getProcessState() {
+            if (currentProcessState == null) {
+                return null;
+            }
+            return currentProcessState.toString();
+        }
+
+        @Override
+        public boolean canQueryProcessState() {
+            return true;
         }
 
         private void exit() {
@@ -383,9 +397,9 @@ public class EmbeddedHostControllerFactory {
                     ServerLogger.ROOT_LOGGER.error(ex.getLocalizedMessage(), ex);
                 }
             }
-            if (controlledProcessStateService != null) {
-                controlledProcessStateService.removePropertyChangeListener(processStateListener);
-                controlledProcessStateService = null;
+            if (processStateNotifier != null) {
+                processStateNotifier.removePropertyChangeListener(processStateListener);
+                processStateNotifier = null;
             }
             if (executorService != null) {
                 try {
@@ -413,10 +427,10 @@ public class EmbeddedHostControllerFactory {
 
             // these are for compatibility with Main.determineEnvironment / HostControllerEnvironment
             // Once WFCORE-938 is resolved, --admin-only will allow a connection back to the DC for slaves,
-            // and support a method for setting the domain master address outside of -Djboss.domain.master.address
+            // and support a method for setting the domain master address outside of -Djboss.domain.primary.address
             // so we'll probably need a command line argument for this if its not specified as a system prop
-            if (SecurityActions.getPropertyPrivileged(HostControllerEnvironment.JBOSS_DOMAIN_MASTER_ADDRESS, null) == null) {
-                SecurityActions.setPropertyPrivileged(HostControllerEnvironment.JBOSS_DOMAIN_MASTER_ADDRESS, "127.0.0.1");
+            if (SecurityActions.getPropertyPrivileged(HostControllerEnvironment.JBOSS_DOMAIN_PRIMARY_ADDRESS, null) == null) {
+                SecurityActions.setPropertyPrivileged(HostControllerEnvironment.JBOSS_DOMAIN_PRIMARY_ADDRESS, "127.0.0.1");
             }
             cmds.add(MODULE_PATH);
             cmds.add(SecurityActions.getPropertyPrivileged("module.path", ""));
@@ -435,6 +449,8 @@ public class EmbeddedHostControllerFactory {
             }
             return Main.determineEnvironment(cmds.toArray(new String[cmds.size()]), startTime, ProcessType.EMBEDDED_HOST_CONTROLLER).getHostControllerEnvironment();
         }
+
+
     }
 }
 

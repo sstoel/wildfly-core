@@ -53,7 +53,7 @@ public class WildCardReadsTestCase extends AbstractCliTestBase {
     public static void setup() throws Exception {
 
         CLITestSuite.createSupport(WildCardReadsTestCase.class.getSimpleName());
-        AbstractCliTestBase.initCLI(DomainTestSupport.masterAddress);
+        AbstractCliTestBase.initCLI(DomainTestSupport.primaryAddress);
     }
 
     @AfterClass
@@ -117,14 +117,14 @@ public class WildCardReadsTestCase extends AbstractCliTestBase {
     }
 
     @Test
-    public void testSlaveAllServersReadRootAttribute() throws IOException {
-        cli.sendLine("/host=slave/server=*:read-attribute(name=\"server-state\")");
+    public void testSecondaryAllServersReadRootAttribute() throws IOException {
+        cli.sendLine("/host=secondary/server=*:read-attribute(name=\"server-state\")");
         CLIOpResult opResult = cli.readAllAsOpResult();
         Assert.assertTrue(opResult.isIsOutcomeSuccess());
         ModelNode generic = opResult.getResponseNode().get(ModelDescriptionConstants.RESULT);
         Assert.assertEquals(ModelType.LIST, generic.getType());
         Assert.assertEquals(4, generic.asInt());
-        cli.sendLine("/host=slave/server=*/interface=*:read-resource()");
+        cli.sendLine("/host=secondary/server=*/interface=*:read-resource()");
         opResult = cli.readAllAsOpResult();
         Assert.assertTrue(opResult.isIsOutcomeSuccess());
         generic = opResult.getResponseNode().get(ModelDescriptionConstants.RESULT);
@@ -133,8 +133,8 @@ public class WildCardReadsTestCase extends AbstractCliTestBase {
     }
 
     @Test
-    public void testSlaveAllServersReadResource() throws IOException {
-        cli.sendLine("/host=slave/server=*/interface=*:read-resource()");
+    public void testSecondaryAllServersReadResource() throws IOException {
+        cli.sendLine("/host=secondary/server=*/interface=*:read-resource()");
         CLIOpResult opResult = cli.readAllAsOpResult();
         Assert.assertTrue(opResult.isIsOutcomeSuccess());
         ModelNode generic = opResult.getResponseNode().get(ModelDescriptionConstants.RESULT);
@@ -143,8 +143,8 @@ public class WildCardReadsTestCase extends AbstractCliTestBase {
     }
 
     @Test
-    public void testSlaveAllServersReadResourceDescription() throws IOException {
-        cli.sendLine("/host=slave/server=*/interface=public:read-resource-description()");
+    public void testSecondaryAllServersReadResourceDescription() throws IOException {
+        cli.sendLine("/host=secondary/server=*/interface=public:read-resource-description()");
         CLIOpResult opResult = cli.readAllAsOpResult();
         Assert.assertTrue(opResult.isIsOutcomeSuccess());
         ModelNode generic = opResult.getResponseNode().get(ModelDescriptionConstants.RESULT);

@@ -17,19 +17,6 @@
  */
 package org.wildfly.extension.elytron;
 
-import mockit.Mock;
-import mockit.MockUp;
-
-import org.jboss.as.controller.capability.RuntimeCapability;
-import org.jboss.as.subsystem.test.AdditionalInitialization;
-import org.jboss.as.subsystem.test.ControllerInitializer;
-import org.jboss.as.subsystem.test.KernelServices;
-import org.jboss.msc.service.ServiceController;
-import org.jboss.msc.service.ServiceName;
-import org.wildfly.security.x500.cert.BasicConstraintsExtension;
-import org.wildfly.security.x500.cert.SelfSignedX509CertificateAndSigningKey;
-import org.wildfly.security.x500.cert.X509CertificateBuilder;
-
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -48,6 +35,20 @@ import java.security.PublicKey;
 import java.security.cert.X509Certificate;
 
 import javax.security.auth.x500.X500Principal;
+
+import org.jboss.as.controller.RunningMode;
+import org.jboss.as.controller.capability.RuntimeCapability;
+import org.jboss.as.subsystem.test.AdditionalInitialization;
+import org.jboss.as.subsystem.test.ControllerInitializer;
+import org.jboss.as.subsystem.test.KernelServices;
+import org.jboss.msc.service.ServiceController;
+import org.jboss.msc.service.ServiceName;
+import org.wildfly.security.x500.cert.BasicConstraintsExtension;
+import org.wildfly.security.x500.cert.SelfSignedX509CertificateAndSigningKey;
+import org.wildfly.security.x500.cert.X509CertificateBuilder;
+
+import mockit.Mock;
+import mockit.MockUp;
 
 class TestEnvironment extends AdditionalInitialization {
 
@@ -69,7 +70,7 @@ class TestEnvironment extends AdditionalInitialization {
         return SelfSignedX509CertificateAndSigningKey.builder()
                 .setDn(ISSUER_DN)
                 .setKeyAlgorithmName("RSA")
-                .setSignatureAlgorithmName("SHA1withRSA")
+                .setSignatureAlgorithmName("SHA256withRSA")
                 .addExtension(false, "BasicConstraints", "CA:true,pathlen:2147483647")
                 .build();
     }
@@ -97,7 +98,7 @@ class TestEnvironment extends AdditionalInitialization {
         X509Certificate localhostCertificate = new X509CertificateBuilder()
                 .setIssuerDn(ISSUER_DN)
                 .setSubjectDn(LOCALHOST_DN)
-                .setSignatureAlgorithmName("SHA1withRSA")
+                .setSignatureAlgorithmName("SHA256withRSA")
                 .setSigningKey(issuerSelfSignedX509CertificateAndSigningKey.getSigningKey())
                 .setPublicKey(localhostPublicKey)
                 .setSerialNumber(new BigInteger("3"))
@@ -128,6 +129,21 @@ class TestEnvironment extends AdditionalInitialization {
 
         createTemporaryKeyStoreFile(trustStore, trustFile);
         createTemporaryKeyStoreFile(localhostKeyStore, localhostFile);
+    }
+
+    private final RunningMode runningMode;
+
+    TestEnvironment() {
+        this(RunningMode.NORMAL);
+    }
+
+    TestEnvironment(RunningMode runningMode) {
+        this.runningMode = runningMode;
+    }
+
+    @Override
+    protected RunningMode getRunningMode() {
+        return runningMode;
     }
 
     @Override

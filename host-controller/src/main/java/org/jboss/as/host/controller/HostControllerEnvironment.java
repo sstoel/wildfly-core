@@ -22,6 +22,8 @@
 
 package org.jboss.as.host.controller;
 
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.VALUE;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -31,14 +33,20 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
 
+import org.jboss.as.controller.OperationContext;
+import org.jboss.as.controller.OperationFailedException;
+import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.ProcessType;
 import org.jboss.as.controller.RunningMode;
 import org.jboss.as.controller.operations.common.ProcessEnvironment;
 import org.jboss.as.controller.persistence.ConfigurationFile;
 import org.jboss.as.host.controller.logging.HostControllerLogger;
 import org.jboss.as.host.controller.jvm.JvmType;
+import org.jboss.as.host.controller.operations.LocalHostControllerInfoImpl;
 import org.jboss.as.network.NetworkUtils;
+import org.jboss.as.server.logging.ServerLogger;
 import org.jboss.as.version.ProductConfig;
+import org.jboss.dmr.ModelNode;
 import org.wildfly.common.Assert;
 import org.wildfly.security.manager.WildFlySecurityManager;
 
@@ -181,15 +189,15 @@ public class HostControllerEnvironment extends ProcessEnvironment {
     public static final String JBOSS_DEFAULT_MULTICAST_ADDRESS = "jboss.default.multicast.address";
 
     /**
-     * The default system property used to store the master Host Controller's native management interface address
+     * The default system property used to store the primary Host Controller's native management interface address
      * from the command line.
      */
-    public static final String JBOSS_DOMAIN_MASTER_ADDRESS = "jboss.domain.master.address";
+    public static final String JBOSS_DOMAIN_PRIMARY_ADDRESS = "jboss.domain.primary.address";
 
     /**
-     * The default system property used to store the master Host Controller's native of the master port from the command line.
+     * The default system property used to store the primary Host Controller's native of the primary port from the command line.
      */
-    public static final String JBOSS_DOMAIN_MASTER_PORT = "jboss.domain.master.port";
+    public static final String JBOSS_DOMAIN_PRIMARY_PORT = "jboss.domain.primary.port";
 
     /**
      * The system property used to store the name of the default domain configuration file. If not set,
@@ -461,6 +469,7 @@ public class HostControllerEnvironment extends ProcessEnvironment {
         }
         this.domainTempDir = tmp;
         WildFlySecurityManager.setPropertyPrivileged(DOMAIN_TEMP_DIR, this.domainTempDir.getAbsolutePath());
+        createAuthDir(tmp);
 
         if (defaultJVM != null) {
             defaultJvm = JvmType.createFromJavaExecutable(defaultJVM, false);
@@ -470,7 +479,7 @@ public class HostControllerEnvironment extends ProcessEnvironment {
 
         final String defaultHostConfig = WildFlySecurityManager.getPropertyPrivileged(JBOSS_HOST_DEFAULT_CONFIG, "host.xml");
 
-        hostConfigurationFile = new ConfigurationFile(domainConfigurationDir, defaultHostConfig, initialHostConfig == null ? hostConfig : initialHostConfig, hostConfigInteractionPolicy, false);
+        hostConfigurationFile = new ConfigurationFile(domainConfigurationDir, defaultHostConfig, initialHostConfig == null ? hostConfig : initialHostConfig, hostConfigInteractionPolicy, false, null);
 
         final Path filePath = this.domainDataDir.toPath().resolve(KERNEL_DIR).resolve(UUID_FILE);
         UUID uuid;
@@ -484,8 +493,14 @@ public class HostControllerEnvironment extends ProcessEnvironment {
         this.backupDomainFiles = backupDomainFiles;
         this.useCachedDc = useCachedDc;
         this.productConfig = productConfig;
-        this.securityManagerEnabled = securityManagerEnabled || hostSystemProperties.containsKey("java.security.manager");
+        // Note the java.security.manager property shouldn't be set, but we'll check to ensure the security manager should be enabled
+        this.securityManagerEnabled = securityManagerEnabled || isJavaSecurityManagerConfigured(hostSystemProperties);
         this.processType = processType;
+    }
+
+    private static boolean isJavaSecurityManagerConfigured(final Map<String, String> props) {
+        final String value = props.get("java.security.manager");
+        return value != null && !"allow".equals(value) && !"disallow".equals(value);
     }
 
     /**
@@ -849,8 +864,65 @@ public class HostControllerEnvironment extends ProcessEnvironment {
         return result;
     }
 
+    private void createAuthDir(File tempDir) {
+        File authDir = new File(tempDir, "auth");
+        if (authDir.exists()) {
+            if (!authDir.isDirectory()) {
+                throw ServerLogger.ROOT_LOGGER.unableToCreateTempDirForAuthTokensFileExists();
+            }
+        } else if (!authDir.mkdirs()) {
+            // there is a race if multiple services are starting for the same
+            // security realm
+            if (!authDir.isDirectory()) {
+                throw ServerLogger.ROOT_LOGGER.unableToCreateAuthDir(authDir.getAbsolutePath());
+            }
+        } else {
+            // As a precaution make perms user restricted for directories created (if the OS allows)
+            authDir.setWritable(false, false);
+            authDir.setWritable(true, true);
+            authDir.setReadable(false, false);
+            authDir.setReadable(true, true);
+            authDir.setExecutable(false, false);
+            authDir.setExecutable(true, true);
+        }
+    }
+
     @Override
     public UUID getInstanceUuid() {
         return this.hostControllerUUID;
+    }
+
+    /**
+     * Gets an {@link OperationStepHandler} that can write the {@code name} attribute for a host controller.
+     *
+     * @return the handler
+     */
+    public OperationStepHandler getHostNameWriteHandler(LocalHostControllerInfoImpl hostControllerInfo) {
+        return new HostNameWriteAttributeHandler(hostControllerInfo);
+    }
+
+    protected class HostNameWriteAttributeHandler extends ProcessNameWriteAttributeHandler {
+        private final LocalHostControllerInfoImpl hostControllerInfo;
+
+        private HostNameWriteAttributeHandler(LocalHostControllerInfoImpl hostControllerInfo) {
+            this.hostControllerInfo = hostControllerInfo;
+        }
+
+        @Override
+        public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
+            final boolean booting = context.isBooting();
+            if (booting) {
+                final ModelNode newValue = operation.hasDefined(VALUE) ? operation.get(VALUE) : new ModelNode();
+                if (newValue.isDefined()) {
+                    context.addStep(new OperationStepHandler() {
+                        @Override
+                        public void execute(OperationContext context, ModelNode operation) {
+                            hostControllerInfo.clearOverrideLocalHostName();
+                        }
+                    }, OperationContext.Stage.RUNTIME);
+                }
+            }
+            super.execute(context, operation);
+        }
     }
 }

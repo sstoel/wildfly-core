@@ -24,7 +24,7 @@ import static org.junit.Assert.assertNotNull;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.apache.http.client.methods.HttpGet;
 import org.jboss.as.test.integration.management.util.ServerReload;
@@ -32,14 +32,14 @@ import org.jboss.as.test.shared.TestSuiteEnvironment;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ManagementClient;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  * Since console is not loaded in core dist, in both modes the server is supposed to return 404.
  *
  * @author Tomas Hofman (thofman@redhat.com)
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 public class WebConsoleRedirectionTestCase {
 
     @SuppressWarnings("unused")

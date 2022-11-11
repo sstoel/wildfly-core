@@ -19,9 +19,12 @@
 package org.wildfly.extension.elytron;
 
 import static org.jboss.as.controller.capability.RuntimeCapability.buildDynamicCapabilityName;
+import static org.jboss.as.controller.security.CredentialReference.handleCredentialReferenceUpdate;
+import static org.jboss.as.controller.security.CredentialReference.rollbackCredentialStoreUpdate;
 import static org.wildfly.extension.elytron.Capabilities.KEY_MANAGER_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.KEY_MANAGER_RUNTIME_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.KEY_STORE_CAPABILITY;
+import static org.wildfly.extension.elytron.Capabilities.KEY_STORE_RUNTIME_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.PRINCIPAL_TRANSFORMER_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.PROVIDERS_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.REALM_MAPPER_CAPABILITY;
@@ -39,6 +42,7 @@ import static org.wildfly.extension.elytron._private.ElytronSubsystemMessages.RO
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.Socket;
@@ -50,6 +54,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.Principal;
 import java.security.PrivateKey;
 import java.security.Provider;
+import java.security.SecureRandom;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -80,6 +85,7 @@ import org.jboss.as.controller.AbstractAddStepHandler;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.MapAttributeDefinition;
 import org.jboss.as.controller.ModelVersion;
+import org.jboss.as.controller.ObjectListAttributeDefinition;
 import org.jboss.as.controller.ObjectTypeAttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
@@ -91,6 +97,7 @@ import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleMapAttributeDefinition;
 import org.jboss.as.controller.SimpleOperationDefinitionBuilder;
 import org.jboss.as.controller.StringListAttributeDefinition;
+import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.descriptions.ResourceDescriptionResolver;
 import org.jboss.as.controller.descriptions.StandardResourceDescriptionResolver;
 import org.jboss.as.controller.logging.ControllerLogger;
@@ -109,6 +116,7 @@ import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceController.State;
 import org.jboss.msc.service.ServiceName;
+import org.jboss.msc.service.ServiceRegistry;
 import org.jboss.msc.service.StartException;
 import org.jboss.msc.value.InjectedValue;
 import org.wildfly.common.function.ExceptionSupplier;
@@ -213,7 +221,16 @@ class SSLDefinitions {
             .setDefaultValue(new ModelNode("DEFAULT"))
             .build();
 
-    private static final String[] ALLOWED_PROTOCOLS = { "SSLv2", "SSLv3", "TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3" };
+    static final SimpleAttributeDefinition CIPHER_SUITE_NAMES = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.CIPHER_SUITE_NAMES, ModelType.STRING, true)
+            .setAllowExpression(true)
+            .setMinSize(1)
+            .setRestartAllServices()
+            .setValidator(new CipherSuiteNamesValidator())
+            // WFCORE-4789: Add the following line back when we are ready to enable TLS 1.3 by default
+            //.setDefaultValue(new ModelNode(CipherSuiteSelector.OPENSSL_DEFAULT_CIPHER_SUITE_NAMES))
+            .build();
+
+    private static final String[] ALLOWED_PROTOCOLS = { "SSLv2", "SSLv2Hello", "SSLv3", "TLSv1", "TLSv1.1", "TLSv1.2", "TLSv1.3" };
 
     static final StringListAttributeDefinition PROTOCOLS = new StringListAttributeDefinition.Builder(ElytronDescriptionConstants.PROTOCOLS)
             .setAllowExpression(true)
@@ -303,7 +320,20 @@ class SSLDefinitions {
     static final ObjectTypeAttributeDefinition CERTIFICATE_REVOCATION_LIST = new ObjectTypeAttributeDefinition.Builder(ElytronDescriptionConstants.CERTIFICATE_REVOCATION_LIST, PATH, RELATIVE_TO, MAXIMUM_CERT_PATH_CRL)
             .setRequired(false)
             .setRestartAllServices()
+            .setAlternatives(ElytronDescriptionConstants.CERTIFICATE_REVOCATION_LISTS)
             .build();
+
+    static final ObjectTypeAttributeDefinition CERTIFICATE_REVOCATION_LIST_NO_MAX_CERT_PATH = new ObjectTypeAttributeDefinition.Builder(ElytronDescriptionConstants.CERTIFICATE_REVOCATION_LIST, PATH, RELATIVE_TO)
+            .setRequired(false)
+            .setRestartAllServices()
+            .build();
+
+    static final ObjectListAttributeDefinition CERTIFICATE_REVOCATION_LISTS = new ObjectListAttributeDefinition.Builder(ElytronDescriptionConstants.CERTIFICATE_REVOCATION_LISTS, CERTIFICATE_REVOCATION_LIST_NO_MAX_CERT_PATH)
+            .setRequired(false)
+            .setRestartAllServices()
+            .setAlternatives(ElytronDescriptionConstants.CERTIFICATE_REVOCATION_LIST)
+            .build();
+
 
     static final SimpleAttributeDefinition RESPONDER = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.RESPONDER, ModelType.STRING, true)
             .setAllowExpression(true)
@@ -341,7 +371,7 @@ class SSLDefinitions {
             .setRequires(ElytronDescriptionConstants.RESPONDER_CERTIFICATE)
             .build();
 
-    static final ObjectTypeAttributeDefinition OCSP = new ObjectTypeAttributeDefinition.Builder(ElytronDescriptionConstants.OCSP, RESPONDER, PREFER_CRLS)
+    static final ObjectTypeAttributeDefinition OCSP = new ObjectTypeAttributeDefinition.Builder(ElytronDescriptionConstants.OCSP, RESPONDER, PREFER_CRLS, RESPONDER_CERTIFICATE, RESPONDER_KEYSTORE)
             .setRequired(false)
             .setRestartAllServices()
             .build();
@@ -360,6 +390,11 @@ class SSLDefinitions {
             .setRestartAllServices()
             .build();
 
+    static final SimpleAttributeDefinition GENERATE_SELF_SIGNED_CERTIFICATE_HOST = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.GENERATE_SELF_SIGNED_CERTIFICATE_HOST, ModelType.STRING, true)
+            .setAllowExpression(true)
+            .setMinSize(1)
+            .setRestartAllServices()
+            .build();
 
     /*
      * Runtime Attributes
@@ -425,7 +460,7 @@ class SSLDefinitions {
         // Hostnames can contain ASCII letters a-z (case-insensitive), digits 0-9, hyphens and dots.
         // This pattern allows also [,],*,? characters to make regular expressions possible. Non-escaped dot represents any character, escaped dot is delimeter.
         static Pattern hostnameRegexPattern = Pattern.compile("[0-9a-zA-Z\\[.*]" + // first character can be digit, letter, left square bracket, non-escaped dot or asterisk
-                "([0-9a-zA-Z*.\\[\\]?-]" + // any combination of digits, letters, asterisks, non-escaped dots, square brackets, question marks and hyphens
+                "([0-9a-zA-Z*.\\[\\]?^-]" + // any combination of digits, letters, asterisks, non-escaped dots, square brackets, question marks, hyphens and carets
                 "|" +                       // OR
                 "(?<!\\\\\\.)\\\\\\.)*" +   // if there is an escaped dot, there cannot be another escaped dot right behind it
                 // backslash must be escaped, so '\\\\' translates to literally slash, and '\\.' translates to literally dot
@@ -443,6 +478,25 @@ class SSLDefinitions {
                     } catch (PatternSyntaxException exception) {
                         throw ROOT_LOGGER.invalidHostContextMapValue(hostname);
                     }
+                }
+            }
+        }
+    }
+
+    static class CipherSuiteNamesValidator extends ModelTypeValidator {
+
+        CipherSuiteNamesValidator() {
+            super(ModelType.STRING, true, true, false);
+        }
+
+        @Override
+        public void validateParameter(String parameterName, ModelNode value) throws OperationFailedException {
+            super.validateParameter(parameterName, value);
+            if (value.isDefined()) {
+                try {
+                    CipherSuiteSelector.fromNamesString(value.asString());
+                } catch (IllegalArgumentException e) {
+                    throw ROOT_LOGGER.invalidCipherSuiteNames(e, e.getLocalizedMessage());
                 }
             }
         }
@@ -466,9 +520,15 @@ class SSLDefinitions {
 
         final ObjectTypeAttributeDefinition credentialReferenceDefinition = CredentialReference.getAttributeDefinition(true);
 
-        AttributeDefinition[] attributes = new AttributeDefinition[]{ALGORITHM, providersDefinition, PROVIDER_NAME, keystoreDefinition, ALIAS_FILTER, credentialReferenceDefinition};
+        AttributeDefinition[] attributes = new AttributeDefinition[]{ALGORITHM, providersDefinition, PROVIDER_NAME, keystoreDefinition, ALIAS_FILTER, credentialReferenceDefinition, GENERATE_SELF_SIGNED_CERTIFICATE_HOST};
 
         AbstractAddStepHandler add = new TrivialAddHandler<KeyManager>(KeyManager.class, attributes, KEY_MANAGER_RUNTIME_CAPABILITY) {
+
+            @Override
+            protected void populateModel(final OperationContext context, final ModelNode operation, final Resource resource) throws  OperationFailedException {
+                super.populateModel(context, operation, resource);
+                handleCredentialReferenceUpdate(context, resource.getModel());
+            }
 
             @Override
             protected ValueSupplier<KeyManager> getValueSupplier(ServiceBuilder<KeyManager> serviceBuilder, OperationContext context, ModelNode model) throws OperationFailedException {
@@ -493,6 +553,8 @@ class SSLDefinitions {
 
                 final String aliasFilter = ALIAS_FILTER.resolveModelAttribute(context, model).asStringOrNull();
                 final String algorithm = algorithmName != null ? algorithmName : KeyManagerFactory.getDefaultAlgorithm();
+                final String generateSelfSignedCertificateHost = GENERATE_SELF_SIGNED_CERTIFICATE_HOST.resolveModelAttribute(context, model).asStringOrNull();
+                final ModifiableKeyStoreService keyStoreService = getModifiableKeyStoreService(context, keyStoreName);
 
                 ExceptionSupplier<CredentialSource, Exception> credentialSourceSupplier =
                         CredentialReference.getCredentialSourceSupplier(context, credentialReferenceDefinition, model, serviceBuilder);
@@ -523,19 +585,15 @@ class SSLDefinitions {
                         }
                     }
 
+                    KeyStore keyStore = keyStoreInjector.getOptionalValue();
+                    char[] password;
                     try {
                         CredentialSource cs = credentialSourceSupplier.get();
-                        char[] password;
                         if (cs != null) {
                             password = cs.getCredential(PasswordCredential.class).getPassword(ClearPassword.class).getPassword();
                         } else {
                             throw new StartException(ROOT_LOGGER.keyStorePasswordCannotBeResolved(keyStoreName));
                         }
-                        KeyStore keyStore = keyStoreInjector.getOptionalValue();
-                        if (aliasFilter != null) {
-                            keyStore = FilteringKeyStore.filteringKeyStore(keyStore, AliasFilter.fromString(aliasFilter));
-                        }
-
                         if (ROOT_LOGGER.isTraceEnabled()) {
                             ROOT_LOGGER.tracef(
                                     "KeyManager supplying:  providers = %s  provider = %s  algorithm = %s  keyManagerFactory = %s  " +
@@ -543,23 +601,32 @@ class SSLDefinitions {
                                     Arrays.toString(providers), providerName, algorithm, keyManagerFactory, keyStoreName, aliasFilter, keyStore, keyStore.size(), password != null
                             );
                         }
-
-                        keyManagerFactory.init(keyStore, password);
                     } catch (StartException e) {
                         throw e;
                     } catch (Exception e) {
                         throw new StartException(e);
                     }
 
-                    KeyManager[] keyManagers = keyManagerFactory.getKeyManagers();
-                    for (KeyManager keyManager : keyManagers) {
-                        if (keyManager instanceof X509ExtendedKeyManager) {
-                            delegatingKeyManager.setKeyManager((X509ExtendedKeyManager) keyManager);
-                            return delegatingKeyManager;
+                    if ((keyStoreService instanceof KeyStoreService) && ((KeyStoreService) keyStoreService).shouldAutoGenerateSelfSignedCertificate(generateSelfSignedCertificateHost)) {
+                        ROOT_LOGGER.selfSignedCertificateWillBeCreated(((KeyStoreService) keyStoreService).getResolvedAbsolutePath(), generateSelfSignedCertificateHost);
+                        return new LazyDelegatingKeyManager(keyStoreService, password, keyManagerFactory,
+                                generateSelfSignedCertificateHost, aliasFilter);
+                    } else {
+                        try {
+                            if (initKeyManagerFactory(keyStore, delegatingKeyManager, aliasFilter, password, keyManagerFactory)) {
+                                return delegatingKeyManager;
+                            }
+                        } catch (Exception e) {
+                            throw new StartException(e);
                         }
+                        throw ROOT_LOGGER.noTypeFound(X509ExtendedKeyManager.class.getSimpleName());
                     }
-                    throw ROOT_LOGGER.noTypeFound(X509ExtendedKeyManager.class.getSimpleName());
                 };
+            }
+
+            @Override
+            protected void rollbackRuntime(OperationContext context, final ModelNode operation, final Resource resource) {
+                rollbackCredentialStoreUpdate(credentialReferenceDefinition, context, resource);
             }
         };
 
@@ -596,7 +663,7 @@ class SSLDefinitions {
                 .build();
 
 
-        AttributeDefinition[] attributes = new AttributeDefinition[]{ALGORITHM, providersDefinition, PROVIDER_NAME, keystoreDefinition, ALIAS_FILTER, CERTIFICATE_REVOCATION_LIST, OCSP, SOFT_FAIL, ONLY_LEAF_CERT, MAXIMUM_CERT_PATH};
+        AttributeDefinition[] attributes = new AttributeDefinition[]{ALGORITHM, providersDefinition, PROVIDER_NAME, keystoreDefinition, ALIAS_FILTER, CERTIFICATE_REVOCATION_LIST, CERTIFICATE_REVOCATION_LISTS, OCSP, SOFT_FAIL, ONLY_LEAF_CERT, MAXIMUM_CERT_PATH};
 
         AbstractAddStepHandler add = new TrivialAddHandler<TrustManager>(TrustManager.class, attributes, TRUST_MANAGER_RUNTIME_CAPABILITY) {
 
@@ -624,13 +691,8 @@ class SSLDefinitions {
                 final String aliasFilter = ALIAS_FILTER.resolveModelAttribute(context, model).asStringOrNull();
                 final String algorithm = algorithmName != null ? algorithmName : TrustManagerFactory.getDefaultAlgorithm();
 
-                ModelNode crlNode = CERTIFICATE_REVOCATION_LIST.resolveModelAttribute(context, model);
-                ModelNode ocspNode = OCSP.resolveModelAttribute(context, model);
-                boolean softFail = SOFT_FAIL.resolveModelAttribute(context, model).asBoolean();
-                Integer maxCertPath = MAXIMUM_CERT_PATH.resolveModelAttribute(context, model).asIntOrNull();
-
-                if (crlNode.isDefined() || ocspNode.isDefined()) {
-                    return createX509RevocationTrustManager(serviceBuilder, context, algorithm, providerName, providersInjector, keyStoreInjector, softFail, crlNode, ocspNode, maxCertPath, aliasFilter);
+                if (model.hasDefined(CERTIFICATE_REVOCATION_LIST.getName()) || model.hasDefined(OCSP.getName()) || model.hasDefined(CERTIFICATE_REVOCATION_LISTS.getName())) {
+                    return createX509RevocationTrustManager(serviceBuilder, context, model, algorithm, providerName, providersInjector, keyStoreInjector, aliasFilter);
                 }
 
                 DelegatingTrustManager delegatingTrustManager = new DelegatingTrustManager();
@@ -668,8 +730,16 @@ class SSLDefinitions {
                 };
             }
 
-            private ValueSupplier<TrustManager> createX509RevocationTrustManager(ServiceBuilder<TrustManager> serviceBuilder, OperationContext context, String algorithm, String providerName, InjectedValue<Provider[]> providersInjector, InjectedValue<KeyStore> keyStoreInjector, boolean softFail, ModelNode crlNode, ModelNode ocspNode, Integer maxCertPath, String aliasFilter) throws OperationFailedException {
+            private ValueSupplier<TrustManager> createX509RevocationTrustManager(ServiceBuilder<TrustManager> serviceBuilder, OperationContext context,
+                    ModelNode model, String algorithm, String providerName, InjectedValue<Provider[]> providersInjector,
+                    InjectedValue<KeyStore> keyStoreInjector, String aliasFilter) throws OperationFailedException {
 
+                ModelNode crlNode = CERTIFICATE_REVOCATION_LIST.resolveModelAttribute(context, model);
+                ModelNode ocspNode = OCSP.resolveModelAttribute(context, model);
+                ModelNode multipleCrlsNode = CERTIFICATE_REVOCATION_LISTS.resolveModelAttribute(context, model);
+                boolean softFail = SOFT_FAIL.resolveModelAttribute(context, model).asBoolean();
+                boolean onlyLeafCert = ONLY_LEAF_CERT.resolveModelAttribute(context, model).asBoolean();
+                Integer maxCertPath = MAXIMUM_CERT_PATH.resolveModelAttribute(context, model).asIntOrNull();
 
                 //BW compatibility, max cert path is now in trust-manager
                 @Deprecated
@@ -684,7 +754,8 @@ class SSLDefinitions {
 
                 String crlPath = null;
                 String crlRelativeTo = null;
-                final InjectedValue<PathManager> pathManagerInjector = new InjectedValue<>();
+                InjectedValue<PathManager> pathManagerInjector = new InjectedValue();
+                List<CrlFile> crlFiles = new ArrayList<>();
 
                 if (crlNode.isDefined()) {
                     crlPath = PATH.resolveModelAttribute(context, crlNode).asStringOrNull();
@@ -695,8 +766,24 @@ class SSLDefinitions {
                             serviceBuilder.addDependency(PathManagerService.SERVICE_NAME, PathManager.class, pathManagerInjector);
                             serviceBuilder.requires(pathName(crlRelativeTo));
                         }
+                        crlFiles.add(new CrlFile(crlPath, crlRelativeTo, pathManagerInjector));
+                    }
+                } else if (multipleCrlsNode.isDefined()) {
+                    // certificate-revocation-lists and certificate-revocation-list are mutually exclusive
+                    for (ModelNode crl : multipleCrlsNode.asList()) {
+                        crlPath = PATH.resolveModelAttribute(context, crl).asStringOrNull();
+                        crlRelativeTo = RELATIVE_TO.resolveModelAttribute(context, crl).asStringOrNull();
+                        pathManagerInjector = new InjectedValue();
+                        if (crlPath != null) {
+                            if (crlRelativeTo != null) {
+                                serviceBuilder.addDependency(PathManagerService.SERVICE_NAME, PathManager.class, pathManagerInjector);
+                                serviceBuilder.requires(pathName(crlRelativeTo));
+                            }
+                            crlFiles.add(new CrlFile(crlPath, crlRelativeTo, pathManagerInjector));
+                        }
                     }
                 }
+
                 boolean preferCrls = PREFER_CRLS.resolveModelAttribute(context, ocspNode).asBoolean(false);
                 String responder = RESPONDER.resolveModelAttribute(context, ocspNode).asStringOrNull();
                 String responderCertAlias = RESPONDER_CERTIFICATE.resolveModelAttribute(context, ocspNode).asStringOrNull();
@@ -720,28 +807,26 @@ class SSLDefinitions {
                 X509RevocationTrustManager.Builder builder = X509RevocationTrustManager.builder();
                 builder.setResponderURI(responderUri);
                 builder.setSoftFail(softFail);
+                builder.setOnlyEndEntity(onlyLeafCert);
                 if (maxCertPath != null) {
                     builder.setMaxCertPath(maxCertPath.intValue());
                 }
-                if (crlNode.isDefined()) {
-                    if (!ocspNode.isDefined()) {
+                if (model.hasDefined(CERTIFICATE_REVOCATION_LIST.getName()) || model.hasDefined(CERTIFICATE_REVOCATION_LISTS.getName())) {
+                    if (!model.hasDefined(OCSP.getName())) {
                         builder.setPreferCrls(true);
                         builder.setNoFallback(true);
                     }
                 }
-                if (ocspNode.isDefined()) {
+                if (model.hasDefined(OCSP.getName())) {
                     builder.setResponderURI(responderUri);
-                    if (!crlNode.isDefined()) {
+                    if (!model.hasDefined(CERTIFICATE_REVOCATION_LIST.getName()) && !model.hasDefined(CERTIFICATE_REVOCATION_LISTS.getName())) {
                         builder.setPreferCrls(false);
                         builder.setNoFallback(true);
                     } else {
                         builder.setPreferCrls(preferCrls);
                     }
                 }
-
-                final String finalCrlPath = crlPath;
-                final String finalCrlRelativeTo = crlRelativeTo;
-
+                final List<CrlFile> finalCrlFiles = crlFiles;
                 return () -> {
                     TrustManagerFactory trustManagerFactory = createTrustManagerFactory(providersInjector.getOptionalValue(), providerName, algorithm);
                     KeyStore keyStore = keyStoreInjector.getOptionalValue();
@@ -766,20 +851,28 @@ class SSLDefinitions {
                     builder.setTrustStore(keyStore);
                     builder.setTrustManagerFactory(trustManagerFactory);
 
-                    if (finalCrlPath != null) {
-                        try {
-                            builder.setCrlStream(new FileInputStream(resolveFileLocation(finalCrlPath, finalCrlRelativeTo, pathManagerInjector)));
-                            return createReloadableX509CRLTrustManager(finalCrlPath, finalCrlRelativeTo, pathManagerInjector, builder);
-                        } catch (FileNotFoundException e) {
-                            throw ElytronSubsystemMessages.ROOT_LOGGER.unableToAccessCRL(e);
-                        }
+                    if (! finalCrlFiles.isEmpty()) {
+                        List<InputStream> finalCrlStreams = getCrlStreams(finalCrlFiles);
+                        builder.setCrlStreams(finalCrlStreams);
+                        return createReloadableX509CRLTrustManager(finalCrlFiles, builder);
                     }
-
                     return builder.build();
                 };
             }
 
-            private TrustManager createReloadableX509CRLTrustManager(final String crlPath, final String crlRelativeTo, final InjectedValue<PathManager> pathManagerInjector, final X509RevocationTrustManager.Builder builder) {
+            private List<InputStream> getCrlStreams(List<CrlFile> crlFiles) throws StartException {
+                List<InputStream> crlStreams = new ArrayList<>();
+                for (CrlFile crl : crlFiles) {
+                    try {
+                        crlStreams.add(new FileInputStream(resolveFileLocation(crl.getCrlPath(), crl.getRelativeTo(), crl.getPathManagerInjector())));
+                    } catch (FileNotFoundException e) {
+                        throw ROOT_LOGGER.unableToAccessCRL(e);
+                    }
+                }
+                return crlStreams;
+            }
+
+            private TrustManager createReloadableX509CRLTrustManager(final List<CrlFile> crlFiles, final X509RevocationTrustManager.Builder builder) {
                 return new ReloadableX509ExtendedTrustManager() {
 
                     private volatile X509ExtendedTrustManager delegate = builder.build();
@@ -789,9 +882,9 @@ class SSLDefinitions {
                     void reload() {
                         if (reloading.compareAndSet(false, true)) {
                             try {
-                                builder.setCrlStream(new FileInputStream(resolveFileLocation(crlPath, crlRelativeTo, pathManagerInjector)));
+                                builder.setCrlStreams(getCrlStreams(crlFiles));
                                 delegate = builder.build();
-                            } catch (FileNotFoundException cause) {
+                            } catch (StartException cause) {
                                 throw ElytronSubsystemMessages.ROOT_LOGGER.unableToReloadCRL(cause);
                             } finally {
                                 reloading.lazySet(false);
@@ -917,6 +1010,8 @@ class SSLDefinitions {
                         serviceContainer = getRequiredService(context.getServiceRegistry(false), serviceName, KeyManager.class);
                     } else if (serviceName.getParent().getCanonicalName().equals(TRUST_MANAGER_CAPABILITY)) {
                         serviceContainer = getRequiredService(context.getServiceRegistry(false), serviceName, TrustManager.class);
+                    } else {
+                        throw ROOT_LOGGER.invalidServiceNameParent(serviceName.getParent().getCanonicalName());
                     }
                     serviceContainer.getService().stop(null);
                     serviceContainer.getService().start(null);
@@ -974,6 +1069,110 @@ class SSLDefinitions {
         public String chooseEngineServerAlias(String keyType, Principal[] issuers, SSLEngine engine) {
             return delegating.get().chooseEngineServerAlias(keyType, issuers, engine);
         }
+    }
+
+    private static class LazyDelegatingKeyManager extends DelegatingKeyManager {
+        private ModifiableKeyStoreService keyStoreService;
+        private char[] password;
+        private KeyManagerFactory keyManagerFactory;
+        private String generateSelfSignedCertificateHostName;
+        private String aliasFilter;
+        private volatile boolean init = false;
+
+        private LazyDelegatingKeyManager(ModifiableKeyStoreService keyStoreService, char[] password, KeyManagerFactory keyManagerFactory,
+                                         String generateSelfSignedCertificateHostName, String aliasFilter) {
+            this.keyStoreService = keyStoreService;
+            this.password = password;
+            this.keyManagerFactory = keyManagerFactory;
+            this.generateSelfSignedCertificateHostName = generateSelfSignedCertificateHostName;
+            this.aliasFilter = aliasFilter;
+        }
+
+        private void doInit() {
+            if(! init) {
+                synchronized (this) {
+                    if(! init) {
+                        try {
+                            ((KeyStoreService) keyStoreService).generateAndSaveSelfSignedCertificate(generateSelfSignedCertificateHostName, password);
+                            if (! initKeyManagerFactory(keyStoreService.getValue(), this, aliasFilter, password, keyManagerFactory)) {
+                                throw ROOT_LOGGER.noTypeFoundForLazyInitKeyManager(X509ExtendedKeyManager.class.getSimpleName());
+                            }
+                        } catch (Exception e) {
+                            throw ROOT_LOGGER.failedToLazilyInitKeyManager(e);
+                        } finally {
+                            init = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        @Override
+        public String[] getClientAliases(String s, Principal[] principals) {
+            doInit();
+            return super.getClientAliases(s, principals);
+        }
+
+        @Override
+        public String chooseClientAlias(String[] strings, Principal[] principals, Socket socket) {
+            doInit();
+            return super.chooseClientAlias(strings, principals, socket);
+        }
+
+        @Override
+        public String[] getServerAliases(String s, Principal[] principals) {
+            doInit();
+            return super.getServerAliases(s, principals);
+        }
+
+        @Override
+        public String chooseServerAlias(String s, Principal[] principals, Socket socket) {
+            doInit();
+            return super.chooseServerAlias(s, principals, socket);
+        }
+
+        @Override
+        public X509Certificate[] getCertificateChain(String s) {
+            doInit();
+            return super.getCertificateChain(s);
+        }
+
+        @Override
+        public PrivateKey getPrivateKey(String s) {
+            doInit();
+            return super.getPrivateKey(s);
+        }
+
+        @Override
+        public String chooseEngineClientAlias(String[] keyType, Principal[] issuers, SSLEngine engine) {
+            doInit();
+            return super.chooseEngineClientAlias(keyType, issuers, engine);
+        }
+
+        @Override
+        public String chooseEngineServerAlias(String keyType, Principal[] issuers, SSLEngine engine) {
+            doInit();
+            return super.chooseEngineServerAlias(keyType, issuers, engine);
+        }
+
+    }
+
+    static boolean initKeyManagerFactory(KeyStore keyStore, DelegatingKeyManager delegating, String aliasFilter,
+                                         char[] password, KeyManagerFactory keyManagerFactory) throws Exception {
+        if (aliasFilter != null) {
+            keyStore = FilteringKeyStore.filteringKeyStore(keyStore, AliasFilter.fromString(aliasFilter));
+        }
+        keyManagerFactory.init(keyStore, password);
+        KeyManager[] keyManagers = keyManagerFactory.getKeyManagers();
+        boolean keyManagerTypeFound = false;
+        for (KeyManager keyManager : keyManagers) {
+            if (keyManager instanceof X509ExtendedKeyManager) {
+                delegating.setKeyManager((X509ExtendedKeyManager) keyManager);
+                keyManagerTypeFound = true;
+                break;
+            }
+        }
+        return keyManagerTypeFound;
     }
 
     private static class DelegatingTrustManager extends X509ExtendedTrustManager {
@@ -1077,13 +1276,13 @@ class SSLDefinitions {
                 .setRestartAllServices()
                 .build();
 
-        AttributeDefinition[] attributes = new AttributeDefinition[]{CIPHER_SUITE_FILTER, PROTOCOLS,
+        AttributeDefinition[] attributes = new AttributeDefinition[]{CIPHER_SUITE_FILTER, CIPHER_SUITE_NAMES, PROTOCOLS,
                 SECURITY_DOMAIN, WANT_CLIENT_AUTH, NEED_CLIENT_AUTH, AUTHENTICATION_OPTIONAL,
                 USE_CIPHER_SUITES_ORDER, MAXIMUM_SESSION_CACHE_SIZE, SESSION_TIMEOUT, WRAP, keyManagerDefinition, TRUST_MANAGER,
                 PRE_REALM_PRINCIPAL_TRANSFORMER, POST_REALM_PRINCIPAL_TRANSFORMER, FINAL_PRINCIPAL_TRANSFORMER, REALM_MAPPER,
                 providersDefinition, PROVIDER_NAME};
 
-        AbstractAddStepHandler add = new TrivialAddHandler<SSLContext>(SSLContext.class, ServiceController.Mode.ACTIVE, ServiceController.Mode.LAZY, attributes, SSL_CONTEXT_RUNTIME_CAPABILITY) {
+        AbstractAddStepHandler add = new TrivialAddHandler<SSLContext>(SSLContext.class, ServiceController.Mode.ACTIVE, ServiceController.Mode.PASSIVE, attributes, SSL_CONTEXT_RUNTIME_CAPABILITY) {
 
             @Override
             protected ValueSupplier<SSLContext> getValueSupplier(ServiceBuilder<SSLContext> serviceBuilder,
@@ -1100,7 +1299,8 @@ class SSLDefinitions {
 
                 final String providerName = PROVIDER_NAME.resolveModelAttribute(context, model).asStringOrNull();
                 final List<String> protocols = PROTOCOLS.unwrap(context, model);
-                final String cipherSuiteFilter = CIPHER_SUITE_FILTER.resolveModelAttribute(context, model).asStringOrNull();
+                final String cipherSuiteFilter = CIPHER_SUITE_FILTER.resolveModelAttribute(context, model).asString(); // has default value, can't be null
+                final String cipherSuiteNames = CIPHER_SUITE_NAMES.resolveModelAttribute(context, model).asStringOrNull(); // doesn't have a default value yet since we are disabling TLS 1.3 by default
                 final boolean wantClientAuth = WANT_CLIENT_AUTH.resolveModelAttribute(context, model).asBoolean();
                 final boolean needClientAuth = NEED_CLIENT_AUTH.resolveModelAttribute(context, model).asBoolean();
                 final boolean authenticationOptional = AUTHENTICATION_OPTIONAL.resolveModelAttribute(context, model).asBoolean();
@@ -1128,8 +1328,7 @@ class SSLDefinitions {
                         builder.setTrustManager(trustManager);
                     if (providers != null)
                         builder.setProviderSupplier(() -> providers);
-                    if (cipherSuiteFilter != null)
-                        builder.setCipherSuiteSelector(CipherSuiteSelector.fromString(cipherSuiteFilter));
+                    builder.setCipherSuiteSelector(CipherSuiteSelector.aggregate(cipherSuiteNames != null ? CipherSuiteSelector.fromNamesString(cipherSuiteNames) : null, CipherSuiteSelector.fromString(cipherSuiteFilter)));
                     if (!protocols.isEmpty()) {
                         List<Protocol> list = new ArrayList<>();
                         for (String protocol : protocols) {
@@ -1162,9 +1361,9 @@ class SSLDefinitions {
                     if (ROOT_LOGGER.isTraceEnabled()) {
                         ROOT_LOGGER.tracef(
                                 "ServerSSLContext supplying:  securityDomain = %s  keyManager = %s  trustManager = %s  "
-                                        + "providers = %s  cipherSuiteFilter = %s  protocols = %s  wantClientAuth = %s  needClientAuth = %s  "
+                                        + "providers = %s  cipherSuiteFilter = %s  cipherSuiteNames = %s protocols = %s  wantClientAuth = %s  needClientAuth = %s  "
                                         + "authenticationOptional = %s  maximumSessionCacheSize = %s  sessionTimeout = %s wrap = %s",
-                                securityDomain, keyManager, trustManager, Arrays.toString(providers), cipherSuiteFilter,
+                                securityDomain, keyManager, trustManager, Arrays.toString(providers), cipherSuiteFilter, cipherSuiteNames,
                                 Arrays.toString(protocols.toArray()), wantClientAuth, needClientAuth, authenticationOptional,
                                 maximumSessionCacheSize, sessionTimeout, wrap);
                     }
@@ -1213,7 +1412,7 @@ class SSLDefinitions {
                 ModelNode hostContextMap = HOST_CONTEXT_MAP.resolveModelAttribute(context, model);
 
                 Set<String> keys;
-                if (hostContextMap.isDefined() && (keys = hostContextMap.keys()).size() > 0) {
+                if (hostContextMap.isDefined() && !(keys = hostContextMap.keys()).isEmpty()) {
                     final Map<String, InjectedValue<SSLContext>> sslContextMap = new HashMap<>(keys.size());
                     for (String host : keys) {
                         String sslContextName = hostContextMap.require(host).asString();
@@ -1253,7 +1452,7 @@ class SSLDefinitions {
                 .setRestartAllServices()
                 .build();
 
-        AttributeDefinition[] attributes = new AttributeDefinition[]{CIPHER_SUITE_FILTER, PROTOCOLS,
+        AttributeDefinition[] attributes = new AttributeDefinition[]{CIPHER_SUITE_FILTER, CIPHER_SUITE_NAMES, PROTOCOLS,
                 KEY_MANAGER, TRUST_MANAGER, providersDefinition, PROVIDER_NAME};
 
         AbstractAddStepHandler add = new TrivialAddHandler<SSLContext>(SSLContext.class, attributes, SSL_CONTEXT_RUNTIME_CAPABILITY) {
@@ -1266,8 +1465,8 @@ class SSLDefinitions {
 
                 final String providerName = PROVIDER_NAME.resolveModelAttribute(context, model).asStringOrNull();
                 final List<String> protocols = PROTOCOLS.unwrap(context, model);
-                final String cipherSuiteFilter = CIPHER_SUITE_FILTER.resolveModelAttribute(context, model).asStringOrNull();
-
+                final String cipherSuiteFilter = CIPHER_SUITE_FILTER.resolveModelAttribute(context, model).asString(); // has default value, can't be null
+                final String cipherSuiteNames = CIPHER_SUITE_NAMES.resolveModelAttribute(context, model).asStringOrNull(); // doesn't have a default value yet since we are disabling TLS 1.3 by default
                 return () -> {
                     X509ExtendedKeyManager keyManager = getX509KeyManager(keyManagerInjector.getOptionalValue());
                     X509ExtendedTrustManager trustManager = getX509TrustManager(trustManagerInjector.getOptionalValue());
@@ -1277,8 +1476,7 @@ class SSLDefinitions {
                     if (keyManager != null) builder.setKeyManager(keyManager);
                     if (trustManager != null) builder.setTrustManager(trustManager);
                     if (providers != null) builder.setProviderSupplier(() -> providers);
-                    if (cipherSuiteFilter != null)
-                        builder.setCipherSuiteSelector(CipherSuiteSelector.fromString(cipherSuiteFilter));
+                    builder.setCipherSuiteSelector(CipherSuiteSelector.aggregate(cipherSuiteNames != null ? CipherSuiteSelector.fromNamesString(cipherSuiteNames) : null, CipherSuiteSelector.fromString(cipherSuiteFilter)));
                     if (!protocols.isEmpty()) {
                         List<Protocol> list = new ArrayList<>();
                         for (String protocol : protocols) {
@@ -1295,8 +1493,8 @@ class SSLDefinitions {
                     if (ROOT_LOGGER.isTraceEnabled()) {
                         ROOT_LOGGER.tracef(
                                 "ClientSSLContext supplying:  keyManager = %s  trustManager = %s  providers = %s  " +
-                                        "cipherSuiteFilter = %s  protocols = %s",
-                                keyManager, trustManager, Arrays.toString(providers), cipherSuiteFilter,
+                                        "cipherSuiteFilter = %s cipherSuiteNames = %s protocols = %s",
+                                keyManager, trustManager, Arrays.toString(providers), cipherSuiteFilter, cipherSuiteNames,
                                 Arrays.toString(protocols.toArray())
                         );
                     }
@@ -1392,23 +1590,59 @@ class SSLDefinitions {
             final Class<?> providerClazz = SSLDefinitions.class.getClassLoader().loadClass("com.sun.net.ssl.internal.ssl.Provider");
             final Method isFipsMethod = providerClazz.getMethod("isFIPS", new Class[0]);
 
-            return () -> {
-                Object isFips;
-                try {
-                    isFips = isFipsMethod.invoke(null, new Object[0]);
-                } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
-                    ROOT_LOGGER.trace("Unable to invoke com.sun.net.ssl.internal.ssl.Provider.isFIPS() method.", e);
-                    return false;
+            Object isFips;
+            try {
+                isFips = isFipsMethod.invoke(null, new Object[0]);
+                if ((isFips instanceof Boolean)) {
+                    return () -> (boolean) isFips;
+                } else {
+                    return () -> false;
                 }
-
-                return isFips != null && isFips instanceof Boolean ? ((Boolean) isFips).booleanValue() : false;
-            };
-
+            } catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+                ROOT_LOGGER.trace("Unable to invoke com.sun.net.ssl.internal.ssl.Provider.isFIPS() method.", e);
+                return () -> false;
+            }
         } catch (ClassNotFoundException | NoSuchMethodException | SecurityException e) {
             ROOT_LOGGER.trace("Unable to find com.sun.net.ssl.internal.ssl.Provider.isFIPS() method.", e);
         }
 
-        return Boolean.FALSE::booleanValue;
+        return () -> new SecureRandom().getProvider().getName().toLowerCase().contains("fips");
+    }
+
+    static ModifiableKeyStoreService getModifiableKeyStoreService(OperationContext context, String keyStoreName) {
+        ServiceRegistry serviceRegistry = context.getServiceRegistry(true);
+        RuntimeCapability<Void> runtimeCapability = KEY_STORE_RUNTIME_CAPABILITY.fromBaseCapability(keyStoreName);
+        ServiceName serviceName = runtimeCapability.getCapabilityServiceName();
+        ServiceController<KeyStore> serviceContainer = getRequiredService(serviceRegistry, serviceName, KeyStore.class);
+        return (ModifiableKeyStoreService) serviceContainer.getService();
+    }
+
+    /**
+     * CrlFile contains the necessary information to create a
+     * CRL File Input Stream
+     */
+    static class CrlFile {
+        private String crlPath = null;
+        private String relativeTo = null;
+        private InjectedValue<PathManager> pathManagerInjector = null;
+
+        public CrlFile(final String crlPath, final String relativeTo, InjectedValue<PathManager> pathManagerInjector) {
+            this.crlPath = crlPath;
+            this.relativeTo = relativeTo;
+            this.pathManagerInjector = pathManagerInjector;
+        }
+
+        public String getCrlPath() {
+            return crlPath;
+        }
+
+        public String getRelativeTo() {
+            return relativeTo;
+        }
+
+        public InjectedValue<PathManager> getPathManagerInjector() {
+            return pathManagerInjector;
+        }
     }
 
 }

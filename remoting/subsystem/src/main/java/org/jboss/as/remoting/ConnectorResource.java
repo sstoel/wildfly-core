@@ -28,6 +28,7 @@ import static org.jboss.as.remoting.ConnectorCommon.SASL_PROTOCOL;
 import static org.jboss.as.remoting.ConnectorCommon.SERVER_NAME;
 
 import org.jboss.as.controller.AttributeDefinition;
+import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.ReloadRequiredWriteAttributeHandler;
@@ -38,6 +39,7 @@ import org.jboss.as.controller.access.management.SensitiveTargetAccessConstraint
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.operations.validation.StringLengthValidator;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
+import org.jboss.as.network.ProtocolSocketBinding;
 import org.jboss.dmr.ModelType;
 
 /**
@@ -52,7 +54,8 @@ public class ConnectorResource extends SimpleResourceDefinition {
     static final String SOCKET_CAPABILITY_NAME = "org.wildfly.network.socket-binding";
     private static final String CONNECTOR_CAPABILITY_NAME = "org.wildfly.remoting.connector";
     static final RuntimeCapability<Void> CONNECTOR_CAPABILITY =
-            RuntimeCapability.Builder.of(CONNECTOR_CAPABILITY_NAME, true)
+            RuntimeCapability.Builder.of(CONNECTOR_CAPABILITY_NAME, true, ProtocolSocketBinding.class)
+                    .setAllowMultipleRegistrations(true)
                     .build();
 
     //FIXME is this attribute still used?
@@ -76,6 +79,7 @@ public class ConnectorResource extends SimpleResourceDefinition {
             .addAccessConstraint(RemotingExtension.REMOTING_SECURITY_DEF)
             .setNullSignificant(true)
             .setRestartAllServices()
+            .setDeprecated(ModelVersion.create(6))
             .build();
 
     static final SimpleAttributeDefinition SASL_AUTHENTICATION_FACTORY = new SimpleAttributeDefinitionBuilder(ConnectorCommon.SASL_AUTHENTICATION_FACTORY)

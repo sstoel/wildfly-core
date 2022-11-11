@@ -24,7 +24,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
@@ -44,7 +44,7 @@ import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.Server;
 import org.wildfly.core.testrunner.ServerControl;
 import org.wildfly.core.testrunner.ServerController;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 import org.wildfly.test.jmx.ControlledStateNotificationListener;
 import org.wildfly.test.jmx.staticmodule.JMXFacadeListenerInStaticModuleSetupTask;
 
@@ -54,7 +54,7 @@ import static org.wildfly.test.jmx.ControlledStateNotificationListener.JMX_FACAD
 /**
  * @author Jan Martiska
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
 public class JmxControlledStateNotificationsInStaticModuleTestCase {
     static final Path DATA = Paths.get("target/notifications/data");

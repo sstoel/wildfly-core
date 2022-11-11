@@ -19,7 +19,7 @@ import java.net.Authenticator;
 import java.net.HttpURLConnection;
 import java.net.PasswordAuthentication;
 import java.net.URL;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import org.jboss.as.test.integration.management.cli.CliProcessWrapper;
 import static org.jboss.as.test.integration.management.util.ModelUtil.createOpNode;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
@@ -35,13 +35,13 @@ import org.wildfly.core.testrunner.ManagementClient;
 import org.wildfly.core.testrunner.ServerControl;
 import org.wildfly.core.testrunner.ServerController;
 import org.wildfly.core.testrunner.UnsuccessfulOperationException;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  *
  * @author jdenise@redhat.com
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
 public class CLIAuthenticationTestCase {
 

@@ -57,7 +57,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>10.0.0.Beta4-SNAPSHOT</version>
+        <version>20.0.0.Beta3-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-core-testsuite</artifactId>
@@ -69,7 +69,6 @@
         <module>shared</module>
         <module>test-runner</module>
         <module>standalone</module>
-        <module>vault-test-feature-pack</module>
         <module>elytron</module>
         <module>embedded</module>
         <module>scripts</module>
@@ -139,7 +138,7 @@
         <surefire.memory.args>-Xmx512m -XX:MetaspaceSize=128m</surefire.memory.args>
         <surefire.jpda.args></surefire.jpda.args>
         <as.debug.port>8787</as.debug.port>
-        <surefire.system.args>${surefire.memory.args} ${surefire.jpda.args} ${modular.jdk.args} ${modular.jdk.props} -Djboss.dist=${jboss.dist} ${surefire.jacoco.args}</surefire.system.args>
+        <surefire.system.args>${surefire.memory.args} ${surefire.jpda.args} ${modular.jdk.args} ${modular.jdk.props} -Djboss.dist=${jboss.dist} ${surefire.jacoco.args} -Djava.io.tmpdir=${project.build.directory}</surefire.system.args>
         <surefire.forked.process.timeout>1500</surefire.forked.process.timeout>
 
         <!-- If servers should be killed before the test suite is run-->
@@ -150,6 +149,10 @@
 
         <!-- used to enable trace logging for test suite runs -->
         <trace>none</trace>
+		
+        <!-- Version for a plugin dependency, which testbom dependencyManagement can't control.
+             See https://issues.apache.org/jira/browse/MNG-2496 -->
+        <version.org.apache.xalan>2.7.1.jbossorg-6</version.org.apache.xalan>
 
     </properties>
 
@@ -157,20 +160,15 @@
         <dependencies>
             <dependency>
                 <groupId>org.wildfly.core</groupId>
-                <artifactId>wildfly-core-testsuite-shared</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>org.wildfly.core</groupId>
-                <artifactId>wildfly-core-vault-test-galleon-pack</artifactId>
+                <artifactId>wildfly-core-testbom</artifactId>
                 <version>${project.version}</version>
                 <type>pom</type>
+                <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>org.wildfly.core</groupId>
-                <artifactId>wildfly-core-vault-test-galleon-pack</artifactId>
+                <artifactId>wildfly-core-testsuite-shared</artifactId>
                 <version>${project.version}</version>
-                <type>zip</type>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -191,26 +189,18 @@
             <groupId>org.wildfly.core</groupId>
             <artifactId>wildfly-host-controller</artifactId>
         </dependency>
-        <!-- needed to make JAXP work properly -->
-        <dependency>
-            <groupId>com.fasterxml.woodstox</groupId>
-            <artifactId>woodstox-core</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>xerces</groupId>
-            <artifactId>xercesImpl</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>xalan</groupId>
-            <artifactId>xalan</artifactId>
-            <scope>test</scope>
-        </dependency>
         <dependency>
             <groupId>org.wildfly.core</groupId>
             <artifactId>wildfly-core-testsuite-shared</artifactId>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.wildfly.security</groupId>
+            <artifactId>wildfly-elytron-auth</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.wildfly.security</groupId>
+            <artifactId>wildfly-elytron-auth-server</artifactId>
         </dependency>
     </dependencies>
 
@@ -298,12 +288,12 @@
                         </execution>
                     </executions>
                     <!-- WFLY-3361 - use external xalan for XML transformations to
-                    ensure consistent behaviour on all platrforms.-->
+                    ensure consistent behaviour on all platforms.-->
                     <dependencies>
                         <dependency>
                             <groupId>xalan</groupId>
                             <artifactId>xalan</artifactId>
-                            <version>2.7.1</version>
+                            <version>${version.org.apache.xalan}</version>
                         </dependency>
                     </dependencies>
                 </plugin>
@@ -402,6 +392,46 @@
             </modules>
         </profile>
 
+        <!-- -Dts.layers -->
+        <profile>
+            <id>ts.integ.group.layers</id>
+            <activation>
+                <property>
+                    <name>ts.layers</name>
+                </property>
+            </activation>
+            <modules>
+                <module>rbac</module>
+                <module>manualmode</module>
+                <module>layers</module>
+            </modules>
+        </profile>
+
+        <!-- -Dts.bootable -->
+        <profile>
+            <id>ts.integ.group.bootable</id>
+            <activation>
+                <property>
+                    <name>ts.bootable</name>
+                </property>
+            </activation>
+            <build>
+                <pluginManagement>
+                    <plugins>
+                        <plugin>
+                            <groupId>org.wildfly.plugins</groupId>
+                            <artifactId>wildfly-jar-maven-plugin</artifactId>
+                            <version>${version.org.wildfly.jar.plugin}</version>
+                        </plugin>
+                    </plugins>
+                </pluginManagement>
+            </build>
+            <modules>
+                <module>rbac</module>
+                <module>manualmode</module>
+            </modules>
+        </profile>
+
         <profile>
             <id>all-modules.module.profile</id>
             <activation>
@@ -414,7 +444,6 @@
                 <module>domain</module>
                 <module>manualmode</module>
                 <module>patching</module>
-                <module>layers</module>
             </modules>
         </profile>
 
@@ -429,7 +458,7 @@
                 </property>
             </activation>
             <properties>
-                <surefire.jpda.args>-agentlib:jdwp=transport=dt_socket,address=${as.debug.port},server=y,suspend=y</surefire.jpda.args>
+                <surefire.jpda.args>-agentlib:jdwp=transport=dt_socket,address=*:${as.debug.port},server=y,suspend=y</surefire.jpda.args>
             </properties>
         </profile>
 

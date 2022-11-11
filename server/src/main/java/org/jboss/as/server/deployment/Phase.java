@@ -183,6 +183,8 @@ public enum Phase {
     }
 
     // STRUCTURE
+    // This is 0 as it's a cleanup for logging resources during undeploy and needs to be run last
+    public static final int STRUCTURE_LOGGING_CLEANUP                   = 0x0000;
     public static final int STRUCTURE_EXPLODED_MOUNT                    = 0x0100;
     public static final int STRUCTURE_MOUNT                             = 0x0200;
     public static final int STRUCTURE_DEPLOYMENT_OVERLAY                = 0x0280;
@@ -208,6 +210,7 @@ public enum Phase {
     @Deprecated
     public static final int STRUCTURE_OSGI_METADATA                     = 0x0430;
     public static final int STRUCTURE_REMOUNT_EXPLODED                  = 0x0450;
+    public static final int STRUCTURE_ELYTRON_EXPRESSION_RESOLVER       = 0x0480;
     public static final int STRUCTURE_EE_SPEC_DESC_PROPERTY_REPLACEMENT = 0x0500;
     public static final int STRUCTURE_EE_JBOSS_DESC_PROPERTY_REPLACEMENT= 0x0550;
     public static final int STRUCTURE_EE_EJB_ANNOTATION_PROPERTY_REPLACEMENT  =  0x0555;
@@ -215,7 +218,8 @@ public enum Phase {
     public static final int STRUCTURE_EE_DEPLOYMENT_PROPERTY_RESOLVER   = 0x0561;
     public static final int STRUCTURE_EE_VAULT_PROPERTY_RESOLVER        = 0x0562;
     public static final int STRUCTURE_EE_SYSTEM_PROPERTY_RESOLVER       = 0x0563;
-    public static final int STRUCTURE_EE_PROPERTY_RESOLVER              = 0x0564;
+    public static final int STRUCTURE_EE_FUNCTIONAL_RESOLVERS           = 0x0564;
+    public static final int STRUCTURE_EE_PROPERTY_RESOLVER              = 0x0565;
     public static final int STRUCTURE_JDBC_DRIVER                       = 0x0600;
     public static final int STRUCTURE_RAR                               = 0x0700;
     public static final int STRUCTURE_WAR_DEPLOYMENT_INIT               = 0x0800;
@@ -261,20 +265,23 @@ public enum Phase {
     public static final int STRUCTURE_CLASS_PATH                        = 0x1900;
     public static final int STRUCTURE_MODULE_IDENTIFIERS                = 0x1A00;
     public static final int STRUCTURE_EE_MODULE_INIT                    = 0x1B00;
+    public static final int STRUCTURE_EE_DEFAULT_BINDINGS_CONFIG        = 0x1B10;
     public static final int STRUCTURE_EE_RESOURCE_INJECTION_REGISTRY                = 0x1C00;
     public static final int STRUCTURE_DATASOURCE_RESOURCE_INJECTION                 = 0x1C01;
     public static final int STRUCTURE_JMS_CONNECTION_FACTORY_RESOURCE_INJECTION     = 0x1C02;
     public static final int STRUCTURE_BEAN_VALIDATION_RESOURCE_INJECTION_REGISTRY   = 0x1C03;
     public static final int STRUCTURE_DEPLOYMENT_DEPENDENCIES           = 0x1D00;
     public static final int STRUCTURE_GLOBAL_MODULES                    = 0x1E00;
+    public static final int STRUCTURE_GLOBAL_DIRECTORIES                = 0x1E01;
     public static final int STRUCTURE_NAMING_EXTERNAL_CONTEXTS          = 0x1F00;
     public static final int STRUCTURE_GLOBAL_REQUEST_CONTROLLER         = 0x2000;
     public static final int STRUCTURE_WS_SERVICES_DEPS                  = 0x2100;
     public static final int STRUCTURE_DEPENDENCIES_MANIFEST             = 0x2200;
+    public static final int STRUCTURE_SECURITY_METADATA                 = 0x2300;
     public static final int STRUCTURE_DEFERRED_DEPLOYMENT_OVERLAY       = 0xF000; //needs to run after all structure processors
 
     // PARSE
-    public static final int PARSE_SECURITY_ENABLED                      = 0x0080;
+    //public static final int PARSE_SECURITY_ENABLED                      = 0x0080;
     public static final int PARSE_EE_MODULE_NAME                        = 0x0100;
     public static final int PARSE_EJB_DEFAULT_DISTINCT_NAME             = 0x0110;
     public static final int PARSE_EAR_SUBDEPLOYMENTS_ISOLATION_DEFAULT  = 0x0200;
@@ -293,7 +300,6 @@ public enum Phase {
     public static final int PARSE_ANNOTATION_WAR                        = 0x0D00;
     public static final int PARSE_ANNOTATION_EJB                        = 0x0D10;
     public static final int PARSE_JBOSS_WEB_DEPLOYMENT                  = 0x0E00;
-    public static final int PARSE_TLD_DEPLOYMENT                        = 0x0F00;
     public static final int PARSE_EAR_CONTEXT_ROOT                      = 0x1000;
     // create and attach EJB metadata for EJB deployments
     public static final int PARSE_EJB_DEPLOYMENT                        = 0x1100;
@@ -306,8 +312,10 @@ public enum Phase {
     // create and attach the component description out of EJB annotations
     public static final int PARSE_EJB_APPLICATION_EXCEPTION_ANNOTATION  = 0x1901;
     public static final int PARSE_WELD_CONFIGURATION                    = 0x1C01;
-    public static final int PARSE_WEB_COMPONENTS                        = 0x1F00;
     public static final int PARSE_WEB_MERGE_METADATA                    = 0x2000;
+    public static final int PARSE_TLD_DEPLOYMENT                        = 0x2004;
+    public static final int PARSE_WEB_COMPONENTS                        = 0x2008;
+    public static final int PARSE_UNDERTOW_DEFAULT_SECURITY_DOMAIN      = 0x200C;
     /**
      * @deprecated there is no phase processing associated with this constant - it was used for OSGi integration
      */
@@ -335,6 +343,7 @@ public enum Phase {
     public static final int PARSE_MANAGED_BEAN_ANNOTATION               = 0x2900;
     public static final int PARSE_EE_ANNOTATIONS                        = 0x2901;
     public static final int PARSE_JAXRS_ANNOTATIONS                     = 0x2A00;
+    public static final int PARSE_EE_SECURITY_ANNOTATIONS               = 0x2A0A;
     public static final int PARSE_CDI_ANNOTATIONS                       = 0x2A10;
     public static final int PARSE_CDI_BEAN_DEFINING_ANNOTATIONS         = 0x2A80;
     public static final int PARSE_WELD_DEPLOYMENT                       = 0x2B00;
@@ -389,7 +398,6 @@ public enum Phase {
     public static final int PARSE_EE_CONCURRENT_DEFAULT_MANAGED_THREAD_FACTORY              = 0x4801;
     public static final int PARSE_EE_CONCURRENT_DEFAULT_MANAGED_EXECUTOR_SERVICE            = 0x4802;
     public static final int PARSE_EE_CONCURRENT_DEFAULT_MANAGED_SCHEDULED_EXECUTOR_SERVICE  = 0x4803;
-    public static final int PARSE_EE_DEFAULT_BINDINGS_CONFIG            = 0x4880;
     public static final int PARSE_JSF_MANAGED_BEANS                     = 0x4900;
     public static final int PARSE_JSF_METADATA                          = 0x4A00;
     public static final int PARSE_SINGLETON_DEPLOYMENT                  = 0x4B00;
@@ -398,6 +406,8 @@ public enum Phase {
     public static final int PARSE_ORIENT_DRIVER                         = 0x4C01;
     public static final int PARSE_CASSANDRA_DRIVER                      = 0x4C02;
     public static final int PARSE_MONGO_DRIVER                          = 0x4C03;
+    public static final int PARSE_MICROPROFILE_JWT_DETECTION            = 0x4C0D;
+    public static final int PARSE_DEFINE_VIRTUAL_DOMAIN_NAME            = 0x4C17;
 
     // REGISTER
     /**
@@ -423,9 +433,11 @@ public enum Phase {
     public static final int DEPENDENCIES_WELD                           = 0x0A00;
     public static final int DEPENDENCIES_SEAM                           = 0x0A01;
     public static final int DEPENDENCIES_WS                             = 0x0C00;
-    public static final int DEPENDENCIES_SECURITY                       = 0x0C50;
+    //public static final int DEPENDENCIES_SECURITY                       = 0x0C50;
     public static final int DEPENDENCIES_ELYTRON                        = 0x0C51;
+    public static final int DEPENDENCIES_ELYTRON_EE_SECURITY            = 0x0C52;
     public static final int DEPENDENCIES_JAXRS                          = 0x0D00;
+    public static final int DEPENDENCIES_EE_SECURITY                    = 0x0D0A;
     public static final int DEPENDENCIES_JAXRS_SPRING                   = 0x0D80;
     public static final int DEPENDENCIES_SUB_DEPLOYMENTS                = 0x0E00;
     public static final int DEPENDENCIES_PERSISTENCE_ANNOTATION         = 0x0F00;
@@ -444,6 +456,13 @@ public enum Phase {
     public static final int DEPENDENCIES_MICROPROFILE_METRICS           = 0x1860;
     public static final int DEPENDENCIES_MICROPROFILE_HEALTH            = 0x1870;
     public static final int DEPENDENCIES_MICROPROFILE_OPENTRACING       = 0x1880;
+    public static final int DEPENDENCIES_MICROPROFILE_OPENAPI           = 0x1890;
+    public static final int DEPENDENCIES_MICROPROFILE_JWT               = 0x18A0;
+    public static final int DEPENDENCIES_MICROPROFILE_REACTIVE_MESSAGING = 0x18B0;
+    public static final int DEPENDENCIES_MICROPROFILE_REACTIVE_STREAMS_OPERATORS = 0x18C0;
+    public static final int DEPENDENCIES_MICROPROFILE_FAULT_TOLERANCE   = 0x1900;
+    public static final int DEPENDENCIES_MICROMETER                     = 0x1910;
+
 
     /**
      * @deprecated there is no phase processing associated with this constant - it was used for OSGi integration
@@ -476,12 +495,13 @@ public enum Phase {
      */
     @Deprecated
     public static final int CONFIGURE_RESOLVE_BUNDLE                    = 0x0100;
+    public static final int CONFIGURE_JDBC_DRIVER_MANAGER_ADAPTER       = 0x0180;
+    public static final int CONFIGURE_DISTRIBUTABLE_WEB                 = 0x0190;
     public static final int CONFIGURE_MODULE_SPEC                       = 0x0200;
     public static final int CONFIGURE_DEFERRED_PHASE                    = 0x0300;
     public static final int CONFIGURE_SINGLETON_DEPLOYMENT              = 0x0400;
     public static final int CONFIGURE_AUTHENTICATION_CONTEXT            = 0x0500;
     public static final int CONFIGURE_DEFAULT_SSL_CONTEXT               = 0x0580;
-    public static final int CONFIGURE_DISTRIBUTABLE_WEB                 = 0x0600;
 
     // FIRST_MODULE_USE
     public static final int FIRST_MODULE_USE_PERSISTENCE_CLASS_FILE_TRANSFORMER = 0x0100; // need to be before POST_MODULE_REFLECTION_INDEX
@@ -597,7 +617,11 @@ public enum Phase {
     public static final int POST_MODULE_SAR_SERVICE_COMPONENT           = 0x2D00;
     public static final int POST_MODULE_UNDERTOW_WEBSOCKETS             = 0x2E00;
     public static final int POST_MODULE_UNDERTOW_HANDLERS               = 0x2F00;
+    public static final int POST_MODULE_EXTERNAL_TAGLIB                 = 0x2F10;
+    public static final int POST_MODULE_UNDERTOW_SERVLET_CONTAINER_DEPENDENCY       = 0x2F1A;
+
     public static final int POST_MODULE_EE_CONCURRENT_CONTEXT           = 0x3000;
+    public static final int POST_MODULE_EE_STARTUP_COUNTDOWN            = 0x3080;
     public static final int POST_MODULE_BATCH_ENVIRONMENT               = 0x3100;
     public static final int POST_MODULE_RAR_SERVICES_DEPS               = 0x3300;
     public static final int POST_MODULE_UNDERTOW_MODCLUSTER             = 0x3400;
@@ -605,14 +629,21 @@ public enum Phase {
     public static final int POST_MODULE_EE_COMPONENT_SUSPEND            = 0x3600;
     public static final int POST_MODULE_PERMISSIONS_VALIDATION          = 0x3700;
     public static final int POST_MODULE_MICROPROFILE_CONFIG             = 0x3750;
+    public static final int POST_MODULE_METRICS                         = 0x3755;
     public static final int POST_MODULE_MICROPROFILE_METRICS            = 0x3760;
+    public static final int POST_MODULE_HEALTH                          = 0x3765;
     public static final int POST_MODULE_MICROPROFILE_HEALTH             = 0x3770;
     public static final int POST_MODULE_MICROPROFILE_OPENTRACING        = 0x3780;
+    public static final int POST_MODULE_MICROPROFILE_OPENAPI            = 0x3790;
+    public static final int POST_MODULE_MICROPROFILE_FAULT_TOLERANCE    = 0x3800;
+
+    public static final int POST_MODULE_EJB_HIBERNATE_VALIDATOR         = 0x3850;
 
 
     // INSTALL
     public static final int INSTALL_SHARED_SESSION_MANAGER              = 0x0100;
     public static final int INSTALL_JACC_POLICY                         = 0x0350;
+    public static final int INSTALL_VIRTUAL_SECURITY_DOMAIN             = 0x0360;
     public static final int INSTALL_COMPONENT_AGGREGATION               = 0x0400;
     public static final int INSTALL_RESOLVE_MESSAGE_DESTINATIONS        = 0x0403;
     public static final int INSTALL_EJB_CLIENT_CONTEXT                  = 0x0404;
@@ -650,7 +681,8 @@ public enum Phase {
     public static final int INSTALL_WS_UNIVERSAL_META_DATA_MODEL        = 0x1C10;
     public static final int INSTALL_WS_DEPLOYMENT_ASPECTS               = 0x1C11;
     // IMPORTANT: WS integration installs deployment aspects dynamically
-    // so consider INSTALL 0x1C10 - 0x1CFF reserved for WS subsystem!
+    // so consider INSTALL 0x1C10 - 0x1CFE reserved for WS subsystem!
+    public static final int INSTALL_WEB_RESOLVE_SECURITY_DOMAIN         = 0x1CFF;
     public static final int INSTALL_WAR_DEPLOYMENT                      = 0x1D00;
     /**
      * @deprecated there is no phase processing associated with this constant - it was used for OSGi integration

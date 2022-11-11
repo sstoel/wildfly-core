@@ -41,7 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import javax.json.JsonObject;
+import jakarta.json.JsonObject;
 import javax.security.auth.x500.X500Principal;
 
 import org.apache.http.HttpStatus;
@@ -68,14 +68,13 @@ import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ManagementClient;
 import org.wildfly.core.testrunner.ServerSetup;
 import org.wildfly.core.testrunner.ServerSetupTask;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 import org.wildfly.security.x500.cert.SelfSignedX509CertificateAndSigningKey;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-// https://github.com/justinmcook/wildfly-core/blob/caea7f7170c24598244558c6a82404e8417c6335/domain-management/src/test/java/org/jboss/as/domain/management/security/auditlog/AuditLogHandlerBootEnabledTestCase.java
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerSetup(SocketHandlerTestCase.ConfigureSubsystem.class)
 public class SocketHandlerTestCase extends AbstractLoggingTestCase {
 
@@ -147,6 +146,18 @@ public class SocketHandlerTestCase extends AbstractLoggingTestCase {
             // Change to only allowing INFO and higher messages
             executeOperation(Operations.createWriteAttributeOperation(socketHandlerAddress, "level", "INFO"));
             checkLevelsLogged(server, EnumSet.of(Logger.Level.INFO, Logger.Level.WARN, Logger.Level.ERROR, Logger.Level.FATAL), "Test TCP INFO and higher.");
+        }
+    }
+
+    @Test
+    public void testAsyncTcpSocket() throws Exception {
+        // Create a TCP server and start it
+        try (JsonLogServer server = JsonLogServer.createTcpServer(PORT)) {
+            server.start(DFT_TIMEOUT);
+
+            // Add the socket handler and test all levels
+            final ModelNode socketHandlerAddress = addSocketHandler("test-async-log-server", null, null, null, true);
+            checkLevelsLogged(server, EnumSet.allOf(Logger.Level.class), "Test TCP all levels.");
         }
     }
 
@@ -324,6 +335,11 @@ public class SocketHandlerTestCase extends AbstractLoggingTestCase {
     }
 
     private ModelNode addSocketHandler(final String name, final String level, final String protocol, final Path keyStore) throws IOException {
+        return addSocketHandler(name, level, protocol, keyStore, false);
+    }
+
+    private ModelNode addSocketHandler(final String name, final String level, final String protocol, final Path keyStore,
+                                       final boolean wrapInAsyncHandler) throws IOException {
         final CompositeOperationBuilder builder = CompositeOperationBuilder.create();
         // Add a socket handler
         final ModelNode address = SUBSYSTEM_ADDRESS.append("socket-handler", name).toModelNode();
@@ -365,9 +381,26 @@ public class SocketHandlerTestCase extends AbstractLoggingTestCase {
         builder.addStep(op);
         resourcesToRemove.addFirst(address);
 
+        final String handlerName;
+
+        if (wrapInAsyncHandler) {
+            handlerName = "async";
+            final ModelNode asyncHandlerAddress = SUBSYSTEM_ADDRESS.append("async-handler", handlerName).toModelNode();
+            op = Operations.createAddOperation(asyncHandlerAddress);
+            op.get("subhandlers").setEmptyList().add(name);
+            if (level != null) {
+                op.get("level").set(level);
+            }
+            op.get("queue-length").set(100L);
+            builder.addStep(op);
+            resourcesToRemove.addFirst(asyncHandlerAddress);
+        } else {
+            handlerName = name;
+        }
+
         // Add the handler to the logger
         op = Operations.createOperation("add-handler", LOGGER_ADDRESS);
-        op.get("name").set(name);
+        op.get("name").set(handlerName);
         builder.addStep(op);
         executeOperation(builder.build());
         return address;

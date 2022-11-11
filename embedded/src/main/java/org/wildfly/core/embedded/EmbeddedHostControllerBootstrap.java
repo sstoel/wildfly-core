@@ -22,9 +22,11 @@
 
 package org.wildfly.core.embedded;
 
+import java.beans.PropertyChangeListener;
 import java.util.concurrent.CountDownLatch;
 
 import org.jboss.as.controller.ControlledProcessState;
+import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.ControlledProcessStateService;
 import org.jboss.as.host.controller.HostControllerEnvironment;
 import org.jboss.as.host.controller.HostControllerService;
@@ -55,15 +57,16 @@ public class EmbeddedHostControllerBootstrap {
         this.futureContainer = futureContainer;
     }
 
-    public FutureServiceContainer bootstrap() throws Exception {
+    public FutureServiceContainer bootstrap(PropertyChangeListener processStateListener) throws Exception {
         try {
             final HostRunningModeControl runningModeControl = environment.getRunningModeControl();
             final ControlledProcessState processState = new ControlledProcessState(true);
             shutdownHook.setControlledProcessState(processState);
             ServiceTarget target = serviceContainer.subTarget();
 
-            final ControlledProcessStateService controlledProcessStateService = ControlledProcessStateService.addService(target, processState).getValue();
-            RunningStateJmx.registerMBean(controlledProcessStateService, null, runningModeControl, false);
+            final ProcessStateNotifier processStateNotifier = ControlledProcessStateService.addService(target, processState).getValue();
+            processStateNotifier.addPropertyChangeListener(processStateListener);
+            RunningStateJmx.registerMBean(processStateNotifier, null, runningModeControl, false);
             final HostControllerService hcs = new HostControllerService(environment, runningModeControl, authCode, processState, futureContainer);
             target.addService(HostControllerService.HC_SERVICE_NAME, hcs).install();
             return futureContainer;

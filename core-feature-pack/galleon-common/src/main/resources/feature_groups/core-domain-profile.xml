@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feature-group-spec name="core-domain-profile" xmlns="urn:jboss:galleon:feature-group:1.0">
+
+    <feature-group name="core-basic-profile"/>
+
+    <feature spec="subsystem.elytron">
+        <param name="final-providers" value="combined-providers"/>
+        <param name="disallowed-providers" value="[OracleUcrypto]"/>
+        <feature-group name="elytron-app">
+            <include feature-id="subsystem.elytron.properties-realm:properties-realm=ApplicationRealm">
+                <param name="users-properties" value="{path=application-users.properties,relative-to=jboss.domain.config.dir,digest-realm-name=ApplicationRealm}"/>
+                <feature spec="subsystem.elytron.properties-realm.groups-properties">
+                    <param name="path" value="application-roles.properties"/>
+                    <param name="relative-to" value="jboss.domain.config.dir"/>
+                </feature>
+            </include>
+            <include feature-id="subsystem.elytron.key-store:key-store=applicationKS">
+                <param name="key-store" value="applicationKS" />
+                <param name="path" value="application.keystore" />
+                <param name="relative-to" value="jboss.domain.config.dir" />
+                <param name="type" value="JKS" />
+                <param name="credential-reference" value="{clear-text=password}" />
+            </include>
+        </feature-group>
+    </feature>
+
+    <feature-group name="domain-server-groups"/>
+
+</feature-group-spec>

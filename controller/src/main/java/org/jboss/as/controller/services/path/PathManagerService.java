@@ -238,7 +238,7 @@ public abstract class PathManagerService implements PathManager, Service<PathMan
                 dependents = dependenctRelativePaths.get(pathEntry.getRelativeTo());
                 if (dependents != null) {
                     dependents.remove(pathEntry.getName());
-                    if (dependents.size() == 0) {
+                    if (dependents.isEmpty()) {
                         dependenctRelativePaths.remove(pathEntry.getRelativeTo());
                     }
                 }
@@ -545,7 +545,7 @@ public abstract class PathManagerService implements PathManager, Service<PathMan
                         if (callbackSet != null) {
                             callbackSet.remove(callback);
                         }
-                        if (callbackSet.isEmpty()) {
+                        if (callbackSet != null && callbackSet.isEmpty()) {
                             callbacksByEvent.remove(event);
                         }
                     }

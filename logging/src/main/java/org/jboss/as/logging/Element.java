@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.jboss.as.controller.AttributeDefinition;
+import org.jboss.as.logging.filters.FilterResourceDefinition;
 import org.jboss.as.logging.formatters.CustomFormatterResourceDefinition;
 import org.jboss.as.logging.formatters.JsonFormatterResourceDefinition;
 import org.jboss.as.logging.formatters.PatternFormatterResourceDefinition;
@@ -40,6 +41,7 @@ import org.jboss.as.logging.handlers.PeriodicSizeRotatingHandlerResourceDefiniti
 import org.jboss.as.logging.handlers.SizeRotatingHandlerResourceDefinition;
 import org.jboss.as.logging.handlers.SocketHandlerResourceDefinition;
 import org.jboss.as.logging.handlers.SyslogHandlerResourceDefinition;
+import org.jboss.as.logging.loggers.LoggerAttributes;
 import org.jboss.as.logging.loggers.LoggerResourceDefinition;
 import org.jboss.as.logging.loggers.RootLoggerResourceDefinition;
 
@@ -59,6 +61,7 @@ enum Element {
     ASYNC_HANDLER(AsyncHandlerResourceDefinition.NAME),
     CHANGE_LEVEL(CommonAttributes.CHANGE_LEVEL),
     CONSOLE_HANDLER(ConsoleHandlerResourceDefinition.NAME),
+    CONSTRUCTOR_PROPERTIES(FilterResourceDefinition.CONSTRUCTOR_PROPERTIES),
     CUSTOM_FORMATTER(CustomFormatterResourceDefinition.CUSTOM_FORMATTER),
     CUSTOM_HANDLER(CustomHandlerResourceDefinition.NAME),
     DENY(CommonAttributes.DENY),
@@ -67,10 +70,9 @@ enum Element {
     FILE(CommonAttributes.FILE),
     FILE_HANDLER(FileHandlerResourceDefinition.NAME),
     FILTER(CommonAttributes.FILTER),
-    FILTER_SPEC(CommonAttributes.FILTER_SPEC),
+    FILTER_SPEC("filter-spec"),
     FORMATTER(AbstractHandlerDefinition.FORMATTER),
-    HANDLER(CommonAttributes.HANDLER),
-    HANDLERS(CommonAttributes.HANDLERS),
+    HANDLERS(LoggerAttributes.HANDLERS),
     HOSTNAME(SyslogHandlerResourceDefinition.HOSTNAME),
     JSON_FORMATTER(JsonFormatterResourceDefinition.NAME),
     LEVEL(CommonAttributes.LEVEL),

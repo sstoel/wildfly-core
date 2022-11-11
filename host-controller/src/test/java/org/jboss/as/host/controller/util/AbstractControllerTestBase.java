@@ -121,7 +121,7 @@ public abstract class AbstractControllerTestBase {
     }
 
     protected AbstractControllerTestBase(ProcessType processType) {
-        this("slave", processType, false);
+        this("secondary", processType, false);
     }
 
     protected AbstractControllerTestBase(String hostName, ProcessType processType, boolean useDelegateRootResourceDefinition) {
@@ -203,7 +203,7 @@ public abstract class AbstractControllerTestBase {
         if (container != null) {
             container.shutdown();
             try {
-                container.awaitTermination(5, TimeUnit.SECONDS);
+                container.awaitTermination(30, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             } finally {
@@ -280,7 +280,7 @@ public abstract class AbstractControllerTestBase {
 
         public ModelControllerService(final ManagedAuditLogger auditLogger) {
             super(AbstractControllerTestBase.this.processType, new EmptyConfigurationPersister(), new ControlledProcessState(true),
-                    ResourceBuilder.Factory.create(PathElement.pathElement("root"), new NonResolvingResourceDescriptionResolver()).build(),
+                    ResourceBuilder.Factory.create(PathElement.pathElement("root"), NonResolvingResourceDescriptionResolver.INSTANCE).build(),
                     auditLogger, initializer, capabilityRegistry);
         }
 
@@ -355,7 +355,7 @@ public abstract class AbstractControllerTestBase {
 //            return hostName;
 //        }
 //
-//        public boolean isMasterDomainController() {
+//        public boolean isPrimaryDomainController() {
 //            return false;
 //        }
 //

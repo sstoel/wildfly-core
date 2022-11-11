@@ -60,6 +60,26 @@ public enum KernelAPIVersion {
     VERSION_8_0(8, 0, 0),
     // WF 15.0.0
     VERSION_9_0(9, 0, 0),
+    // WF 16.0.0-18.0.0
+    VERSION_10_0(10, 0, 0),
+    // WildFly 19.0.0
+    VERSION_12_0(12, 0, 0),
+    // WildFly 20.0.0
+    VERSION_13_0(13, 0, 0),
+    // WildFly 21.0.0
+    VERSION_14_0(14, 0, 0),
+    // WildFly 22.0.0
+    VERSION_15_0(15, 0, 0),
+    // WildFly 23.0.0
+    VERSION_16_0(16, 0, 0),
+    // WildFly 24.0.0
+    VERSION_17_0(17, 0, 0),
+    // WildFly 25.0.0
+    VERSION_18_0(18, 0, 0),
+    // WildFLy 26.0.0
+    VERSION_19_0(19, 0, 0),
+    // WildFLy 27.0.0
+    VERSION_20_0(20, 0, 0),
     // Latest
     CURRENT(Version.MANAGEMENT_MAJOR_VERSION, Version.MANAGEMENT_MINOR_VERSION, Version.MANAGEMENT_MICRO_VERSION);
 

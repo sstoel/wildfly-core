@@ -25,7 +25,9 @@ import static org.jboss.as.remoting.Capabilities.SASL_AUTHENTICATION_FACTORY_CAP
 import static org.jboss.as.remoting.CommonAttributes.HTTP_CONNECTOR;
 import static org.jboss.as.remoting.ConnectorCommon.SASL_PROTOCOL;
 import static org.jboss.as.remoting.ConnectorCommon.SERVER_NAME;
+import static org.jboss.as.remoting.ConnectorResource.CONNECTOR_CAPABILITY;
 
+import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.ReloadRequiredWriteAttributeHandler;
@@ -71,6 +73,7 @@ public class HttpConnectorResource extends SimpleResourceDefinition {
             .addAccessConstraint(SensitiveTargetAccessConstraintDefinition.SECURITY_REALM_REF)
             .addAccessConstraint(RemotingExtension.REMOTING_SECURITY_DEF)
             .setRestartAllServices()
+            .setDeprecated(ModelVersion.create(6))
             .build();
 
     static final SimpleAttributeDefinition SASL_AUTHENTICATION_FACTORY = new SimpleAttributeDefinitionBuilder(ConnectorCommon.SASL_AUTHENTICATION_FACTORY)
@@ -85,7 +88,8 @@ public class HttpConnectorResource extends SimpleResourceDefinition {
         super(new Parameters(PATH, RemotingExtension.getResourceDescriptionResolver(HTTP_CONNECTOR))
                 .setAddHandler(HttpConnectorAdd.INSTANCE)
                 .setRemoveHandler(HttpConnectorRemove.INSTANCE)
-                .setCapabilities(HTTP_CONNECTOR_CAPABILITY));
+                // expose a common connector capability (WFCORE-4875)
+                .setCapabilities(CONNECTOR_CAPABILITY, HTTP_CONNECTOR_CAPABILITY));
     }
 
     @Override

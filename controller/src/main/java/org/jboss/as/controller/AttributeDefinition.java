@@ -84,9 +84,7 @@ public abstract class AttributeDefinition {
     private final ParameterCorrector valueCorrector;
     private final ParameterValidator validator;
     private final Set<AttributeAccess.Flag> flags;
-    /** @deprecated use {@link #getMarshaller()} as this will be made private in a future release*/
-    @Deprecated
-    protected final AttributeMarshaller attributeMarshaller;
+    private final AttributeMarshaller attributeMarshaller;
     private final boolean resourceOnly;
     private final DeprecationData deprecationData;
     private final List<AccessConstraintDefinition> accessConstraints;
@@ -94,9 +92,7 @@ public abstract class AttributeDefinition {
     private final AttributeParser parser;
     private final String attributeGroup;
     private final ModelNode undefinedMetricValue;
-    /** @deprecated use {@link #getReferenceRecorder()} ()} as this will be made private in a future release*/
-    @Deprecated
-    protected final CapabilityReferenceRecorder referenceRecorder;
+    private final CapabilityReferenceRecorder referenceRecorder;
     private final Map<String, ModelNode> arbitraryDescriptors;
 
     // NOTE: Standards for creating a constructor variant are:
@@ -107,19 +103,19 @@ public abstract class AttributeDefinition {
 
     protected AttributeDefinition(AbstractAttributeDefinitionBuilder<?, ?> toCopy) {
         this(toCopy.getName(), toCopy.getXmlName(), toCopy.getDefaultValue(), toCopy.getType(),
-                toCopy.isAllowNull(), toCopy.isAllowExpression(), toCopy.getMeasurementUnit(), toCopy.getCorrector(),
-                wrapValidator(toCopy.getValidator(), toCopy.isAllowNull(), toCopy.getAlternatives(), toCopy.isAllowExpression(),
+                toCopy.isNillable(), toCopy.isAllowExpression(), toCopy.getMeasurementUnit(), toCopy.getCorrector(),
+                wrapValidator(toCopy.getValidator(), toCopy.isNillable(), toCopy.getAlternatives(), toCopy.isAllowExpression(),
                         toCopy.getType(), toCopy.getConfiguredMinSize(), toCopy.getConfiguredMaxSize()),
-                true, toCopy.getAlternatives(), toCopy.getRequires(), toCopy.getAttributeMarshaller(),
+                toCopy.getAlternatives(), toCopy.getRequires(), toCopy.getAttributeMarshaller(),
                 toCopy.isResourceOnly(), toCopy.getDeprecated(),
                 wrapConstraints(toCopy.getAccessConstraints()), toCopy.getNullSignificant(), toCopy.getParser(),
-                toCopy.getAttributeGroup(), toCopy.referenceRecorder, toCopy.getAllowedValues(), toCopy.getArbitraryDescriptors(),
+                toCopy.getAttributeGroup(), toCopy.getCapabilityReferenceRecorder(), toCopy.getAllowedValues(), toCopy.getArbitraryDescriptors(),
                 toCopy.getUndefinedMetricValue(), immutableSetOf(toCopy.getFlags()));
     }
 
     private AttributeDefinition(String name, String xmlName, final ModelNode defaultValue, final ModelType type,
                                 final boolean allowNull, final boolean allowExpression, final MeasurementUnit measurementUnit,
-                                final ParameterCorrector valueCorrector, final ParameterValidator validator, final boolean validateNull,
+                                final ParameterCorrector valueCorrector, final ParameterValidator validator,
                                 final String[] alternatives, final String[] requires, AttributeMarshaller marshaller,
                                 boolean resourceOnly, DeprecationData deprecationData, final List<AccessConstraintDefinition> accessConstraints,
                                 Boolean nilSignificant, AttributeParser parser, final String attributeGroup, CapabilityReferenceRecorder referenceRecorder,
@@ -143,7 +139,6 @@ public abstract class AttributeDefinition {
         this.valueCorrector = valueCorrector;
         this.validator = validator;
         this.flags = flags;
-        //noinspection deprecation
         this.attributeMarshaller = marshaller != null ? marshaller : AttributeMarshaller.SIMPLE;
         this.resourceOnly = resourceOnly;
         this.accessConstraints = accessConstraints;
@@ -157,7 +152,6 @@ public abstract class AttributeDefinition {
         } else {
             this.undefinedMetricValue = null;
         }
-        //noinspection deprecation
         this.referenceRecorder = referenceRecorder;
         if (arbitraryDescriptors != null && !arbitraryDescriptors.isEmpty()) {
             if (arbitraryDescriptors.size() == 1) {
@@ -210,7 +204,7 @@ public abstract class AttributeDefinition {
 
     private static List<AccessConstraintDefinition> wrapConstraints(AccessConstraintDefinition[] accessConstraints) {
         if (accessConstraints == null || accessConstraints.length == 0) {
-            return Collections.<AccessConstraintDefinition>emptyList();
+            return Collections.emptyList();
         } else {
             return Collections.unmodifiableList(Arrays.asList(accessConstraints));
         }
@@ -412,27 +406,12 @@ public abstract class AttributeDefinition {
     }
 
     /**
-     * Gets a set of any {@link org.jboss.as.controller.registry.AttributeAccess.Flag flags} used
+     * Returns an immutable set of any {@link org.jboss.as.controller.registry.AttributeAccess.Flag flags} used
      * to indicate special characteristics of the attribute
      *
      * @return the flags. Will not be {@code null} but may be empty.
-     *
-     * @deprecated In the next release, the return type of this method will become simply {@code Set} and the returned object will be immutable, so any callers should update their code to reflect that
      */
-    @Deprecated
-    public EnumSet<AttributeAccess.Flag> getFlags() {
-        if (flags.isEmpty()) {
-            return EnumSet.noneOf(AttributeAccess.Flag.class);
-        }
-        AttributeAccess.Flag[] array = flags.toArray(new AttributeAccess.Flag[flags.size()]);
-        return array.length == 1 ? EnumSet.of(array[0]) : EnumSet.of(array[0], array);
-    }
-
-    /**
-     * Provides an immutable variant of the set returned by {@link #getFlags()}.
-     * @deprecated for internal use only; will be dropped when the semantic of {@link #getFlags()} is changed to return an immutable {@code Set}*/
-    @Deprecated
-    public Set<AttributeAccess.Flag> getImmutableFlags() {
+    public Set<AttributeAccess.Flag> getFlags() {
         return flags;
     }
 
@@ -505,6 +484,21 @@ public abstract class AttributeDefinition {
             ControllerLogger.DEPRECATED_LOGGER.attributeDeprecated(getName(),
                     PathAddress.pathAddress(operationObject.get(ModelDescriptionConstants.OP_ADDR)).toCLIStyleString());
         }
+
+
+        // overriding the value of an attribute using an env var is performed only when the operation
+        // containers a PathAddress. This method is also used for validating parameters (that are not necessary
+        // providing an address (e.g. AbstractWriteAttributeHandler.execute)
+        if (EnvVarAttributeOverrider.isEnabled() &&
+                operationObject.has(ModelDescriptionConstants.OP_ADDR) &&
+                ! COMPLEX_TYPES.contains(type)) {
+            PathAddress pathAddress = PathAddress.pathAddress(operationObject.get(ModelDescriptionConstants.OP_ADDR));
+            String overriddenValue = EnvVarAttributeOverrider.getOverriddenValueFromEnvVar(pathAddress, name);
+            if (overriddenValue != null) {
+                operationObject.get(name).set(overriddenValue);
+            }
+        }
+
         // AS7-6224 -- convert expression strings to ModelType.EXPRESSION *before* correcting
         ModelNode newValue = convertParameterExpressions(operationObject.get(name));
         final ModelNode correctedValue = correctValue(newValue, model.get(name));
@@ -597,12 +591,9 @@ public abstract class AttributeDefinition {
      * @throws OperationFailedException if the value is not valid
      */
     public ModelNode resolveModelAttribute(final OperationContext context, final ModelNode model) throws OperationFailedException {
-        return resolveModelAttribute(new ExpressionResolver() {
-            @Override
-            public ModelNode resolveExpressions(ModelNode node) throws OperationFailedException {
-                return context.resolveExpressions(node);
-            }
-        }, model);
+        // OperationContext is a subinterface of ExpressionResolver but that distinction
+        // is not relevant to us so just use the method that takes ExpressionResolver
+        return resolveModelAttribute((ExpressionResolver) context, model);
     }
 
     /**
@@ -639,12 +630,9 @@ public abstract class AttributeDefinition {
      * @throws OperationFailedException if the value is not valid
      */
     public ModelNode resolveValue(final OperationContext context, final ModelNode value) throws OperationFailedException {
-        return resolveValue(new ExpressionResolver() {
-            @Override
-            public ModelNode resolveExpressions(ModelNode node) throws OperationFailedException {
-                return context.resolveExpressions(node);
-            }
-        }, value);
+        // OperationContext is a subinterface of ExpressionResolver but that distinction
+        // is not relevant to us so just use the method that takes ExpressionResolver
+        return resolveValue((ExpressionResolver) context, value);
     }
 
     /**
@@ -1053,11 +1041,10 @@ public abstract class AttributeDefinition {
      * This is a no-op in this base class. Subclasses that support attribute types that can represent
      * capability references should override this method.
      *  @param context the operation context
-     * @param resource
+     * @param resource  the resource on which requirements are gathered
      * @param attributeValue the value of the attribute described by this object
      */
     public void addCapabilityRequirements(OperationContext context, Resource resource, ModelNode attributeValue) {
-        @SuppressWarnings("deprecation")
         CapabilityReferenceRecorder refRecorder = getReferenceRecorder();
         if (refRecorder != null) {
             // We can't process expressions
@@ -1098,7 +1085,6 @@ public abstract class AttributeDefinition {
      * @param attributeValue the value of the attribute described by this object
      */
     public void removeCapabilityRequirements(OperationContext context, Resource resource, ModelNode attributeValue) {
-        @SuppressWarnings("deprecation")
         CapabilityReferenceRecorder refRecorder = getReferenceRecorder();
         if (refRecorder != null) {
             // We can't process expressions
@@ -1116,14 +1102,13 @@ public abstract class AttributeDefinition {
      * <p>
      * This is a no-op in this base class. Subclasses that support attribute types that can represent
      * capability references should override this method.
-     * @return
+     * @return {@code true} if this definition is for an attribute whose value is or contains a reference to the name of some capability
      */
     public boolean hasCapabilityRequirements(){
         return getReferenceRecorder() != null;
     }
 
     protected CapabilityReferenceRecorder getReferenceRecorder(){
-        //noinspection deprecation
         return referenceRecorder;
     }
 
@@ -1246,7 +1231,6 @@ public abstract class AttributeDefinition {
      * @return attribute marshaller that can be used to persist attribute to XML
      */
     public AttributeMarshaller getMarshaller() {
-        //noinspection deprecation
         return attributeMarshaller;
     }
 

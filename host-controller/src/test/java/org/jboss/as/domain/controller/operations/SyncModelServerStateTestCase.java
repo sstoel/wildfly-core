@@ -97,7 +97,6 @@ import org.jboss.as.host.controller.util.AbstractControllerTestBase;
 import org.jboss.as.repository.ContentReference;
 import org.jboss.as.repository.HostFileRepository;
 import org.jboss.as.server.operations.ServerProcessStateHandler;
-import org.jboss.as.server.services.security.AbstractVaultReader;
 import org.jboss.as.version.ProductConfig;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
@@ -107,9 +106,9 @@ import org.junit.Assert;
 import org.junit.Test;
 
 /**
- * Port of ApplyRemoteMasterDomainModelHandler to work with syncing using the operations.
- * SlaveReconnectTestCase contains other tests relevant to this. If maintaining all the mocks
- * for this test becomes too cumbersome, they should be ported to SlaveReconnectTestCase in the
+ * Port of ApplyRemotePrimaryDomainModelHandler to work with syncing using the operations.
+ * SecondaryReconnectTestCase contains other tests relevant to this. If maintaining all the mocks
+ * for this test becomes too cumbersome, they should be ported to SecondaryReconnectTestCase in the
  * domain testsuite.
  *
  * @author <a href="mailto:kabir.khan@jboss.com">Kabir Khan</a>
@@ -117,7 +116,7 @@ import org.junit.Test;
 public class SyncModelServerStateTestCase extends AbstractControllerTestBase  {
 
     static final AttributeDefinition ATTR = new SimpleAttributeDefinitionBuilder("attr", ModelType.STRING, true).build();
-    static final OperationDefinition TRIGGER_SYNC = new SimpleOperationDefinitionBuilder("trigger-sync", new NonResolvingResourceDescriptionResolver())
+    static final OperationDefinition TRIGGER_SYNC = new SimpleOperationDefinitionBuilder("trigger-sync", NonResolvingResourceDescriptionResolver.INSTANCE)
             .addParameter(ATTR)
             .build();
 
@@ -129,7 +128,7 @@ public class SyncModelServerStateTestCase extends AbstractControllerTestBase  {
     private volatile TestSyncRepository repository = new TestSyncRepository();
 
     public SyncModelServerStateTestCase() {
-        super("slave", ProcessType.HOST_CONTROLLER, true);
+        super("secondary", ProcessType.HOST_CONTROLLER, true);
         ignoredDomainResourceRegistry = new IgnoredDomainResourceRegistry(hostControllerInfo);
         serverProxies = new HashMap<>();
         serverProxies.put("server-one", new MockServerProxy("server-one"));
@@ -165,12 +164,12 @@ public class SyncModelServerStateTestCase extends AbstractControllerTestBase  {
 
     @Test
     public void testLegacyModelSync() throws Exception {
-        Resource masterRootResource = rootResource.clone();
-        masterRootResource.getModel().get(PRODUCT_NAME).set("WildFly Core Test");
-        masterRootResource.getModel().get(PRODUCT_VERSION).set("test 2.0");
+        Resource primaryRootResource = rootResource.clone();
+        primaryRootResource.getModel().get(PRODUCT_NAME).set("WildFly Core Test");
+        primaryRootResource.getModel().get(PRODUCT_VERSION).set("test 2.0");
         Assert.assertFalse(rootResource.getModel().hasDefined(PRODUCT_NAME));
         Assert.assertFalse(rootResource.getModel().hasDefined(PRODUCT_VERSION));
-        executeTriggerSyncOperation(masterRootResource);
+        executeTriggerSyncOperation(primaryRootResource);
         Assert.assertTrue(rootResource.getModel().hasDefined(PRODUCT_NAME));
         Assert.assertEquals("WildFly Core Test", rootResource.getModel().get(PRODUCT_NAME).asString());
         Assert.assertTrue(rootResource.getModel().hasDefined(PRODUCT_VERSION));
@@ -705,7 +704,7 @@ public class SyncModelServerStateTestCase extends AbstractControllerTestBase  {
         @Override
         public void setDelegate() {
             final ExtensibleConfigurationPersister configurationPersister = new EmptyConfigurationPersister();
-            final boolean isMaster = false;
+            final boolean isPrimary = false;
             final IgnoredDomainResourceRegistry ignoredDomainResourceRegistry = new IgnoredDomainResourceRegistry(hostControllerInfo);
             final PathManagerService pathManager = new HostPathManagerService(capabilityRegistry);
             final DelegatingConfigurableAuthorizer authorizer = new DelegatingConfigurableAuthorizer();
@@ -719,7 +718,7 @@ public class SyncModelServerStateTestCase extends AbstractControllerTestBase  {
                 }
             };
             DomainRootDefinition domain = new DomainRootDefinition(domainController, hostControllerEnvironment, configurationPersister,
-                    repository, repository, isMaster, hostControllerInfo, extensionRegistry, ignoredDomainResourceRegistry,
+                    repository, repository, isPrimary, hostControllerInfo, extensionRegistry, ignoredDomainResourceRegistry,
                     pathManager, authorizer, securityIdentitySupplier, hostRegistrations, domainHostExcludeRegistry, rootResourceRegistrationProvider);
             getDelegatingResourceDefiniton().setDelegate(domain);
 
@@ -730,14 +729,13 @@ public class SyncModelServerStateTestCase extends AbstractControllerTestBase  {
             final HostRunningModeControl runningModeControl = new HostRunningModeControl(RunningMode.NORMAL, RestartMode.SERVERS);
             final ServerInventory serverInventory = null;
             final HostFileRepository remoteFileRepository = repository;
-            final AbstractVaultReader vaultReader = null;
             final ControlledProcessState processState = null;
             final ManagedAuditLogger auditLogger = null;
             final BootErrorCollector bootErrorCollector = null;
             //Save this for later since setDelegate() gets called before initModel....
             hostResourceDefinition = new HostResourceDefinition(hostName, hostControllerConfigurationPersister,
                     hostControllerEnvironment, runningModeControl, repository, hostControllerInfo, serverInventory, remoteFileRepository,
-                    repository, domainController, extensionRegistry, vaultReader, ignoredDomainResourceRegistry, processState,
+                    repository, domainController, extensionRegistry, ignoredDomainResourceRegistry, processState,
                     pathManager, authorizer, securityIdentitySupplier, auditLogger, bootErrorCollector);
         }
 

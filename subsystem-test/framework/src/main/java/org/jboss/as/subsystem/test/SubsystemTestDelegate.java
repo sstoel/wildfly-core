@@ -46,7 +46,6 @@ import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
 import javax.xml.namespace.QName;
-import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 
@@ -91,7 +90,6 @@ import org.jboss.as.controller.registry.RuntimePackageDependency;
 import org.jboss.as.controller.transform.ExtensionTransformerRegistration;
 import org.jboss.as.controller.transform.OperationTransformer.TransformedOperation;
 import org.jboss.as.model.test.ChildFirstClassLoaderBuilder;
-import org.jboss.as.model.test.EAPRepositoryReachableUtil;
 import org.jboss.as.model.test.ModelFixer;
 import org.jboss.as.model.test.ModelTestBootOperationsBuilder;
 import org.jboss.as.model.test.ModelTestControllerVersion;
@@ -111,6 +109,7 @@ import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLMapper;
 import org.junit.Assert;
 import org.junit.Assume;
+import org.wildfly.common.xml.XMLInputFactoryUtil;
 import org.wildfly.legacy.test.spi.Version;
 
 /**
@@ -219,7 +218,7 @@ final class SubsystemTestDelegate {
         String xml = "<test xmlns=\"" + TEST_NAMESPACE + "\">" +
                 subsystemXml +
                 "</test>";
-        final XMLStreamReader reader = XMLInputFactory.newInstance().createXMLStreamReader(new StringReader(xml));
+        final XMLStreamReader reader = XMLInputFactoryUtil.create().createXMLStreamReader(new StringReader(xml));
         addAdditionalParsers(additionalParsers);
         final List<ModelNode> operationList = new ArrayList<>();
         xmlMapper.parseDocument(operationList, reader);
@@ -484,7 +483,7 @@ final class SubsystemTestDelegate {
 
         ModelDescriptionValidator validator = new ModelDescriptionValidator(address, model, arbitraryDescriptors);
         List<ModelDescriptionValidator.ValidationFailure> validationMessages = validator.validateResource();
-        if (validationMessages.size() > 0) {
+        if (!validationMessages.isEmpty()) {
             final StringBuilder builder = new StringBuilder("VALIDATION ERRORS IN MODEL:");
             for (ModelDescriptionValidator.ValidationFailure failure : validationMessages) {
                 builder.append(failure);
@@ -537,10 +536,6 @@ final class SubsystemTestDelegate {
                 valid = System.getProperties().containsKey(TEST_OLD_LEGACY);
             }
             Assume.assumeTrue("No legacy controller to test against", valid);
-            //Ignore this test if it is eap
-            if (version.isEap()) {
-                Assume.assumeTrue(EAPRepositoryReachableUtil.isReachable());
-            }
 
             bootOperationBuilder.validateNotAlreadyBuilt();
             if (legacyControllerInitializers.containsKey(modelVersion)) {
@@ -829,7 +824,7 @@ final class SubsystemTestDelegate {
                 }
                 throw new Exception(bootError);
             }
-            Assert.assertTrue(reverseServices.isSuccessfulBoot());
+            Assert.assertTrue(reverseServices.getBootErrorDescription(), reverseServices.isSuccessfulBoot() && !reverseServices.hasBootErrorCollectorFailures());
 
             ModelNode reverseSubsystem = reverseServices.readWholeModel().get(SUBSYSTEM, getMainSubsystemName());
             if (reverseCheckModelFixer != null) {

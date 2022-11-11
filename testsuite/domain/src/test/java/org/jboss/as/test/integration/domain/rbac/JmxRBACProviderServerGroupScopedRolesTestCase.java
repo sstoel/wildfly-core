@@ -33,22 +33,20 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import javax.management.Attribute;
 import javax.management.JMRuntimeException;
 import javax.management.MBeanServerConnection;
 import javax.management.ObjectName;
 import javax.management.remote.JMXServiceURL;
-import org.apache.commons.lang.ArrayUtils;
+
+import org.apache.commons.lang3.ArrayUtils;
+
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.client.helpers.Operations;
@@ -66,7 +64,6 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 //import org.junit.Ignore;
 import org.junit.Test;
-import org.wildfly.security.sasl.util.UsernamePasswordHashUtil;
 import org.wildfly.test.jmx.JMXServiceDeploymentSetupTask;
 
 /**
@@ -85,19 +82,13 @@ public class JmxRBACProviderServerGroupScopedRolesTestCase extends AbstractServe
     @BeforeClass
     public static void setupDomain() throws Exception {
         testSupport = FullRbacProviderTestSuite.createSupport(JmxRBACProviderServerGroupScopedRolesTestCase.class.getSimpleName());
-        masterClientConfig = testSupport.getDomainMasterConfiguration();
-        DomainClient domainClient = testSupport.getDomainMasterLifecycleUtil().getDomainClient();
+        primaryClientConfig = testSupport.getDomainPrimaryConfiguration();
+        DomainClient domainClient = testSupport.getDomainPrimaryLifecycleUtil().getDomainClient();
         setupRoles(domainClient);
         setNonCoreMbeanSensitivity(domainClient, true);
         ServerGroupRolesMappingSetup.INSTANCE.setup(domainClient);
         deployDeployment1(domainClient);
         jmxTask.setup(domainClient, SERVER_GROUP_A);
-        List<String> users = new ArrayList<String>(USERS.length);
-        for (int i = 0; i < USERS.length; i++) {
-            users.add(USERS[i] + "=" + new UsernamePasswordHashUtil().generateHashedHexURP(USERS[i], "ApplicationRealm", RbacAdminCallbackHandler.STD_PASSWORD.toCharArray()));
-        }
-        users.add(OTHER_GROUP_USER + "=" + new UsernamePasswordHashUtil().generateHashedHexURP(OTHER_GROUP_USER, "ApplicationRealm", RbacAdminCallbackHandler.STD_PASSWORD.toCharArray()));
-        Files.write((new File(masterClientConfig.getJbossHome()).toPath().resolve("domain").resolve("configuration").resolve("application-users.properties")), users, Charset.forName("UTF-8"));
     }
 
     protected static void setupRoles(DomainClient domainClient) throws IOException {
@@ -130,17 +121,17 @@ public class JmxRBACProviderServerGroupScopedRolesTestCase extends AbstractServe
     @After
     public void activateMBeanSensitivity() throws IOException {
         mbeanSensitivity = true;
-        setNonCoreMbeanSensitivity(testSupport.getDomainMasterLifecycleUtil().getDomainClient(), true);
+        setNonCoreMbeanSensitivity(testSupport.getDomainPrimaryLifecycleUtil().getDomainClient(), true);
     }
 
     protected void deactivateMBeanSensitivity() throws IOException {
         mbeanSensitivity = false;
-        setNonCoreMbeanSensitivity(testSupport.getDomainMasterLifecycleUtil().getDomainClient(), false);
+        setNonCoreMbeanSensitivity(testSupport.getDomainPrimaryLifecycleUtil().getDomainClient(), false);
     }
 
     @AfterClass
     public static void tearDownDomain() throws Exception {
-        DomainClient domainClient = testSupport.getDomainMasterLifecycleUtil().getDomainClient();
+        DomainClient domainClient = testSupport.getDomainPrimaryLifecycleUtil().getDomainClient();
         try {
             ServerGroupRolesMappingSetup.INSTANCE.tearDown(domainClient);
         } finally {
@@ -243,7 +234,7 @@ public class JmxRBACProviderServerGroupScopedRolesTestCase extends AbstractServe
 
     private void test(String userName) throws Exception {
         String urlString = System.getProperty("jmx.service.url", "service:jmx:remoting-jmx://"
-                        + NetworkUtils.formatPossibleIpv6Address(masterClientConfig.getHostControllerManagementAddress()) + ":12345");
+                        + NetworkUtils.formatPossibleIpv6Address(primaryClientConfig.getHostControllerManagementAddress()) + ":12345");
         JmxManagementInterface jmx = JmxManagementInterface.create(new JMXServiceURL(urlString),
                 userName, RbacAdminCallbackHandler.STD_PASSWORD,
                 null // not needed, as the only thing from JmxManagementInterface used in this test is getConnection()

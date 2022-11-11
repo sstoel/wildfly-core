@@ -34,7 +34,7 @@ final class HostControllerSystemPropertyContext extends SystemPropertyContext {
     private static final String DOMAIN_DEPLOYMENT_DIR = "jboss.domain.deployment.dir";
     private static final String DOMAIN_LOG_DIR = "jboss.domain.log.dir";
     private static final String DOMAIN_TEMP_DIR = "jboss.domain.temp.dir";
-    private static final String JBOSS_DOMAIN_MASTER_ADDRESS = "jboss.domain.master.address";
+    private static final String JBOSS_DOMAIN_PRIMARY_ADDRESS = "jboss.domain.primary.address";
     private static final String DOMAIN_SERVERS_DIR = "jboss.domain.servers.dir";
 
     /**
@@ -52,12 +52,13 @@ final class HostControllerSystemPropertyContext extends SystemPropertyContext {
         final Path baseDir = resolveBaseDir(DOMAIN_BASE_DIR, "domain");
         addPropertyIfAbsent(DOMAIN_BASE_DIR, baseDir.toString());
         addPropertyIfAbsent(DOMAIN_CONFIG_DIR, resolvePath(baseDir, "configuration"));
-        addPropertyIfAbsent(DOMAIN_DATA_DIR, resolvePath(baseDir, "data"));
-        addPropertyIfAbsent(DOMAIN_CONTENT_DIR, resolvePath(baseDir, "data", "content"));
-        addPropertyIfAbsent(DOMAIN_DEPLOYMENT_DIR, resolvePath(baseDir, "data", "content"));
+        Path dataDir = resolveDir(DOMAIN_DATA_DIR, baseDir.resolve("data"));
+        addPropertyIfAbsent(DOMAIN_DATA_DIR, dataDir);
+        addPropertyIfAbsent(DOMAIN_CONTENT_DIR, resolvePath(dataDir, "content"));
+        addPropertyIfAbsent(DOMAIN_DEPLOYMENT_DIR, resolvePath(dataDir, "content"));
         addPropertyIfAbsent(DOMAIN_LOG_DIR, resolvePath(baseDir, "log"));
         addPropertyIfAbsent(DOMAIN_TEMP_DIR, resolvePath(baseDir, "tmp"));
-        checkProperty(JBOSS_DOMAIN_MASTER_ADDRESS);
+        checkProperty(JBOSS_DOMAIN_PRIMARY_ADDRESS);
         checkProperty(DOMAIN_SERVERS_DIR);
     }
 }

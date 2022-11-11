@@ -40,7 +40,6 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MAN
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MANAGEMENT_MICRO_VERSION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MANAGEMENT_MINOR_VERSION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MANAGEMENT_SUBSYSTEM_ENDPOINT;
-import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MASTER;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MODEL_DESCRIPTION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NAME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NAMESPACES;
@@ -78,7 +77,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 
@@ -113,9 +111,8 @@ import org.jboss.dmr.ModelType;
 import org.jboss.dmr.Property;
 import org.jboss.staxmapper.XMLMapper;
 import org.junit.Assert;
+import org.wildfly.common.xml.XMLInputFactoryUtil;
 import org.wildfly.legacy.test.spi.Version;
-
-
 
 /**
  *
@@ -202,7 +199,7 @@ public class CoreModelTestDelegate {
             //Big big hack to get around the fact that the tests install the host description twice
             //we're only interested in the host model anyway
             //See KnownIssuesValidator.createHostPlatformMBeanAddress
-            model = model.require(CHILDREN).require(HOST).require(MODEL_DESCRIPTION).require(MASTER);
+            model = model.require(CHILDREN).require(HOST).require(MODEL_DESCRIPTION).require("primary");
         }
 
         //System.out.println(model);
@@ -236,7 +233,7 @@ public class CoreModelTestDelegate {
         }
         ModelTestModelDescriptionValidator validator = new ModelTestModelDescriptionValidator(PathAddress.EMPTY_ADDRESS.toModelNode(), model, config);
         List<ValidationFailure> validationMessages = validator.validateResources();
-        if (validationMessages.size() > 0) {
+        if (!validationMessages.isEmpty()) {
             final StringBuilder builder = new StringBuilder("VALIDATION ERRORS IN MODEL:");
             for (ValidationFailure failure : validationMessages) {
                 builder.append(failure);
@@ -617,7 +614,7 @@ public class CoreModelTestDelegate {
             //formatted strings. Simply remove it.
             //Also do the same for the following system property in the runtime platform mbean system properties:
             //"org.jboss.model.test.maven.repository.urls" => "${org.jboss.model.test.maven.repository.urls}"
-            ModelNode runtime = findModelNode(model, HOST, "master", CORE_SERVICE, PLATFORM_MBEAN, TYPE, "runtime");
+            ModelNode runtime = findModelNode(model, HOST, "primary", CORE_SERVICE, PLATFORM_MBEAN, TYPE, "runtime");
             if (runtime.isDefined()){
                 runtime.remove("input-arguments");
                 if (runtime.hasDefined(SYSTEM_PROPERTIES)) {
@@ -643,7 +640,7 @@ public class CoreModelTestDelegate {
 
         @Override
         public List<ModelNode> parse(String xml) throws XMLStreamException {
-            final XMLStreamReader reader = XMLInputFactory.newInstance().createXMLStreamReader(new StringReader(xml));
+            final XMLStreamReader reader = XMLInputFactoryUtil.create().createXMLStreamReader(new StringReader(xml));
             final List<ModelNode> operationList = new ArrayList<ModelNode>();
             xmlMapper.parseDocument(operationList, reader);
             return operationList;
@@ -826,7 +823,7 @@ public class CoreModelTestDelegate {
                 }
                 throw new Exception(t);
             }
-            Assert.assertTrue(reverseServices.getBootError() == null ? "error" : reverseServices.getBootError().getMessage(), reverseServices.isSuccessfulBoot());
+            Assert.assertTrue(reverseServices.getBootErrorDescription(), reverseServices.isSuccessfulBoot() && !reverseServices.hasBootErrorCollectorFailures());
 
             ModelNode mainModel = mainServices.readWholeModel();
             if (reverseCheckMainModelFixer != null) {

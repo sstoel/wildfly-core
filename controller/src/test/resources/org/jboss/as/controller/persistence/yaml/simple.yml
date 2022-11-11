@@ -1,0 +1,18 @@
+wildfly-configuration:
+    extension:
+      org.jboss.as.failure:
+        module: org.jboss.as.failure
+    system-property:
+      aaa: 
+        value: foo
+      bbb:
+        value: bar
+    system-property:
+      ccc:
+        value: test
+    basic:
+      test:
+#User defined elements, must be ignored.
+org:
+    foo:
+        bar: true

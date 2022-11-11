@@ -44,7 +44,7 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 
@@ -68,14 +68,14 @@ import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ServerControl;
 import org.wildfly.core.testrunner.ServerController;
 import org.wildfly.core.testrunner.UnsuccessfulOperationException;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  * Tests server reload during a deployment or undeployment to a wildfly core server by the filesystem scanner.
  *
  * @author <a href="mailto:ehugonne@redhat.com">Emmanuel Hugonnet</a> (c) 2015 Red Hat, inc.
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
 @Ignore("this test relies too much on hacking internals (see the byteman script) so it's only here to allow " +
         "custom use if there is a need to diagnose a problem in this area")

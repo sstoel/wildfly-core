@@ -19,6 +19,7 @@ import org.jboss.as.controller.extension.ExtensionRegistry;
 import org.jboss.as.controller.operations.validation.OperationValidator;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.services.path.PathManagerService;
+import org.jboss.as.server.RuntimeExpressionResolver;
 import org.jboss.as.model.test.ModelTestKernelServicesImpl;
 import org.jboss.as.model.test.ModelTestModelControllerService;
 import org.jboss.as.model.test.ModelTestOperationValidatorFilter;
@@ -97,8 +98,10 @@ public abstract class AbstractKernelServicesImpl extends ModelTestKernelServices
                                                            AdditionalInitialization additionalInit, ExtensionRegistry extensionRegistry,
                                                            StringConfigurationPersister persister, ModelTestOperationValidatorFilter validateOpsFilter,
                                                            boolean registerTransformers){
+                RuntimeExpressionResolver runtimeExpressionResolver = new RuntimeExpressionResolver();
+                extensionRegistry.setResolverExtensionRegistry(runtimeExpressionResolver);
                 return TestModelControllerService.create(mainExtension, controllerInitializer, additionalInit, extensionRegistry,
-                        persister, validateOpsFilter, registerTransformers, capabilityRegistry);
+                        persister, validateOpsFilter, registerTransformers, runtimeExpressionResolver, capabilityRegistry);
             }
         };
         if (legacyModelVersion != null) {

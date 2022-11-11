@@ -21,24 +21,27 @@
  */
 package org.jboss.as.test.integration.management.cli;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.StringReader;
 
 import org.apache.commons.io.FileUtils;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  *
  * @author Dominik Pospisil <dpospisi@redhat.com>
  * @author Alexey Loubyansky
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 public class CliArgumentsTestCase {
 
     private static final String tempDir = TestSuiteEnvironment.getTmpDir();
@@ -131,6 +134,27 @@ public class CliArgumentsTestCase {
         cli.executeNonInteractive();
 
         int exitCode = cli.getProcessExitValue();
+        assertTrue(exitCode != 0);
+    }
+
+    @Test
+    public void testMisspelledParameter() throws Exception {
+        CliProcessWrapper cli = new CliProcessWrapper()
+           .addCliArgument("--connect")
+           .addCliArgument("--controler=" + TestSuiteEnvironment.getServerAddress() + ":" + (TestSuiteEnvironment.getServerPort() - 1))
+           .addCliArgument("quit");
+        cli.executeNonInteractive();
+
+        int exitCode = cli.getProcessExitValue();
+        String output = cli.getOutput();
+        try (BufferedReader reader = new BufferedReader(new StringReader(output))) {
+            String line = reader.readLine();
+            // Skip lines like: "Picked up _JAVA_OPTIONS: ..."
+            while (line.startsWith("Picked up _JAVA_")) {
+                line = reader.readLine();
+            }
+            assertEquals("Unknown argument: --controler=" + TestSuiteEnvironment.getServerAddress() + ":" + (TestSuiteEnvironment.getServerPort() - 1), line);
+        }
         assertTrue(exitCode != 0);
     }
 }

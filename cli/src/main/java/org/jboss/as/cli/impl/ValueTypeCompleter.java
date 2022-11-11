@@ -21,6 +21,8 @@
  */
 package org.jboss.as.cli.impl;
 
+import static org.wildfly.common.Assert.checkNotNullParam;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -171,18 +173,6 @@ public class ValueTypeCompleter implements CommandLineCompleter {
 
         public String asString() {
             return null;
-        }
-
-        private boolean contains(String p) {
-            boolean found = false;
-            for (Property prop : properties) {
-                if (prop.name != null && prop.name.equals(p)
-                        && prop.value != null) {
-                    found = true;
-                    break;
-                }
-            }
-            return found;
         }
     }
 
@@ -352,8 +342,8 @@ public class ValueTypeCompleter implements CommandLineCompleter {
     }
 
     public ValueTypeCompleter(ModelNode propDescr, OperationRequestAddress address, CapabilityCompleterFactory factory) {
-        if(propDescr == null || !propDescr.isDefined()) {
-            throw new IllegalArgumentException("property description is null or undefined.");
+        if(!checkNotNullParam("propDescr", propDescr).isDefined()) {
+            throw new IllegalArgumentException("property description is undefined.");
         }
         this.propDescr = propDescr;
         this.address = address;
@@ -602,7 +592,7 @@ public class ValueTypeCompleter implements CommandLineCompleter {
             // The user typed the start of a property name
             String nameChunk = null;
             if (last != null) {
-                if (!lastEnteredState.equals(EqualsState.ID)) {
+                if (!EqualsState.ID.equals(lastEnteredState)) {
                     if (last.value == null) {
                         nameChunk = last.name;
                     }
@@ -616,7 +606,7 @@ public class ValueTypeCompleter implements CommandLineCompleter {
             // On list separator, or when no property exists,
             // complete with the next item in the list or the next property
             // inside an Object
-            if (lastEnteredState.equals(ListItemSeparatorState.ID)
+            if (ListItemSeparatorState.ID.equals(lastEnteredState)
                     || last == null) {
                 return completeNewProperty(propType, visibility);
             }
@@ -625,7 +615,7 @@ public class ValueTypeCompleter implements CommandLineCompleter {
 
             // Are we completing after the equals?
             // If yes, complete with possible values.
-            if (lastEnteredState.equals(EqualsState.ID)) {
+            if (EqualsState.ID.equals(lastEnteredState)) {
                 // Wrong syntax, for example for a String value inside a list, user would type
                 // "[{role=<TAB>"
                 if (!isObject(propType)) {

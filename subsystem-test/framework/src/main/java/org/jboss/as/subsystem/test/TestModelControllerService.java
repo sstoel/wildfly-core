@@ -35,6 +35,7 @@ import java.util.Set;
 
 import org.jboss.as.controller.CapabilityRegistry;
 import org.jboss.as.controller.ControlledProcessState;
+import org.jboss.as.controller.ExpressionResolver;
 import org.jboss.as.controller.Extension;
 import org.jboss.as.controller.ManagementModel;
 import org.jboss.as.controller.ModelControllerServiceInitialization;
@@ -43,6 +44,7 @@ import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.descriptions.NonResolvingResourceDescriptionResolver;
 import org.jboss.as.controller.extension.ExtensionRegistry;
 import org.jboss.as.controller.extension.ExtensionRegistryType;
+import org.jboss.as.controller.extension.ResolverExtensionRegistry;
 import org.jboss.as.controller.operations.global.GlobalNotifications;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
@@ -90,13 +92,17 @@ class TestModelControllerService extends ModelTestModelControllerService impleme
     protected TestModelControllerService(final Extension mainExtension, final ControllerInitializer controllerInitializer,
                                             final AdditionalInitialization additionalInit, final RunningModeControl runningModeControl,
                                             final ExtensionRegistry extensionRegistry, final StringConfigurationPersister persister,
-                                            final ModelTestOperationValidatorFilter validateOpsFilter, final boolean registerTransformers, CapabilityRegistry capabilityRegistry) {
+                                            final ModelTestOperationValidatorFilter validateOpsFilter, final boolean registerTransformers,
+                                            final ExpressionResolver expressionResolver, final CapabilityRegistry capabilityRegistry) {
            super(additionalInit.getProcessType(), runningModeControl, extensionRegistry.getTransformerRegistry(), persister, validateOpsFilter,
-                   new SimpleResourceDefinition(null, NonResolvingResourceDescriptionResolver.INSTANCE) , new ControlledProcessState(true),capabilityRegistry);
+                   new SimpleResourceDefinition(null, NonResolvingResourceDescriptionResolver.INSTANCE) , expressionResolver, new ControlledProcessState(true),capabilityRegistry);
            this.mainExtension = mainExtension;
            this.additionalInit = additionalInit;
            this.controllerInitializer = controllerInitializer;
            this.extensionRegistry = extensionRegistry;
+           if (expressionResolver instanceof ResolverExtensionRegistry) {
+               extensionRegistry.setResolverExtensionRegistry((ResolverExtensionRegistry) expressionResolver);
+           }
            this.runningModeControl = runningModeControl;
            this.registerTransformers = registerTransformers;
 
@@ -105,10 +111,10 @@ class TestModelControllerService extends ModelTestModelControllerService impleme
     static TestModelControllerService create(final Extension mainExtension, final ControllerInitializer controllerInitializer,
                                              final AdditionalInitialization additionalInit, final ExtensionRegistry extensionRegistry,
                                              final StringConfigurationPersister persister, final ModelTestOperationValidatorFilter validateOpsFilter,
-                                             final boolean registerTransformers, CapabilityRegistry capabilityRegistry) {
+                                             final boolean registerTransformers, final ExpressionResolver expressionResolver, final CapabilityRegistry capabilityRegistry) {
         return new TestModelControllerService(mainExtension, controllerInitializer, additionalInit,
                 new RunningModeControl(additionalInit.getRunningMode()), extensionRegistry, persister, validateOpsFilter,
-                registerTransformers,capabilityRegistry);
+                registerTransformers, expressionResolver, capabilityRegistry);
     }
 
     @Override
@@ -147,7 +153,7 @@ class TestModelControllerService extends ModelTestModelControllerService impleme
     private void initExtraModelInternal(Resource rootResource, ManagementResourceRegistration rootRegistration) {
         rootResource.getModel().get(SUBSYSTEM);
 
-        rootRegistration.registerSubModel(ServerDeploymentResourceDefinition.create(contentRepository, null, null));
+        rootRegistration.registerSubModel(ServerDeploymentResourceDefinition.create(contentRepository, null));
 
         controllerInitializer.setTestModelControllerAccessor(this);
         controllerInitializer.initializeModel(rootResource, rootRegistration);

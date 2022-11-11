@@ -63,7 +63,7 @@ public class HierarchicalCompositionTestCase extends AbstractCliTestBase {
 
     private static final String SERVER = "test-server";
 
-    private static final String HOST = "master";
+    private static final String HOST = "primary";
 
     private static final String NEW_SOCKET_BINDING_GROUP = "hierarchical-composition-test-case-binding-group";
 
@@ -85,7 +85,7 @@ public class HierarchicalCompositionTestCase extends AbstractCliTestBase {
     @BeforeClass
     public static void before() throws Exception {
         CLITestSuite.createSupport(HierarchicalCompositionTestCase.class.getSimpleName());
-        AbstractCliTestBase.initCLI(DomainTestSupport.masterAddress);
+        AbstractCliTestBase.initCLI(DomainTestSupport.primaryAddress);
     }
 
     @AfterClass

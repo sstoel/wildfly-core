@@ -24,7 +24,6 @@ import static org.jboss.as.logging.CommonAttributes.ENABLED;
 import static org.jboss.as.logging.CommonAttributes.ENCODING;
 import static org.jboss.as.logging.CommonAttributes.FILE;
 import static org.jboss.as.logging.CommonAttributes.FILTER;
-import static org.jboss.as.logging.CommonAttributes.FILTER_SPEC;
 import static org.jboss.as.logging.CommonAttributes.HANDLER_NAME;
 import static org.jboss.as.logging.CommonAttributes.LEVEL;
 import static org.jboss.as.logging.CommonAttributes.MODULE;
@@ -32,8 +31,11 @@ import static org.jboss.as.logging.CommonAttributes.PROPERTIES;
 import static org.jboss.as.logging.CommonAttributes.ROOT_LOGGER_NAME;
 import static org.jboss.as.logging.Logging.createOperationFailure;
 import static org.jboss.as.logging.formatters.PatternFormatterResourceDefinition.PATTERN;
+import static org.jboss.as.logging.formatters.PatternFormatterResourceDefinition.getDefaultFomatterName;
+import static org.jboss.as.logging.handlers.AbstractHandlerDefinition.FILTER_SPEC;
 import static org.jboss.as.logging.handlers.AbstractHandlerDefinition.FORMATTER;
 import static org.jboss.as.logging.handlers.AbstractHandlerDefinition.NAMED_FORMATTER;
+import static org.jboss.as.logging.handlers.AsyncHandlerResourceDefinition.HANDLER;
 import static org.jboss.as.logging.handlers.AsyncHandlerResourceDefinition.QUEUE_LENGTH;
 import static org.jboss.as.logging.handlers.AsyncHandlerResourceDefinition.SUBHANDLERS;
 
@@ -44,10 +46,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Handler;
 
-import org.apache.log4j.Appender;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
-import org.jboss.as.controller.OperationContext.ResultHandler;
 import org.jboss.as.controller.OperationContext.Stage;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
@@ -55,14 +55,11 @@ import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.logging.CommonAttributes;
 import org.jboss.as.logging.ConfigurationProperty;
-import org.jboss.as.logging.Filters;
 import org.jboss.as.logging.Logging;
 import org.jboss.as.logging.LoggingOperations;
-import org.jboss.as.logging.formatters.PatternFormatterResourceDefinition;
+import org.jboss.as.logging.filters.Filters;
 import org.jboss.as.logging.loggers.RootLoggerResourceDefinition;
 import org.jboss.as.logging.logging.LoggingLogger;
-import org.jboss.as.logging.logmanager.Log4jAppenderHandler;
-import org.jboss.as.logging.logmanager.PropertySorter;
 import org.jboss.as.logging.resolvers.ModelNodeResolver;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
@@ -95,11 +92,9 @@ final class HandlerOperations {
      * A step handler for updating logging handler properties.
      */
     static class HandlerUpdateOperationStepHandler extends LoggingOperations.LoggingUpdateOperationStepHandler {
-        private final PropertySorter propertySorter;
 
-        HandlerUpdateOperationStepHandler(final PropertySorter propertySorter, final AttributeDefinition... attributes) {
+        HandlerUpdateOperationStepHandler(final AttributeDefinition... attributes) {
             super(attributes);
-            this.propertySorter = propertySorter;
         }
 
         @Override
@@ -127,10 +122,6 @@ final class HandlerOperations {
                     context.reloadRequired();
                 }
             }
-
-            // It's important that properties are written in the correct order, reorder the properties if
-            // needed before the commit.
-            addOrderPropertiesStep(context, propertySorter, configuration);
         }
     }
 
@@ -141,13 +132,8 @@ final class HandlerOperations {
         private final String[] constructionProperties;
         private final AttributeDefinition[] attributes;
         private final Class<? extends Handler> type;
-        private final PropertySorter propertySorter;
 
-        HandlerAddOperationStepHandler(final Class<? extends Handler> type, final AttributeDefinition[] attributes) {
-            this(PropertySorter.NO_OP, type, attributes);
-        }
-
-        HandlerAddOperationStepHandler(final PropertySorter propertySorter, final Class<? extends Handler> type, final AttributeDefinition[] attributes, final ConfigurationProperty<?>... constructionProperties) {
+        HandlerAddOperationStepHandler(final Class<? extends Handler> type, final AttributeDefinition[] attributes, final ConfigurationProperty<?>... constructionProperties) {
             super(attributes);
             this.type = type;
             this.attributes = attributes;
@@ -156,7 +142,6 @@ final class HandlerOperations {
                 names.add(prop.getPropertyName());
             }
             this.constructionProperties = names.toArray(new String[0]);
-            this.propertySorter = (propertySorter == null ? PropertySorter.NO_OP : propertySorter);
         }
 
         @Override
@@ -167,7 +152,7 @@ final class HandlerOperations {
                     final ModelNode filter = CommonAttributes.FILTER.validateOperation(operation);
                     if (filter.isDefined()) {
                         final String value = Filters.filterToFilterSpec(filter);
-                        model.get(CommonAttributes.FILTER_SPEC.getName()).set(value.isEmpty() ? new ModelNode() : new ModelNode(value));
+                        model.get(FILTER_SPEC.getName()).set(value.isEmpty() ? new ModelNode() : new ModelNode(value));
                     }
                 } else {
                     attribute.validateAndSet(operation, model);
@@ -208,12 +193,6 @@ final class HandlerOperations {
                     context.setRollbackOnly();
                     throw e;
                 }
-            } else if (Log4jAppenderHandler.class.getName().equals(configuration.getClassName())) {
-                // Check the POJO names
-                final PojoConfiguration log4jPojo = logContextConfiguration.getPojoConfiguration(name);
-                if (log4jPojo != null) {
-                    replaceHandler = (!className.equals(log4jPojo.getClassName()) || (moduleName == null ? log4jPojo.getModuleName() != null : !moduleName.equals(log4jPojo.getModuleName())));
-                }
             } else if (!className.equals(configuration.getClassName()) || (moduleName == null ? configuration.getModuleName() != null : !moduleName.equals(configuration.getModuleName()))) {
                 replaceHandler = true;
             }
@@ -248,13 +227,10 @@ final class HandlerOperations {
                     skip = (exists && equalValue(attribute, context, model, logContextConfiguration, configuration));
                 }
 
-                if (!skip)
+                if (!skip) {
                     handleProperty(attribute, context, model, logContextConfiguration, configuration);
+                }
             }
-
-            // It's important that properties are written in the correct order, reorder the properties if
-            // needed before the commit.
-            addOrderPropertiesStep(context, propertySorter, configuration);
         }
 
         HandlerConfiguration createHandlerConfiguration(final String className,
@@ -264,30 +240,15 @@ final class HandlerOperations {
             final HandlerConfiguration configuration;
 
             if (moduleName != null) {
-                // Check if this is a log4j appender
                 final ModuleLoader moduleLoader = ModuleLoader.forClass(HandlerOperations.class);
                 try {
-                    final Class<?> actualClass = Class.forName(className, false, moduleLoader.loadModule(moduleName).getClassLoader());
-                    if (Appender.class.isAssignableFrom(actualClass)) {
-                        final PojoConfiguration pojoConfiguration;
-                        // Check for construction parameters
-                        if (constructionProperties == null) {
-                            pojoConfiguration = logContextConfiguration.addPojoConfiguration(moduleName, className, name);
-                        } else {
-                            pojoConfiguration = logContextConfiguration.addPojoConfiguration(moduleName, className, name, constructionProperties);
-                        }
-                        // Set the name on the appender
-                        pojoConfiguration.setPropertyValueString("name", name);
-                        configuration = logContextConfiguration.addHandlerConfiguration("org.jboss.as.logging", Log4jAppenderHandler.class.getName(), name);
-                        configuration.addPostConfigurationMethod(Log4jAppenderHandler.ACTIVATE_OPTIONS_METHOD_NAME);
-                        configuration.setPropertyValueString("appender", name);
+                    // Attempt to create the class to see if it's valid
+                    Class.forName(className, false, moduleLoader.loadModule(moduleName).getClassLoader());
+                    // Check for construction parameters
+                    if (constructionProperties == null) {
+                        configuration = logContextConfiguration.addHandlerConfiguration(moduleName, className, name);
                     } else {
-                        // Check for construction parameters
-                        if (constructionProperties == null) {
-                            configuration = logContextConfiguration.addHandlerConfiguration(moduleName, className, name);
-                        } else {
-                            configuration = logContextConfiguration.addHandlerConfiguration(moduleName, className, name, constructionProperties);
-                        }
+                        configuration = logContextConfiguration.addHandlerConfiguration(moduleName, className, name, constructionProperties);
                     }
                 } catch (ClassNotFoundException e) {
                     throw createOperationFailure(LoggingLogger.ROOT_LOGGER.classNotFound(e, className));
@@ -314,15 +275,9 @@ final class HandlerOperations {
      * A default log handler write attribute step handler.
      */
     static class LogHandlerWriteAttributeHandler extends LoggingOperations.LoggingWriteAttributeHandler {
-        private final PropertySorter propertySorter;
 
         LogHandlerWriteAttributeHandler(final AttributeDefinition... attributes) {
-            this(PropertySorter.NO_OP, attributes);
-        }
-
-        LogHandlerWriteAttributeHandler(final PropertySorter propertySorter, final AttributeDefinition... attributes) {
             super(attributes);
-            this.propertySorter = propertySorter;
         }
 
         @Override
@@ -352,10 +307,6 @@ final class HandlerOperations {
                         propertyConfigurable = configuration;
                     } else {
                         propertyConfigurable = pojoConfiguration;
-                        // A log4j appender may be an OptionHandler which requires the invocation of activateOptions(). Setting
-                        // a dummy property on the Log4jAppenderHandler is required to invoke this method as all properties are
-                        // set on the POJO which is the actual appender
-                        configuration.setPropertyValueString(Log4jAppenderHandler.ACTIVATOR_PROPERTY_METHOD_NAME, "");
                     }
                     if (value.isDefined()) {
                         for (Property property : value.asPropertyList()) {
@@ -383,10 +334,6 @@ final class HandlerOperations {
                         }
                     }
                 }
-
-                // It's important that properties are written in the correct order, reorder the properties if
-                // needed before the commit.
-                addOrderPropertiesStep(context, propertySorter, configuration);
             }
             return restartRequired;
         }
@@ -400,7 +347,7 @@ final class HandlerOperations {
                 final String filterSpec = Filters.filterToFilterSpec(newValue);
                 final ModelNode filterSpecValue = (filterSpec.isEmpty() ? new ModelNode() : new ModelNode(filterSpec));
                 // Undefine the filter-spec
-                model.getModel().get(CommonAttributes.FILTER_SPEC.getName()).set(filterSpecValue);
+                model.getModel().get(FILTER_SPEC.getName()).set(filterSpecValue);
             }
         }
     }
@@ -448,8 +395,9 @@ final class HandlerOperations {
             // Remove the handler
             logContextConfiguration.removeHandlerConfiguration(name);
             // Remove the formatter if there is one
-            if (logContextConfiguration.getFormatterNames().contains(name) && !model.hasDefined(NAMED_FORMATTER.getName())) {
-                logContextConfiguration.removeFormatterConfiguration(name);
+            final String defaultFormatterName = getDefaultFomatterName(name);
+            if (logContextConfiguration.getFormatterNames().contains(defaultFormatterName) && !model.hasDefined(NAMED_FORMATTER.getName())) {
+                logContextConfiguration.removeFormatterConfiguration(defaultFormatterName);
             }
             // Remove the POJO if it exists
             if (logContextConfiguration.getPojoNames().contains(name)) {
@@ -461,7 +409,7 @@ final class HandlerOperations {
     /**
      * A step handler to remove a handler
      */
-    static final OperationStepHandler CHANGE_LEVEL = new HandlerUpdateOperationStepHandler(PropertySorter.NO_OP, LEVEL);
+    static final OperationStepHandler CHANGE_LEVEL = new HandlerUpdateOperationStepHandler(LEVEL);
 
     /**
      * A step handler to remove a handler
@@ -485,7 +433,7 @@ final class HandlerOperations {
             handlers.add(handlerName);
             SUBHANDLERS.getValidator().validateParameter(SUBHANDLERS.getName(), handlers);
             model.get(SUBHANDLERS.getName()).add(handlerName);
-            recordCapabilitiesAndRequirements(context, resource, SUBHANDLERS, new ModelNode().setEmptyList().add(handlerName), new ModelNode());
+            HANDLER.addCapabilityRequirements(context, resource, handlerName);
         }
 
         @Override
@@ -522,7 +470,7 @@ final class HandlerOperations {
             final List<ModelNode> newHandlers = new ArrayList<>(handlers.size());
             for (ModelNode handler : handlers) {
                 if (handlerName.equals(handler.asString())) {
-                    SUBHANDLERS.removeCapabilityRequirements(context, resource, new ModelNode().setEmptyList().add(handlerName));
+                    HANDLER.removeCapabilityRequirements(context, resource, handler);
                     found = true;
                 } else {
                     newHandlers.add(handler);
@@ -548,7 +496,7 @@ final class HandlerOperations {
     /**
      * Changes the file for a file handler.
      */
-    static final OperationStepHandler CHANGE_FILE = new HandlerUpdateOperationStepHandler(PropertySorter.NO_OP, FILE);
+    static final OperationStepHandler CHANGE_FILE = new HandlerUpdateOperationStepHandler(FILE);
 
     static final LoggingOperations.LoggingUpdateOperationStepHandler ENABLE_HANDLER = new LoggingOperations.LoggingUpdateOperationStepHandler() {
         @Override
@@ -622,7 +570,7 @@ final class HandlerOperations {
             configuration.setEncoding(resolvedValue);
         } else if (attribute.getName().equals(FORMATTER.getName())) {
             // The handler name will be used for the name of a formatter for the formatter attribute
-            final String defaultFormatterName = configuration.getName() + PatternFormatterResourceDefinition.DEFAULT_FORMATTER_SUFFIX;
+            final String defaultFormatterName = getDefaultFomatterName(configuration.getName());
             // Get the current model and check for a defined named-formatter attribute
             final Resource resource = context.readResource(PathAddress.EMPTY_ADDRESS);
             final ModelNode m = resource.getModel();
@@ -647,7 +595,7 @@ final class HandlerOperations {
         } else if (attribute.getName().equals(NAMED_FORMATTER.getName())) {
             // The name of the handler will be used for a "formatter" if the named-formatter is not defined
             final String handlerName = configuration.getName();
-            final String defaultFormatterName = handlerName + PatternFormatterResourceDefinition.DEFAULT_FORMATTER_SUFFIX;
+            final String defaultFormatterName = getDefaultFomatterName(handlerName);
             final ModelNode valueNode = (resolveValue ? NAMED_FORMATTER.resolveModelAttribute(context, model) : model);
             // Set the formatter if the value is defined
             if (valueNode.isDefined()) {
@@ -703,10 +651,6 @@ final class HandlerOperations {
                 propertyConfigurable = configuration;
             } else {
                 propertyConfigurable = pojoConfiguration;
-                // A log4j appender may be an OptionHandler which requires the invocation of activateOptions(). Setting
-                // a dummy property on the Log4jAppenderHandler is required to invoke this method as all properties are
-                // set on the POJO which is the actual appender
-                configuration.setPropertyValueString(Log4jAppenderHandler.ACTIVATOR_PROPERTY_METHOD_NAME, "");
             }
             // Should be safe here to only process defined properties. The write-attribute handler handles removing
             // undefined properties
@@ -718,22 +662,43 @@ final class HandlerOperations {
             }
         } else {
             if (attribute instanceof ConfigurationProperty) {
-                @SuppressWarnings("unchecked") final ConfigurationProperty<String> configurationProperty = (ConfigurationProperty<String>) attribute;
+                // We need to set the file last in case it was set after the append for example. We'll use a new step
+                // for this.
+                final boolean addAsStep = (FILE.equals(attribute));
+                @SuppressWarnings("unchecked")
+                final ConfigurationProperty<String> configurationProperty = (ConfigurationProperty<String>) attribute;
                 if (resolveValue) {
-                    configurationProperty.setPropertyValue(context, model, configuration);
+                    if (addAsStep) {
+                        context.addStep((c, m) -> {
+                            configurationProperty.setPropertyValue(c, m, configuration);
+                        }, Stage.RUNTIME);
+                    } else {
+                        configurationProperty.setPropertyValue(context, model, configuration);
+                    }
                 } else {
                     // Get the resolver
                     final ModelNodeResolver<String> resolver = configurationProperty.resolver();
                     // Resolve the value
                     final String resolvedValue = (resolver == null ? (model.isDefined() ? model.asString() : null) : resolver.resolveValue(context, model));
                     if (resolvedValue == null) {
-                        // The value must be set to null and then the property removed,
+                        // The value must be set to null and then the property removed.
                         // Note that primitive attributes should use a default value as null is invalid
-                        configuration.setPropertyValueString(configurationProperty.getPropertyName(), null);
-                        configuration.removeProperty(configurationProperty.getPropertyName());
+                        if (addAsStep) {
+                            context.addStep((c, m) -> {
+                                configuration.setPropertyValueString(configurationProperty.getPropertyName(), null);
+                                configuration.removeProperty(configurationProperty.getPropertyName());
+                            }, Stage.RUNTIME);
+                        } else {
+                            configuration.setPropertyValueString(configurationProperty.getPropertyName(), null);
+                            configuration.removeProperty(configurationProperty.getPropertyName());
+                        }
                     } else {
-                        // Set the string value
-                        configuration.setPropertyValueString(configurationProperty.getPropertyName(), resolvedValue);
+                        if (addAsStep) {
+                            context.addStep((c, m) -> configuration.setPropertyValueString(configurationProperty.getPropertyName(), resolvedValue), Stage.RUNTIME);
+                        } else {
+                            // Set the string value
+                            configuration.setPropertyValueString(configurationProperty.getPropertyName(), resolvedValue);
+                        }
                     }
                 }
             } else {
@@ -766,7 +731,7 @@ final class HandlerOperations {
             if (configuration.hasProperty(ENABLED.getPropertyName())) {
                 currentValue = Boolean.parseBoolean(configuration.getPropertyValueString(ENABLED.getPropertyName()));
             } else {
-                currentValue = isDisabledHandler(logContextConfiguration.getLogContext(), configuration.getName());
+                currentValue = isEnabled(logContextConfiguration.getLogContext(), configuration.getName());
             }
             result = resolvedValue == currentValue;
         } else if (attribute.getName().equals(ENCODING.getName())) {
@@ -805,10 +770,8 @@ final class HandlerOperations {
                 result = true;
             }
         } else if (attribute.getName().equals(FILTER_SPEC.getName())) {
-            final ModelNode valueNode = FILTER_SPEC.resolveModelAttribute(context, model);
-            final String resolvedValue = (valueNode.isDefined() ? valueNode.asString() : null);
-            final String currentValue = configuration.getFilter();
-            result = (resolvedValue == null ? currentValue == null : resolvedValue.equals(currentValue));
+            // Always reset the filter as the filter may have been reconstructed
+            result = false;
         } else if (attribute.getName().equals(LEVEL.getName())) {
             final String resolvedValue = LEVEL.resolvePropertyValue(context, model);
             final String currentValue = configuration.getLevel();
@@ -859,13 +822,13 @@ final class HandlerOperations {
 
 
     /**
-     * Checks to see if a handler is disabled
+     * Checks to see if a handler is enabled
      *
      * @param handlerName the name of the handler to enable.
      */
-    private static boolean isDisabledHandler(final LogContext logContext, final String handlerName) {
+    private static boolean isEnabled(final LogContext logContext, final String handlerName) {
         final Map<String, String> disableHandlers = logContext.getAttachment(CommonAttributes.ROOT_LOGGER_NAME, DISABLED_HANDLERS_KEY);
-        return disableHandlers != null && disableHandlers.containsKey(handlerName);
+        return disableHandlers == null || !disableHandlers.containsKey(handlerName);
     }
 
 
@@ -925,19 +888,6 @@ final class HandlerOperations {
                 disableHandlers.put(handlerName, handlerConfiguration.getFilter());
                 handlerConfiguration.setFilter(CommonAttributes.DENY.getName());
             }
-        }
-    }
-
-    private static void addOrderPropertiesStep(final OperationContext context, final PropertySorter propertySorter, final PropertyConfigurable configuration) {
-        if (propertySorter.isReorderRequired(configuration)) {
-            context.addStep(new OperationStepHandler() {
-                @Override
-                public void execute(final OperationContext context, final ModelNode operation) {
-                    propertySorter.sort(configuration);
-                    // Nothing to really rollback, properties are only reordered
-                    context.completeStep(ResultHandler.NOOP_RESULT_HANDLER);
-                }
-            }, Stage.RUNTIME);
         }
     }
 }

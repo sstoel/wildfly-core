@@ -21,6 +21,9 @@
  */
 package org.jboss.as.cli;
 
+import static org.wildfly.common.Assert.checkNotNullParam;
+import static org.wildfly.common.Assert.checkNotNullParamWithNullPointerException;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -39,7 +42,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -90,6 +92,7 @@ public class Util {
     public static final String ALTERNATIVES = "alternatives";
     public static final String APPLICATION_REALM = "ApplicationRealm";
     public static final String APPLICATION_SECURITY_DOMAIN = "application-security-domain";
+    public static final String APPLICATION_SERVER_SSL_CONTEXT = "applicationSSC";
     public static final String ARCHIVE = "archive";
     public static final String ATTACHED_STREAMS = "attached-streams";
     public static final String ATTRIBUTES = "attributes";
@@ -100,6 +103,8 @@ public class Util {
     public static final String BYTES = "bytes";
     public static final String CAPABILITY_REFERENCE = "capability-reference";
     public static final String CAPABILITY_REGISTRY = "capability-registry";
+    public static final String CERTIFICATE_AUTHORITY = "certificate-authority";
+    public static final String CERTIFICATE_AUTHORITY_ACCOUNT = "certificate-authority-account";
     public static final String CHILDREN = "children";
     public static final String CHILD_TYPE = "child-type";
     public static final String CLEAR_TEXT = "clear-text";
@@ -109,10 +114,12 @@ public class Util {
     public static final String CONFIGURED = "configured";
     public static final String CONSTANT_REALM_MAPPER = "constant-realm-mapper";
     public static final String CONSTANT_ROLE_MAPPER = "constant-role-mapper";
+    public static final String CONTACT_URLS = "contact-urls";
     public static final String CONTENT = "content";
     public static final String CORE_SERVICE = "core-service";
     public static final String CREDENTIAL_REFERENCE = "credential-reference";
     public static final String CIPHER_SUITE_FILTER = "cipher-suite-filter";
+    public static final String CIPHER_SUITE_NAMES = "cipher-suite-names";
     public static final String DATASOURCES = "datasources";
     public static final String DEFAULT = "default";
     public static final String DEFAULT_PERMISSION_MAPPER = "default-permission-mapper";
@@ -199,11 +206,14 @@ public class Util {
     public static final String OPERATION = "operation";
     public static final String OPERATIONS = "operations";
     public static final String OPERATION_HEADERS = "operation-headers";
+    public static final String OBTAIN_CERTIFICATE = "obtain-certificate";
     public static final String OUTCOME = "outcome";
     public static final String PATH = "path";
     public static final String PEM = "pem";
     public static final String PERMISSION_MAPPER = "permission-mapper";
     public static final String PERSISTENT = "persistent";
+    public static final String PLAIN_TEXT = "plain-text";
+    public static final String PRIMARY = "primary";
     public static final String PROBLEM = "problem";
     public static final String PRODUCT_NAME = "product-name";
     public static final String PRODUCT_VERSION = "product-version";
@@ -257,6 +267,7 @@ public class Util {
     public static final String RUNNING_MODE = "running-mode";
     public static final String SASL_AUTHENTICATION_FACTORY = "sasl-authentication-factory";
     public static final String SASL_SERVER_FACTORY = "sasl-server-factory";
+    public static final String SECONDARY = "secondary";
     public static final String SECURE_SOCKET_BINDING = "secure-socket-binding";
     public static final String SECURITY_DOMAIN = "security-domain";
     public static final String SECURITY_REALM = "security-realm";
@@ -310,6 +321,8 @@ public class Util {
     public static final String DESCRIPTION_RESPONSE = "DESCRIPTION_RESPONSE";
 
     public static final String NOT_OPERATOR = "!";
+    public static final String DOMAIN_NAMES = "domain-names";
+    public static final String AGREE_TO_TERMS_OF_SERVICE = "agree-to-terms-of-service";
 
     private static TerminalColor ERROR_COLOR;
     private static TerminalColor SUCCESS_COLOR;
@@ -477,9 +490,7 @@ public class Util {
     }
 
     public static String wildcardToJavaRegex(String expr) {
-        if(expr == null) {
-            throw new IllegalArgumentException("expr is null");
-        }
+        checkNotNullParam("expr", expr);
         String regex = expr.replaceAll("([(){}\\[\\].+^$])", "\\\\$1"); // escape regex characters
         regex = regex.replaceAll("\\*", ".*"); // replace * with .*
         regex = regex.replaceAll("\\?", "."); // replace ? with .
@@ -778,6 +789,31 @@ public class Util {
         return Collections.emptyList();
     }
 
+    public static List<String> getUndertowHTTSListeners(ModelControllerClient client, String serverName) {
+
+        final DefaultOperationRequestBuilder builder = new DefaultOperationRequestBuilder();
+        final ModelNode request;
+        try {
+            builder.setOperationName(Util.READ_CHILDREN_NAMES);
+            builder.addNode(Util.SUBSYSTEM, Util.UNDERTOW);
+            builder.addNode(Util.SERVER, serverName);
+            builder.addProperty(Util.CHILD_TYPE, Util.HTTPS_LISTENER);
+            request = builder.buildRequest();
+        } catch (OperationFormatException e) {
+            throw new IllegalStateException("Failed to build operation", e);
+        }
+
+        try {
+            final ModelNode outcome = client.execute(request);
+            if (isSuccess(outcome)) {
+                return getList(outcome);
+            }
+        } catch (Exception e) {
+        }
+
+        return Collections.emptyList();
+    }
+
     public static List<String> getStandardSocketBindings(ModelControllerClient client) {
 
         final DefaultOperationRequestBuilder builder = new DefaultOperationRequestBuilder();
@@ -826,7 +862,7 @@ public class Util {
     }
 
     public static List<String> getDeploymentRuntimeNames(ModelControllerClient client) {
-        Objects.requireNonNull(client);
+        checkNotNullParamWithNullPointerException("client", client);
         final DefaultOperationRequestBuilder builder = new DefaultOperationRequestBuilder();
         final ModelNode request;
         try {
@@ -1835,7 +1871,7 @@ public class Util {
      * @return A single line containing the multi lines ModelNode.toString() content.
      */
     public static String compactToString(ModelNode node) {
-        Objects.requireNonNull(node);
+        checkNotNullParamWithNullPointerException("node", node);
         final StringWriter stringWriter = new StringWriter();
         final PrintWriter writer = new PrintWriter(stringWriter, true);
         node.writeString(writer, true);

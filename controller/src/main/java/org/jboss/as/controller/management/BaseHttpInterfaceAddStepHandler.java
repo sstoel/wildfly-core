@@ -24,12 +24,16 @@ package org.jboss.as.controller.management;
 
 import static org.jboss.as.controller.logging.ControllerLogger.ROOT_LOGGER;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
+import org.jboss.as.controller.management.HttpInterfaceCommonPolicy.Header;
 import org.jboss.dmr.ModelNode;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.remoting3.RemotingOptions;
@@ -71,7 +75,6 @@ public abstract class BaseHttpInterfaceAddStepHandler extends ManagementInterfac
     public void performRuntime(OperationContext context, ModelNode operation, ModelNode model) throws OperationFailedException {
         final String httpAuthenticationFactory = asStringIfDefined(context, BaseHttpInterfaceResourceDefinition.HTTP_AUTHENTICATION_FACTORY, model);
         final String sslContext = asStringIfDefined(context, BaseHttpInterfaceResourceDefinition.SSL_CONTEXT, model);
-        final String securityRealm = asStringIfDefined(context, BaseHttpInterfaceResourceDefinition.SECURITY_REALM, model);
         final boolean consoleEnabled = BaseHttpInterfaceResourceDefinition.CONSOLE_ENABLED.resolveModelAttribute(context, model).asBoolean();
         final boolean httpUpgradeEnabled;
         final String saslAuthenticationFactory;
@@ -92,6 +95,25 @@ public abstract class BaseHttpInterfaceAddStepHandler extends ManagementInterfac
             builder.set(RemotingOptions.SERVER_NAME, serverName);
         }
         final OptionMap options = builder.getMap();
+
+        Map<String, List<Header>> constantHeaders = model.hasDefined(ModelDescriptionConstants.CONSTANT_HEADERS) ? new LinkedHashMap<>() : null;
+        if (constantHeaders != null) {
+            for (ModelNode headerMapping : model.require(ModelDescriptionConstants.CONSTANT_HEADERS).asList()) {
+                String path = BaseHttpInterfaceResourceDefinition.PATH.resolveModelAttribute(context, headerMapping).asString();
+                List<Header> headers = new ArrayList<>();
+                for (ModelNode header : headerMapping.require(ModelDescriptionConstants.HEADERS).asList()) {
+                    headers.add(new Header(
+                            BaseHttpInterfaceResourceDefinition.HEADER_NAME.resolveModelAttribute(context, header).asString(),
+                            BaseHttpInterfaceResourceDefinition.HEADER_VALUE.resolveModelAttribute(context, header).asString()));
+                }
+
+                if (constantHeaders.containsKey(path)) {
+                    constantHeaders.get(path).addAll(headers);
+                } else {
+                    constantHeaders.put(path, headers);
+                }
+            }
+        }
 
         List<ServiceName> requiredServices = installServices(context, new HttpInterfaceCommonPolicy() {
 
@@ -121,11 +143,6 @@ public abstract class BaseHttpInterfaceAddStepHandler extends ManagementInterfac
             }
 
             @Override
-            public String getSecurityRealm() {
-                return securityRealm;
-            }
-
-            @Override
             public OptionMap getConnectorOptions() {
                 return options;
             }
@@ -134,6 +151,13 @@ public abstract class BaseHttpInterfaceAddStepHandler extends ManagementInterfac
             public List<String> getAllowedOrigins() {
                 return allowedOrigins;
             }
+
+            @Override
+            public Map<String, List<Header>> getConstantHeaders() {
+                return constantHeaders;
+            }
+
+
         }, model);
         addVerifyInstallationStep(context, requiredServices);
     }

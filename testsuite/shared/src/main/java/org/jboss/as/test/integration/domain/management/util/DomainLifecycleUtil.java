@@ -80,8 +80,8 @@ import org.wildfly.security.sasl.util.UsernamePasswordHashUtil;
  */
 public class DomainLifecycleUtil implements AutoCloseable {
 
-    public static final String SLAVE_HOST_USERNAME = "slave";
-    public static final String SLAVE_HOST_PASSWORD = "slave_us3r_password";
+    public static final String SECONDARY_HOST_USERNAME = "secondary";
+    public static final String SECONDARY_HOST_PASSWORD = "secondary_us3r_password";
 
     private static final ThreadFactory threadFactory = new AsyncThreadFactory();
 
@@ -138,6 +138,7 @@ public class DomainLifecycleUtil implements AutoCloseable {
      */
     public void start() {
         try {
+            log.info("Starting HostController (host = " + configuration.getHostName() + ")");
             configuration.validate();
 
             final String address = NetworkUtils.formatPossibleIpv6Address(configuration.getHostControllerManagementAddress());
@@ -200,7 +201,7 @@ public class DomainLifecycleUtil implements AutoCloseable {
                 // No point backing up the file in a test scenario, just write what we need.
                 final String text =
                         "testSuite=29a64f8524f32269aa9b681efc347f96\n" +
-                        "slave=" + new UsernamePasswordHashUtil().generateHashedHexURP(SLAVE_HOST_USERNAME, "ManagementRealm", SLAVE_HOST_PASSWORD.toCharArray());
+                        "secondary=" + new UsernamePasswordHashUtil().generateHashedHexURP(SECONDARY_HOST_USERNAME, "ManagementRealm", SECONDARY_HOST_PASSWORD.toCharArray());
                 createFile(configDir.resolve("mgmt-users.properties"), text);
             }
             if (configuration.getMgmtGroupsFile() != null) {
@@ -286,7 +287,7 @@ public class DomainLifecycleUtil implements AutoCloseable {
             // Wait for the HC to be in running state. Normally if all servers are started, this is redundant
             // but there may not be any servers or we may be in --admin-only mode
             awaitHostController(start);
-            log.info("HostController started in " + (System.currentTimeMillis() - start) + " ms");
+            log.info("HostController (host = " + configuration.getHostName() + ") started in " + (System.currentTimeMillis() - start) + " ms");
 
         } catch (RuntimeException e) {
             throw e;
@@ -319,6 +320,30 @@ public class DomainLifecycleUtil implements AutoCloseable {
 
     public int getProcessExitCode() {
         return process.getExitValue();
+    }
+
+    /**
+     * Poll until {@link #getProcessExitCode()} returns 0 or a positive value or the
+     * timeout passes as argument is reached.
+     *
+     * @param timeOutInSeconds timeout in seconds to wait for getting exit value.
+     *
+     * @throws TimeoutException if the timeout is up.
+     * @throws InterruptedException if interrupted while sleeping.
+     */
+    public int awaitForProcessExitCode(int timeOutInSeconds) throws TimeoutException, InterruptedException {
+        long deadline = System.currentTimeMillis() +  timeOutInSeconds * 1000;
+        int exitValue = getProcessExitCode();
+        while (exitValue < 0) {
+            long remaining = deadline - System.currentTimeMillis();
+            if(remaining <= 0) {
+               throw new TimeoutException(String.format("Could not get the process exit code within [%d] seconds", timeOutInSeconds));
+            }
+            TimeUnit.MILLISECONDS.sleep(250);
+            exitValue = getProcessExitCode();
+        }
+
+        return exitValue;
     }
 
     /**
@@ -378,6 +403,112 @@ public class DomainLifecycleUtil implements AutoCloseable {
     public void close() {
         closed = true;
         stop();
+    }
+
+    /**
+     * Executes a {@code reload} operation.
+     *
+     * @param host the host to use for the request. Cannot be {@code null}
+     *
+     */
+    public void reload(String host) throws IOException, InterruptedException, TimeoutException {
+        reload(host, false, null, null, null);
+    }
+
+    /**
+     * Executes a {@code reload} operation.
+     *
+     * @param host the host to use for the request. Cannot be {@code null}
+     * @param restartServers if {@code true}, servers will be restarted
+     *
+     */
+    public void reload(String host, Boolean restartServers) throws IOException, InterruptedException, TimeoutException {
+        reload(host, false, restartServers, null, null);
+    }
+
+    /**
+     * Executes a {@code reload} operation.
+     *
+     * @param host the host to use for the request. Cannot be {@code null}
+     * @param restartServers if {@code true}, servers will be restarted
+     * @param waitForServers if {@code true}, wait for Servers reload to complete
+     *
+     */
+    public void reload(String host, Boolean restartServers, Boolean waitForServers) throws IOException, InterruptedException, TimeoutException {
+        reload(host, false, restartServers, waitForServers, null);
+    }
+
+    /**
+     * Executes a {@code reload} operation and waits a configurable maximum time for the reload to complete.
+     *
+     * @param host the host to use for the request. Cannot be {@code null}
+     * @param restartServers if {@code true}, servers will be restarted
+     * @param waitForServers if {@code true}, wait for Servers reload to complete
+     * @param timeout maximum time to wait for the Host Controller and Servers reload to complete, in milliseconds
+     *
+     */
+    public void reload(String host, Boolean restartServers, Boolean waitForServers, Long timeout) throws IOException, InterruptedException, TimeoutException {
+        reload(host, false, restartServers, waitForServers, timeout);
+    }
+
+    /**
+     * Executes a {@code reload} operation in admin only mode.
+     *
+     * @param host the host to use for the request. Cannot be {@code null}
+     *
+     */
+    public void reloadAdminOnly(String host) throws IOException, InterruptedException, TimeoutException {
+        reload(host, true, null, null, null);
+    }
+
+    /**
+     * Executes a {@code reload} operation in admin only mode and waits a configurable maximum time for the reload to complete.
+     *
+     * @param host the host to use for the request. Cannot be {@code null}
+     * @param timeout maximum time to wait for the Host Controller and Servers reload to complete, in milliseconds
+     *
+     */
+    public void reloadAdminOnly(String host, Long timeout) throws IOException, InterruptedException, TimeoutException {
+        reload(host, true, null, null, timeout);
+    }
+
+    /**
+     * Executes a {@code reload} operation and waits a configurable maximum time for the reload to complete.
+     *
+     * @param host the host to use for the request. Cannot be {@code null}
+     * @param adminOnly if {@code true}, the Host Controller will be reloaded in admin-only mode
+     * @param restartServers if {@code true}, servers will be restarted
+     * @param waitForServers if {@code true}, wait for Servers reload to complete
+     * @param timeout maximum time to wait for the Host Controller and Servers reload to complete, in milliseconds
+     *
+     */
+    private void reload(String host, Boolean adminOnly, Boolean restartServers, Boolean waitForServers, Long timeout) throws IOException, InterruptedException, TimeoutException {
+        ModelNode op = new ModelNode();
+        op.get(ModelDescriptionConstants.ADDRESS).add(ModelDescriptionConstants.HOST, host);
+        op.get(ModelDescriptionConstants.OP).set("reload");
+        if (adminOnly != null) {
+            op.get("admin-only").set(adminOnly);
+        }
+        if (restartServers != null) {
+            op.get(ModelDescriptionConstants.RESTART_SERVERS).set(restartServers);
+        }
+        long startupTimeout;
+        if (timeout == null) {
+            startupTimeout = configuration.getStartupTimeoutInSeconds();
+        } else {
+            startupTimeout = timeout;
+        }
+
+        executeAwaitConnectionClosed(op);
+        // Try to reconnect to the hc
+        connect();
+        awaitHostController(System.currentTimeMillis(), startupTimeout);
+        // check that the servers are up
+        if (adminOnly == null || !adminOnly) {
+            if (waitForServers == null || waitForServers) {
+                awaitServers(System.currentTimeMillis(), startupTimeout);
+            }
+        }
     }
 
     /**
@@ -544,9 +675,13 @@ public class DomainLifecycleUtil implements AutoCloseable {
      * @throws TimeoutException if no call {@link #areServersStarted()} returns {@code true} before the timeout
      */
     public void awaitServers(long start) throws InterruptedException, TimeoutException {
+        awaitServers(start, configuration.getStartupTimeoutInSeconds());
+    }
+
+    public void awaitServers(long start, long timeout) throws InterruptedException, TimeoutException {
         checkClosed();
         boolean serversAvailable = false;
-        long deadline = start + configuration.getStartupTimeoutInSeconds() * 1000;
+        long deadline = start + timeout * 1000;
         while (!serversAvailable && getProcessExitCode() < 0) {
             serversAvailable = areServersStarted();
             long remaining = deadline - System.currentTimeMillis();
@@ -556,7 +691,7 @@ public class DomainLifecycleUtil implements AutoCloseable {
             TimeUnit.MILLISECONDS.sleep(250);
         }
         if (!serversAvailable) {
-            throw new TimeoutException(String.format("Managed servers were not started within [%d] seconds", configuration.getStartupTimeoutInSeconds()));
+            throw new TimeoutException(String.format("Managed servers were not started within [%d] seconds", timeout));
         }
     }
 
@@ -573,6 +708,10 @@ public class DomainLifecycleUtil implements AutoCloseable {
         awaitHostController(start, ControlledProcessState.State.RUNNING);
     }
 
+    public void awaitHostController(long start, long timeout) throws InterruptedException, TimeoutException {
+        awaitHostController(start, timeout, ControlledProcessState.State.RUNNING);
+    }
+
     /**
      * Poll until {@link #isHostControllerInState(ControlledProcessState.State)} returns {@code true} or the
      * {@link WildFlyManagedConfiguration#getStartupTimeoutInSeconds() configured timeout} is reached.
@@ -584,9 +723,12 @@ public class DomainLifecycleUtil implements AutoCloseable {
      * @throws TimeoutException      if no call {@link #isHostControllerStarted()} returns {@code true} before the timeout
      */
     public void awaitHostController(long start, ControlledProcessState.State state) throws InterruptedException, TimeoutException {
+        awaitHostController(start, configuration.getStartupTimeoutInSeconds(), state);
+    }
+    public void awaitHostController(long start, long timeout, ControlledProcessState.State state) throws InterruptedException, TimeoutException {
         checkClosed();
         boolean hcAvailable = false;
-        long deadline = start + configuration.getStartupTimeoutInSeconds() * 1000;
+        long deadline = start + timeout * 1000;
         while (!hcAvailable && getProcessExitCode() < 0) {
             hcAvailable = isHostControllerInState(state);
             long remaining = deadline - System.currentTimeMillis();
@@ -596,7 +738,7 @@ public class DomainLifecycleUtil implements AutoCloseable {
             TimeUnit.MILLISECONDS.sleep(250);
         }
         if (!hcAvailable) {
-            throw new TimeoutException(String.format("HostController was not started within [%d] seconds", configuration.getStartupTimeoutInSeconds()));
+            throw new TimeoutException(String.format("HostController was not started within [%d] seconds", timeout));
         }
     }
 

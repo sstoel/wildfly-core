@@ -95,7 +95,6 @@ import org.jboss.as.server.ServerEnvironmentService;
 import org.jboss.as.server.ServerPathManagerService;
 import org.jboss.as.server.controller.resources.ServerRootResourceDefinition;
 import org.jboss.as.server.controller.resources.VersionModelInitializer;
-import org.jboss.as.server.services.security.AbstractVaultReader;
 import org.jboss.as.version.ProductConfig;
 import org.jboss.as.version.Version;
 import org.jboss.dmr.ModelNode;
@@ -119,14 +118,13 @@ class TestModelControllerService extends ModelTestModelControllerService {
     private final ControlledProcessState processState;
     private final ExtensionRegistry extensionRegistry;
     private final CapabilityRegistry capabilityRegistry;
-    private final AbstractVaultReader vaultReader;
     private volatile Initializer initializer;
 
     TestModelControllerService(ProcessType processType, RunningModeControl runningModeControl, StringConfigurationPersister persister, ModelTestOperationValidatorFilter validateOpsFilter,
             TestModelType type, ModelInitializer modelInitializer, TestDelegatingResourceDefinition rootResourceDefinition, ControlledProcessState processState, ExtensionRegistry extensionRegistry,
-            AbstractVaultReader vaultReader, CapabilityRegistry capabilityRegistry) {
+            CapabilityRegistry capabilityRegistry, RuntimeExpressionResolver expressionResolver) {
         super(processType, runningModeControl, null, persister, validateOpsFilter, rootResourceDefinition, processState,
-                new RuntimeExpressionResolver(vaultReader), capabilityRegistry);
+                expressionResolver, capabilityRegistry);
         this.type = type;
         this.runningModeControl = runningModeControl;
         this.pathManagerService = type == TestModelType.STANDALONE ? new ServerPathManagerService(capabilityRegistry) : new HostPathManagerService(capabilityRegistry);
@@ -135,7 +133,6 @@ class TestModelControllerService extends ModelTestModelControllerService {
         this.processState = processState;
         this.extensionRegistry = extensionRegistry;
         this.capabilityRegistry = capabilityRegistry;
-        this.vaultReader = vaultReader;
 
         if (type == TestModelType.STANDALONE) {
             initializer = new ServerInitializer();
@@ -148,8 +145,10 @@ class TestModelControllerService extends ModelTestModelControllerService {
 
     static TestModelControllerService create(ProcessType processType, RunningModeControl runningModeControl, StringConfigurationPersister persister, ModelTestOperationValidatorFilter validateOpsFilter,
             TestModelType type, ModelInitializer modelInitializer, ExtensionRegistry extensionRegistry, CapabilityRegistry capabilityRegistry) {
+        RuntimeExpressionResolver expressionResolver = new RuntimeExpressionResolver();
+        extensionRegistry.setResolverExtensionRegistry(expressionResolver);
         return new TestModelControllerService(processType, runningModeControl, persister, validateOpsFilter, type, modelInitializer,
-                new TestDelegatingResourceDefinition(type), new ControlledProcessState(true), extensionRegistry, new TestVaultReader(), capabilityRegistry);
+                new TestDelegatingResourceDefinition(type), new ControlledProcessState(true), extensionRegistry, capabilityRegistry, expressionResolver);
     }
 
     InjectedValue<ContentRepository> getContentRepositoryInjector(){
@@ -417,7 +416,6 @@ class TestModelControllerService extends ModelTestModelControllerService {
                     environment,
                     processState,
                     runningModeControl,
-                    vaultReader,
                     extensionRegistry,
                     parallelBoot,
                     pathManagerService,
@@ -443,7 +441,7 @@ class TestModelControllerService extends ModelTestModelControllerService {
     }
 
     private class HostInitializer implements Initializer {
-        final String hostName = "master";
+        final String hostName = "primary";
         final HostControllerEnvironment env = createHostControllerEnvironment();
         final LocalHostControllerInfoImpl info = createLocalHostControllerInfo(env);
         final IgnoredDomainResourceRegistry ignoredRegistry = new IgnoredDomainResourceRegistry(info);
@@ -467,7 +465,6 @@ class TestModelControllerService extends ModelTestModelControllerService {
                             injectedContentRepository.getValue(),
                             domainController,
                             extensionRegistry,
-                            vaultReader,
                             ignoredRegistry,
                             processState,
                             pathManagerService,
@@ -503,7 +500,6 @@ class TestModelControllerService extends ModelTestModelControllerService {
                     domainController,
                     extensionRegistry, //Just use the same for the host as for the domain
                     extensionRegistry,
-                    null /*vaultReader*/,
                     ignoredRegistry,
                     processState,
                     pathManagerService,
@@ -543,7 +539,7 @@ class TestModelControllerService extends ModelTestModelControllerService {
             final DomainController domainController = new MockDomainController();
             DomainRootDefinition domainDefinition = null;
             Constructor<?>[] constructors = DomainRootDefinition.class.getConstructors();
-            if(constructors.length == 1 && constructors[0].getParameterTypes().length == 10) { // For EAP 6.2 compatibility
+            if(constructors.length == 1 && constructors[0].getParameterCount() == 10) { // For EAP 6.2 compatibility
                 try {
                     domainDefinition = (DomainRootDefinition) constructors[0].newInstance(domainController, env, persister, injectedContentRepository.getValue(),
                             hostFileRepository, true, info, extensionRegistry, null, pathManagerService);
@@ -735,7 +731,7 @@ class TestModelControllerService extends ModelTestModelControllerService {
     private static class AddMissingHostSchemaLocationsAttributeForValidationHandler implements OperationStepHandler {
         static final OperationStepHandler INSTANCE = new AddMissingHostSchemaLocationsAttributeForValidationHandler();
         static final String NAME = "add-missing-schema-locations-attribute-for-validation-handler";
-        static final OperationDefinition DEF = new SimpleOperationDefinitionBuilder(NAME, new NonResolvingResourceDescriptionResolver()).build();
+        static final OperationDefinition DEF = new SimpleOperationDefinitionBuilder(NAME, NonResolvingResourceDescriptionResolver.INSTANCE).build();
         @Override
         public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
             context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel().get(SCHEMA_LOCATIONS).setEmptyList();
@@ -745,7 +741,7 @@ class TestModelControllerService extends ModelTestModelControllerService {
     private static class AddMissingHostNamespacesAttributeForValidationHandler implements OperationStepHandler {
         static final OperationStepHandler INSTANCE = new AddMissingHostNamespacesAttributeForValidationHandler();
         static final String NAME = "add-missing-namespaces-attribute-for-validation-handler";
-        static final OperationDefinition DEF = new SimpleOperationDefinitionBuilder(NAME, new NonResolvingResourceDescriptionResolver()).build();
+        static final OperationDefinition DEF = new SimpleOperationDefinitionBuilder(NAME, NonResolvingResourceDescriptionResolver.INSTANCE).build();
         @Override
         public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
             context.readResourceForUpdate(PathAddress.EMPTY_ADDRESS).getModel().get(NAMESPACES).setEmptyList();

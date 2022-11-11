@@ -59,11 +59,11 @@ public class CommandLineConstants {
     /** Passed in when the host controller is respawned by process controller */
     public static final String RESTART_HOST_CONTROLLER = PROCESS_RESTARTED;
 
-    /** Passed in to a slave host controller to get a backup of all files on the domain controller" */
+    /** Passed in to a secondary host controller to get a backup of all files on the domain controller" */
     public static final String OLD_BACKUP_DC = "-backup";
     public static final String BACKUP_DC = "--backup";
 
-    /** Passed in to a slave host controller to attempt to start up using its cached copy of the remote DC, if the remote DC can not be contacted" */
+    /** Passed in to a secondary host controller to attempt to start up using its cached copy of the remote DC, if the remote DC can not be contacted" */
     public static final String OLD_CACHED_DC = "-cached-dc";
     public static final String CACHED_DC = "--cached-dc";
 
@@ -120,8 +120,8 @@ public class CommandLineConstants {
 
     public static final String ADMIN_ONLY = "--admin-only";
 
-    public static final String MASTER_ADDRESS = "--master-address";
-    public static final String MASTER_PORT = "--master-port";
+    public static final String PRIMARY_ADDRESS = "--primary-address";
+    public static final String PRIMARY_PORT = "--primary-port";
 
     public static final String MODULE_PATH = "-mp";
     public static final String SECMGR = "-secmgr";
@@ -130,6 +130,7 @@ public class CommandLineConstants {
     public static final String NORMAL_MODE = "normal";
     public static final String SUSPEND_MODE = "suspend";
     public static final String ADMIN_ONLY_MODE = "admin-only";
+    public static final String GRACEFUL_STARTUP = "--graceful-startup";
 
 
     // java.net properties

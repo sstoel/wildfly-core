@@ -815,9 +815,7 @@ public class JmxFacadeRbacEnabledTestCase extends AbstractControllerTestBase {
         GlobalNotifications.registerGlobalNotifications(rootRegistration, processType);
 
         StabilityMonitor monitor = new StabilityMonitor();
-        getContainer().addService(AbstractControllerService.PATH_MANAGER_CAPABILITY.getCapabilityServiceName(), pathManagerService)
-                .addMonitor(monitor)
-                .install();
+        monitor.addController(getContainer().addService(AbstractControllerService.PATH_MANAGER_CAPABILITY.getCapabilityServiceName(), pathManagerService).install());
 
         try {
             monitor.awaitStability(10, TimeUnit.SECONDS);
@@ -867,7 +865,7 @@ public class JmxFacadeRbacEnabledTestCase extends AbstractControllerTestBase {
 
     private static class TestResourceDefinition extends SimpleResourceDefinition {
         TestResourceDefinition(PathElement pathElement, AccessConstraintDefinition...constraints) {
-            super(new Parameters(pathElement, new NonResolvingResourceDescriptionResolver())
+            super(new Parameters(pathElement, NonResolvingResourceDescriptionResolver.INSTANCE)
                     .setAddHandler(new AbstractAddStepHandler() {})
                     .setRemoveHandler(new AbstractRemoveStepHandler() {})
                     .setAccessConstraints(constraints));
@@ -893,7 +891,7 @@ public class JmxFacadeRbacEnabledTestCase extends AbstractControllerTestBase {
         }
 
         void addOperation(String name, boolean readOnly, boolean runtimeOnly, SimpleAttributeDefinition[] parameters, AccessConstraintDefinition...constraints) {
-            SimpleOperationDefinitionBuilder builder = new SimpleOperationDefinitionBuilder(name, new NonResolvingResourceDescriptionResolver());
+            SimpleOperationDefinitionBuilder builder = new SimpleOperationDefinitionBuilder(name, NonResolvingResourceDescriptionResolver.INSTANCE);
             if (constraints != null) {
                 builder.setAccessConstraints(constraints);
             }

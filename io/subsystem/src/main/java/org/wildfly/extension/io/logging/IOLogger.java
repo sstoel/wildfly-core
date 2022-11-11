@@ -51,19 +51,19 @@ public interface IOLogger extends BasicLogger {
 
 
     @LogMessage(level = INFO)
-    @Message(id = 1, value = "Worker '%s' has auto-configured to %d core threads with %d task threads based on your %d available processors")
+    @Message(id = 1, value = "Worker '%s' has auto-configured to %d IO threads with %d max task threads based on your %d available processors")
     void printDefaults(String workerName, int ioThreads, int workerThreads, int cpuCount);
 
     @LogMessage(level = INFO)
-    @Message(id = 2, value = "Worker '%s' has auto-configured to %d core threads based on your %d available processors")
+    @Message(id = 2, value = "Worker '%s' has auto-configured to %d IO threads based on your %d available processors")
     void printDefaultsIoThreads(String workerName, int ioThreads, int cpuCount);
 
     @LogMessage(level = INFO)
-    @Message(id = 3, value = "Worker '%s' has auto-configured to %d task threads based on your %d available processors")
+    @Message(id = 3, value = "Worker '%s' has auto-configured to %d max task threads based on your %d available processors")
     void printDefaultsWorkerThreads(String workerName, int workerThreads, int cpuCount);
 
     @LogMessage(level = WARN)
-    @Message(id = 4, value = "Worker '%s' would auto-configure to %d task threads based on %d available processors, however your system does not have enough file descriptors configured to support this configuration. It is likely you will experience application degradation unless you increase your file descriptor limit.")
+    @Message(id = 4, value = "Worker '%s' would auto-configure to %d max task threads based on %d available processors, however your system does not have enough file descriptors configured to support this configuration. It is likely you will experience application degradation unless you increase your file descriptor limit.")
     void lowFD(String workerName, int suggestedWorkerThreadCount, int cpuCount);
 
     @LogMessage(level = WARN)
@@ -75,4 +75,8 @@ public interface IOLogger extends BasicLogger {
 
     @Message(id = 7, value = "Unexpected bind address conflict in resource \"%s\" when attempting to establish binding for destination %s to %s: a binding of %s already existed")
     OperationFailedException unexpectedBindAddressConflict(PathAddress currentAddress, CidrAddress cidrAddress, InetSocketAddress bindAddress, InetSocketAddress existing);
+
+    @LogMessage(level = WARN)
+    @Message(id = 8, value = "The stack-size value of %d bytes for IO worker %s is low and may result in problems. A value of at least 150,000 is recommended.")
+    void wrongStackSize(long val, String workerName);
 }

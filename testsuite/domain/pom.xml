@@ -31,7 +31,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-testsuite</artifactId>
-        <version>10.0.0.Beta4-SNAPSHOT</version>
+        <version>20.0.0.Beta3-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -64,11 +64,6 @@
         <dependency>
             <groupId>org.wildfly.core</groupId>
             <artifactId>wildfly-core-testsuite-shared</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.wildfly.core</groupId>
-            <artifactId>wildfly-core-vault-test-galleon-pack</artifactId>
-            <type>pom</type>
         </dependency>
 
         <dependency>
@@ -186,13 +181,13 @@
                         <cli.jvm.args>${modular.jdk.args}</cli.jvm.args>
                         <jboss.home>${project.basedir}/target/wildfly-core</jboss.home>
                         <module.path>${jboss.dist}/modules</module.path>
-                        <jboss.test.host.master.address>${management.address}</jboss.test.host.master.address>
-                        <jboss.test.host.slave.address>${node0}</jboss.test.host.slave.address>
+                        <jboss.test.host.primary.address>${management.address}</jboss.test.host.primary.address>
+                        <jboss.test.host.secondary.address>${node0}</jboss.test.host.secondary.address>
                         <management.address>${management.address}</management.address>
                         <settings.localRepository>${settings.localRepository}</settings.localRepository>
                         <cli.args>-Dmaven.repo.local=${settings.localRepository}</cli.args>
                         <server.jvm.args>-Dmaven.repo.local=${settings.localRepository} ${surefire.system.args} ${jvm.args.ip.server} ${jvm.args.security} ${jvm.args.other} ${jvm.args.timeouts} -Djbossas.ts.dir=${jbossas.ts.dir}</server.jvm.args>
-                        <jboss.test.host.server.byteman.javaagent>${org.jboss.byteman:byteman:jar}=port:${byteman.port},address:${byteman.host},boot:${org.jboss.byteman:byteman:jar},sys:${org.wildfly.core:wildfly-core-testsuite-shared:jar},script:${project.build.directory}/test-classes/byteman-scripts/</jboss.test.host.server.byteman.javaagent>
+                        <jboss.test.host.server.byteman.javaagent>${org.jboss.byteman:byteman:jar}=port:${byteman.port},address:${byteman.host},boot:${org.jboss.byteman:byteman:jar},script:${project.build.directory}/test-classes/byteman-scripts/</jboss.test.host.server.byteman.javaagent>
                     </systemPropertyVariables>
                     <includes>
                         <include>org/jboss/as/test/integration/domain/autoignore/*TestCase.java</include>
@@ -202,7 +197,7 @@
                         <include>org/jboss/as/test/integration/domain/events/*TestCase.java</include>
                         <include>org/jboss/as/test/integration/domain/suites/*TestSuite.java</include>
                         <include>org/jboss/as/test/integration/domain/suspendresume/*TestCase.java</include>
-                        <include>org/jboss/as/test/integration/domain/slavereconnect/*TestCase.java</include>
+                        <include>org/jboss/as/test/integration/domain/secondaryreconnect/*TestCase.java</include>
                         <include>org/jboss/as/test/integration/domain/management/*TestCase.java</include>
                         <include>org/jboss/as/test/integration/domain/elytron/*TestCase.java</include>
                     </includes>
@@ -254,8 +249,8 @@
                                 <cli.jvm.args>${modular.jdk.args}</cli.jvm.args>
                                 <jboss.home>${project.basedir}/target/wildfly-core</jboss.home>
                                 <module.path>${jboss.dist}/modules</module.path>
-                                <jboss.test.host.master.address>${management.address}</jboss.test.host.master.address>
-                                <jboss.test.host.slave.address>${node0}</jboss.test.host.slave.address>
+                                <jboss.test.host.primary.address>${management.address}</jboss.test.host.primary.address>
+                                <jboss.test.host.secondary.address>${node0}</jboss.test.host.secondary.address>
                                 <management.address>${management.address}</management.address>
                                 <settings.localRepository>${settings.localRepository}</settings.localRepository>
                                 <server.jvm.args>-Dmaven.repo.local=${settings.localRepository} ${surefire.system.args} ${jvm.args.ip.server} ${jvm.args.security} ${jvm.args.other} ${jvm.args.timeouts} -Djbossas.ts.dir=${jbossas.ts.dir}</server.jvm.args>
@@ -287,7 +282,7 @@
                     <plugin>
                         <groupId>org.wildfly.plugins</groupId>
                         <artifactId>wildfly-maven-plugin</artifactId>
-                        <version>${version.org.wildfly.plugin}</version>
+                        <version>${version.wildfly.plugin}</version>
                         <executions>
                             <execution>
                                 <phase>process-test-resources</phase>

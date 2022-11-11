@@ -753,6 +753,20 @@
                         </xs:documentation>
                     </xs:annotation>
                 </xs:attribute>
+                <xs:attribute name="syslog-format" type="xs:string">
+                    <xs:annotation>
+                        <xs:documentation>
+                            The RFC format to be used for formatting the log entry, default value of RFC5424.
+                        </xs:documentation>
+                    </xs:annotation>
+                </xs:attribute>
+                <xs:attribute name="reconnect-attempts" type="xs:int">
+                    <xs:annotation>
+                        <xs:documentation>
+                            The maximum amount of failed reconnect attempts that should be made for sending messages to a syslog server before the endpoint is closed, default value of 0 (no reconnect attempts).
+                        </xs:documentation>
+                    </xs:annotation>
+                </xs:attribute>
             </xs:extension>
         </xs:complexContent>
     </xs:complexType>
@@ -1001,10 +1015,30 @@
                         </xs:documentation>
                     </xs:annotation>
                 </xs:attribute>
-                <xs:attribute name="authorization-realm" type="xs:string" use="required">
+                <xs:attribute name="authorization-realm" type="xs:string">
                     <xs:annotation>
                         <xs:documentation>
                             The name of the realm to use for the authorization steps (loading of the identity).
+
+                            Exactly one of 'authorization-realm' and 'authorization-realms' must be specified.
+                        </xs:documentation>
+                    </xs:annotation>
+                </xs:attribute>
+                <xs:attribute name="authorization-realms" type="stringListType">
+                    <xs:annotation>
+                        <xs:documentation>
+                            A list of security realms that should be used for the authorizations steps resulting in an 
+                            aggregation of attributes if the identity is contained in multiple realms.
+
+                            Exactly one of 'authorization-realm' and 'authorization-realms' must be specified.
+                        </xs:documentation>
+                    </xs:annotation>
+                </xs:attribute>
+                <xs:attribute name="principal-transformer" type="xs:string" use="optional">
+                    <xs:annotation>
+                        <xs:documentation>
+                            A principal transformer to be applied after the authentication steps but before the authorization
+                            steps.
                         </xs:documentation>
                     </xs:annotation>
                 </xs:attribute>
@@ -4581,6 +4615,20 @@
             <xs:annotation>
                 <xs:documentation>
                     Prefer certificate revocation list revocation over OCSP if certificate-revocation-list is defined.
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="responder-certificate" type="xs:string" use="optional">
+            <xs:annotation>
+                <xs:documentation>
+                    The alias for OCSP Responder certificate. Keep undefined to use the issuer of certificate being validated.
+                </xs:documentation>
+            </xs:annotation>
+        </xs:attribute>
+        <xs:attribute name="responder-keystore" type="xs:string" use="optional">
+            <xs:annotation>
+                <xs:documentation>
+                    The keystore for responder-certificate. Keep undefined to use trust-manager keystore. Requires responder-certificate to be defined.
                 </xs:documentation>
             </xs:annotation>
         </xs:attribute>

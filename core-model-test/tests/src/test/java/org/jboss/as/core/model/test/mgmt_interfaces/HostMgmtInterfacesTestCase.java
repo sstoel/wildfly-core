@@ -41,10 +41,10 @@ public class HostMgmtInterfacesTestCase extends AbstractCoreModelTest {
     }
 
     @Test
-    public void testConfiguration_Legacy() throws Exception {
-        testConfiguration("host_legacy.xml");
+    public void testEmptyAllowedOriginsConfiguration() throws Exception {
+        // Test for https://issues.jboss.org/browse/WFCORE-4656
+        testConfiguration("host_empty_allowed_origins.xml");
     }
-
 
     private void testConfiguration(String fileName) throws Exception {
         KernelServices kernelServices = createKernelServicesBuilder(TestModelType.HOST)

@@ -1,4 +1,4 @@
-<subsystem xmlns="urn:wildfly:elytron:8.0">
+<subsystem xmlns="urn:wildfly:elytron:16.0">
     <mappers>
         <custom-permission-mapper name="CustomPermissionMapper" class-name="org.wildfly.elytron.CustomPermissionMapper" module="l.m" />
         <custom-permission-mapper name="CustomPermissionMapper2" class-name="org.wildfly.elytron.CustomPermissionMapper" module="l.m" />
@@ -116,6 +116,13 @@
             <evidence-decoder name="rfc822Decoder"/>
             <evidence-decoder name="subjectDecoder"/>
         </aggregate-evidence-decoder>
+        <source-address-role-decoder name="ipRoleDecoder" source-address="10.12.14.16" roles="admin user"/>
+        <source-address-role-decoder name="regexRoleDecoder" pattern="10\.12\.14\.\d+$" roles="employee"/>
+        <aggregate-role-decoder name="aggregateRoleDecoder">
+            <role-decoder name="ipRoleDecoder"/>
+            <role-decoder name="regexRoleDecoder"/>
+        </aggregate-role-decoder>
+        <regex-role-mapper name="RegexRoleMapper" pattern=".*-[a-z]*" replacement="$1"/>
     </mappers>
     <permission-sets>
         <permission-set name="my-permissions">

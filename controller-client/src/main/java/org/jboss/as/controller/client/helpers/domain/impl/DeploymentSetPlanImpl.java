@@ -81,7 +81,7 @@ public class DeploymentSetPlanImpl implements DeploymentSetPlan, Serializable {
     }
 
     public DeploymentAction getLastAction() {
-        return deploymentActions.size() == 0 ? null : deploymentActions.get(deploymentActions.size() - 1);
+        return deploymentActions.isEmpty() ? null : deploymentActions.get(deploymentActions.size() - 1);
     }
 
     @Override
@@ -112,7 +112,7 @@ public class DeploymentSetPlanImpl implements DeploymentSetPlan, Serializable {
     @Override
     public List<Set<ServerGroupDeploymentPlan>> getServerGroupDeploymentPlans() {
         List<Set<ServerGroupDeploymentPlan>> copy = null;
-        if (serverGroupPlans != null) {
+        if (serverGroupPlans != null && !serverGroupPlans.isEmpty()) {
             copy = new ArrayList<Set<ServerGroupDeploymentPlan>>(serverGroupPlans.size());
             for (Set<ServerGroupDeploymentPlan> set : serverGroupPlans) {
                 copy.add(Collections.unmodifiableSet(new LinkedHashSet<ServerGroupDeploymentPlan>(set)));
@@ -125,7 +125,7 @@ public class DeploymentSetPlanImpl implements DeploymentSetPlan, Serializable {
     }
 
     boolean hasServerGroupPlans() {
-        return serverGroupPlans.size() > 1 || serverGroupPlans.get(0).size() > 0;
+        return serverGroupPlans.size() > 1 || !serverGroupPlans.get(0).isEmpty();
     }
 
     ServerGroupDeploymentPlan getLatestServerGroupDeploymentPlan() {

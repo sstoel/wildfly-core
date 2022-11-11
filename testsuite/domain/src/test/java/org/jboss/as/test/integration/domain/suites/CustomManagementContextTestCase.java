@@ -33,15 +33,15 @@ import org.wildfly.core.testrunner.ManagementClient;
  */
 public class CustomManagementContextTestCase extends CustomManagementContextTestBase {
 
-    private static final PathElement HOST = PathElement.pathElement(ModelDescriptionConstants.HOST, "master");
+    private static final PathElement HOST = PathElement.pathElement(ModelDescriptionConstants.HOST, "primary");
     private static DomainTestSupport testSupport;
     private static ManagementClient managementClient;
 
     @BeforeClass
     public static void setupDomain() throws Exception {
         testSupport = DomainTestSuite.createSupport(CustomManagementContextTestCase.class.getSimpleName());
-        DomainClient masterClient = testSupport.getDomainMasterLifecycleUtil().getDomainClient();
-        managementClient = new ManagementClient(masterClient, TestSuiteEnvironment.getServerAddress(), 9090, "remoting+http");
+        DomainClient primaryClient = testSupport.getDomainPrimaryLifecycleUtil().getDomainClient();
+        managementClient = new ManagementClient(primaryClient, TestSuiteEnvironment.getServerAddress(), 9090, "remoting+http");
     }
 
     @AfterClass

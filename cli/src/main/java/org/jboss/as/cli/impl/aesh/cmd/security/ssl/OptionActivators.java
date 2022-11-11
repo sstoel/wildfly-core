@@ -15,17 +15,22 @@ limitations under the License.
  */
 package org.jboss.as.cli.impl.aesh.cmd.security.ssl;
 
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 import org.aesh.command.impl.internal.ParsedCommand;
 import org.jboss.as.cli.Util;
+import static org.jboss.as.cli.impl.aesh.cmd.security.SecurityCommand.OPT_ADD_HTTPS_LISTENER;
 import static org.jboss.as.cli.impl.aesh.cmd.security.SecurityCommand.OPT_INTERACTIVE;
 import static org.jboss.as.cli.impl.aesh.cmd.security.SecurityCommand.OPT_KEY_STORE_NAME;
 import static org.jboss.as.cli.impl.aesh.cmd.security.SecurityCommand.OPT_KEY_STORE_PATH;
+import static org.jboss.as.cli.impl.aesh.cmd.security.SecurityCommand.OPT_LETS_ENCRYPT;
 import static org.jboss.as.cli.impl.aesh.cmd.security.SecurityCommand.OPT_MANAGEMENT_INTERFACE;
 import static org.jboss.as.cli.impl.aesh.cmd.security.SecurityCommand.OPT_TRUSTED_CERTIFICATE_PATH;
 import static org.jboss.as.cli.impl.aesh.cmd.security.SecurityCommand.OPT_TRUST_STORE_NAME;
 import org.jboss.as.cli.impl.aesh.cmd.security.model.ElytronUtil;
+import org.jboss.as.cli.impl.aesh.cmd.security.model.HTTPServer;
+import org.jboss.as.cli.operation.OperationFormatException;
 import org.wildfly.core.cli.command.aesh.activator.AbstractDependOptionActivator;
 import org.wildfly.core.cli.command.aesh.activator.AbstractDependOneOfOptionActivator;
 import org.wildfly.core.cli.command.aesh.activator.AbstractDependRejectOptionActivator;
@@ -215,13 +220,32 @@ public interface OptionActivators {
         }
     }
 
+    public static class DependsOnAddHttpsListenerActivator extends AbstractDependOneOfOptionActivator {
+
+        public DependsOnAddHttpsListenerActivator() {
+            super(OPT_ADD_HTTPS_LISTENER);
+        }
+    }
+
     public static class NoOverrideSecurityRealmActivator extends AbstractDependOneOfOptionActivator {
 
         public NoOverrideSecurityRealmActivator() {
             super(OPT_KEY_STORE_PATH, OPT_KEY_STORE_NAME);
         }
-    }
 
+        @Override
+        public boolean isActivated(ParsedCommand processedCommand) {
+            HTTPServerEnableSSLCommand cmd = (HTTPServerEnableSSLCommand) processedCommand.command();
+            try {
+                if (!HTTPServer.isLegacySecurityRealmSupported(cmd.getCommandContext())) {
+                    return false;
+                }
+            } catch (OperationFormatException | IOException ex) {
+                return false;
+            }
+            return super.isActivated(processedCommand);
+        }
+    }
 
     public static class KeyStorePathDependentActivator extends AbstractDependOptionActivator {
 
@@ -248,4 +272,19 @@ public interface OptionActivators {
             return false;
         }
     }
+
+    public static class LetsEncryptActivator extends AbstractDependOptionActivator {
+
+        public LetsEncryptActivator() {
+            super(false, OPT_INTERACTIVE);
+        }
+    }
+
+    public static class CaAccountActivator extends AbstractDependOptionActivator {
+
+        public CaAccountActivator() {
+            super(false, OPT_INTERACTIVE, OPT_LETS_ENCRYPT);
+        }
+    }
+
 }

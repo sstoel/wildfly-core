@@ -21,6 +21,8 @@
  */
 package org.jboss.as.test.integration.management.cli;
 
+import static org.junit.Assert.assertNotNull;
+
 import org.jboss.as.cli.CommandContext;
 import org.jboss.as.cli.CommandLineException;
 import org.jboss.as.cli.operation.impl.DefaultOperationRequestAddress;
@@ -28,13 +30,13 @@ import org.jboss.as.test.integration.management.util.CLITestUtil;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  *
  * @author Alexey Loubyansky
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 public class CdTestCase {
 
     @Test
@@ -51,15 +53,18 @@ public class CdTestCase {
     @Test
     public void testInvalidAddress() throws Exception {
         final CommandContext ctx = CLITestUtil.getCommandContext();
+        CommandLineException expectedEx = null;
         try {
             ctx.connectController();
-            ctx.handle("cd subsystem=subsystem");
-            Assert.fail("Can't cd into a non-existing nodepath.");
-        } catch(CommandLineException e) {
-            // expected
+            try {
+                ctx.handle("cd subsystem=subsystem");
+            } catch (CommandLineException e) {
+                expectedEx = e;
+            }
         } finally {
             ctx.terminateSession();
         }
+        assertNotNull("Can't cd into a non-existing nodepath.", expectedEx);
     }
 
     @Test

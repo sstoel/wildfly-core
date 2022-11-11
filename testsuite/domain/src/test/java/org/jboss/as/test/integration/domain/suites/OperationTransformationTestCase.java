@@ -52,7 +52,6 @@ import static org.jboss.as.test.integration.domain.management.util.DomainTestUti
 import static org.jboss.as.test.integration.domain.management.util.DomainTestUtils.executeForResult;
 import static org.jboss.as.test.integration.domain.management.util.DomainTestUtils.exists;
 import static org.jboss.as.test.integration.domain.management.util.DomainTestUtils.getRunningServerAddress;
-import org.junit.Assert;
 
 import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.PathAddress;
@@ -62,10 +61,20 @@ import org.jboss.as.test.integration.domain.extension.ExtensionSetup;
 import org.jboss.as.test.integration.domain.extension.VersionedExtensionCommon;
 import org.jboss.as.test.integration.domain.management.util.DomainLifecycleUtil;
 import org.jboss.as.test.integration.domain.management.util.DomainTestSupport;
+import org.jboss.as.test.integration.domain.management.util.WildFlyManagedConfiguration;
 import org.jboss.dmr.ModelNode;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.Reader;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author Emanuel Muckenhuber
@@ -73,15 +82,15 @@ import org.junit.Test;
 public class OperationTransformationTestCase {
 
     private static DomainTestSupport testSupport;
-    private static DomainLifecycleUtil master;
-    private static DomainLifecycleUtil slave;
+    private static DomainLifecycleUtil primary;
+    private static DomainLifecycleUtil secondary;
 
     @BeforeClass
     public static void setupDomain() throws Exception {
         testSupport = DomainTestSuite.createSupport(OperationTransformationTestCase.class.getSimpleName());
 
-        master = testSupport.getDomainMasterLifecycleUtil();
-        slave = testSupport.getDomainSlaveLifecycleUtil();
+        primary = testSupport.getDomainPrimaryLifecycleUtil();
+        secondary = testSupport.getDomainSecondaryLifecycleUtil();
         // Initialize the extension
         ExtensionSetup.initializeTransformersExtension(testSupport);
     }
@@ -90,8 +99,8 @@ public class OperationTransformationTestCase {
     public static void tearDownDomain() throws Exception {
         DomainTestSuite.stopSupport();
         testSupport = null;
-        master = null;
-        slave = null;
+        primary = null;
+        secondary = null;
     }
 
     @Test
@@ -102,17 +111,17 @@ public class OperationTransformationTestCase {
         final PathAddress ignored = PathAddress.pathAddress(PathElement.pathElement(PROFILE, "ignored"),
                 PathElement.pathElement(SUBSYSTEM, VersionedExtensionCommon.SUBSYSTEM_NAME));
 
-        final ModelNode serverAddress = getRunningServerAddress("slave", "main-three");
+        final ModelNode serverAddress = getRunningServerAddress("secondary", "main-three");
         serverAddress.add(SUBSYSTEM, VersionedExtensionCommon.SUBSYSTEM_NAME);
 
-        final DomainClient client = master.getDomainClient();
+        final DomainClient client = primary.getDomainClient();
         // Add extension
         final ModelNode extensionAdd = createAdd(extension);
         executeForResult(extensionAdd, client);
         // Add subsystem
         final ModelNode subsystemAdd = createAdd(address);
         executeForResult(subsystemAdd, client);
-        // Check master version
+        // Check primary version
         final ModelNode mExt = create(READ_RESOURCE_OPERATION, extension.append(PathElement.pathElement(SUBSYSTEM, VersionedExtensionCommon.SUBSYSTEM_NAME)));
         mExt.get(INCLUDE_RUNTIME).set(true);
         assertVersion(executeForResult(mExt, client), ModelVersion.create(2));
@@ -134,10 +143,10 @@ public class OperationTransformationTestCase {
         executeForResult(remove, client);
         Assert.assertFalse(exists(newElement, client));
 
-        // The add operation on the slave should have been discarded
-        final ModelNode newElementOnSlave = serverAddress.clone();
-        newElementOnSlave.add("new-element", "new1");
-        Assert.assertFalse(exists(newElementOnSlave, client));
+        // The add operation on the secondary should have been discarded
+        final ModelNode newElementOnSecondary = serverAddress.clone();
+        newElementOnSecondary.add("new-element", "new1");
+        Assert.assertFalse(exists(newElementOnSecondary, client));
 
         // Other new element
         final PathElement otherNewElementPath = PathElement.pathElement("other-new-element", "new1");
@@ -146,9 +155,9 @@ public class OperationTransformationTestCase {
         final ModelNode otherFailure = executeForFailure(addOtherNew, client);
 
         Assert.assertTrue(otherFailure.hasDefined(HOST_FAILURE_DESCRIPTIONS));
-        Assert.assertTrue(otherFailure.get(HOST_FAILURE_DESCRIPTIONS).hasDefined("slave"));
+        Assert.assertTrue(otherFailure.get(HOST_FAILURE_DESCRIPTIONS).hasDefined("secondary"));
         // Check that the host-failure contains WFLYCTL0304 rejected
-        Assert.assertTrue(otherFailure.get(HOST_FAILURE_DESCRIPTIONS, "slave").asString().contains("WFLYCTL0304"));
+        Assert.assertTrue(otherFailure.get(HOST_FAILURE_DESCRIPTIONS, "secondary").asString().contains("WFLYCTL0304"));
 
         // This should work
         final ModelNode addOtherNewIgnored = createAdd(ignored.append(otherNewElementPath));
@@ -161,9 +170,9 @@ public class OperationTransformationTestCase {
                 createAdd(address.append(PathElement.pathElement("other-new-element", "new2")))); // fail
         final ModelNode compositeFailure = executeForFailure(cpa, client);
         Assert.assertTrue(compositeFailure.hasDefined(HOST_FAILURE_DESCRIPTIONS));
-        Assert.assertTrue(compositeFailure.get(HOST_FAILURE_DESCRIPTIONS).hasDefined("slave"));
+        Assert.assertTrue(compositeFailure.get(HOST_FAILURE_DESCRIPTIONS).hasDefined("secondary"));
         // Check that the host-failure contains WFLYCTL0304 rejected
-        Assert.assertTrue(compositeFailure.get(HOST_FAILURE_DESCRIPTIONS, "slave").asString().contains("WFLYCTL0304"));
+        Assert.assertTrue(compositeFailure.get(HOST_FAILURE_DESCRIPTIONS, "secondary").asString().contains("WFLYCTL0304"));
 
         // Successful composite
         executeForResult(createCompositeOperation(
@@ -178,17 +187,17 @@ public class OperationTransformationTestCase {
         Assert.assertTrue(exists(renamedAddress, client));
 
         // renamed > element
-        final ModelNode renamedElementOnSlave = serverAddress.clone();
-        renamedElementOnSlave.add("renamed", "element");
-        Assert.assertFalse(exists(renamedElementOnSlave, client));
+        final ModelNode renamedElementOnSecondary = serverAddress.clone();
+        renamedElementOnSecondary.add("renamed", "element");
+        Assert.assertFalse(exists(renamedElementOnSecondary, client));
 
         // element > renamed
-        final ModelNode elementRenamedOnSlave = serverAddress.clone();
-        elementRenamedOnSlave.add("element", "renamed");
-        Assert.assertTrue(exists(elementRenamedOnSlave, client));
+        final ModelNode elementRenamedOnSecondary = serverAddress.clone();
+        elementRenamedOnSecondary.add("element", "renamed");
+        Assert.assertTrue(exists(elementRenamedOnSecondary, client));
 
 //        final ModelNode op = create(READ_RESOURCE_OPERATION, PathAddress.pathAddress(PathElement.pathElement("profile", "ignored")));
-//        System.out.println(executeForResult(op, slave.getDomainClient()));
+//        System.out.println(executeForResult(op, secondary.getDomainClient()));
 
         final ModelNode update = new ModelNode();
         update.get(OP).set("update");
@@ -200,7 +209,7 @@ public class OperationTransformationTestCase {
         // "result" => {"test-attribute" => "test"},
         Assert.assertEquals("test", updateResult.get(RESULT, "test-attribute").asString());
         // server-result
-        //Assert.assertEquals("test", updateResult.get(SERVER_GROUPS, "main-server-group", HOST, "slave", "main-three", "response", RESULT, "test-attribute").asString());
+        //Assert.assertEquals("test", updateResult.get(SERVER_GROUPS, "main-server-group", HOST, "secondary", "main-three", "response", RESULT, "test-attribute").asString());
 
         //
         final ModelNode write = new ModelNode();
@@ -225,15 +234,20 @@ public class OperationTransformationTestCase {
 
         final ModelNode compositeResult = client.execute(composite);
         // server-result
-        Assert.assertEquals(false, compositeResult.get(SERVER_GROUPS, "main-server-group", HOST, "slave", "main-three", "response", RESULT, "step-2", RESULT).asBoolean());
+        Assert.assertEquals(false, compositeResult.get(SERVER_GROUPS, "main-server-group", HOST, "secondary", "main-three", "response", RESULT, "step-2", RESULT).asBoolean());
 
         // Test expression replacement
         testPropertiesModel();
+
+        // verifies WFCORE-5675, we should not have WFLYPRT0018 due to Null Pointer Exceptions sending transformer operations
+        List<String> linesFound = checkHostControllerLogFile(primary.getConfiguration(), "WFLYPRT0018");
+        Assert.assertTrue("The secondary host-controller.log file contains unexpected warning errors: " + linesFound,
+                linesFound.isEmpty());
     }
 
     protected void testPropertiesModel() throws Exception {
-        final DomainClient client = master.getDomainClient();
-        final DomainClient slaveClient = slave.getDomainClient();
+        final DomainClient client = primary.getDomainClient();
+        final DomainClient secondaryClient = secondary.getDomainClient();
 
         final PathAddress address = PathAddress.pathAddress(PathElement.pathElement(PROFILE, "default"));
 
@@ -242,15 +256,15 @@ public class OperationTransformationTestCase {
 
         final ModelNode writePropertiesInt = writeAttribute(properties, "int", "${org.jboss.domain.tests.int:1}");
         executeForFailure(writePropertiesInt, client);
-        // Check both master and slave
+        // Check both primary and secondary
         Assert.assertFalse(executeForResult(readAttribute(properties, "int"), client).isDefined());
-        Assert.assertFalse(executeForResult(readAttribute(properties, "int"), slaveClient).isDefined());
+        Assert.assertFalse(executeForResult(readAttribute(properties, "int"), secondaryClient).isDefined());
 
         final ModelNode writePropertiesString = writeAttribute(properties, "string", "${org.jboss.domain.tests.string:abc}");
         executeForFailure(writePropertiesString, client);
-        // Check both master and slave
+        // Check both primary and secondary
         Assert.assertFalse(executeForResult(readAttribute(properties, "string"), client).isDefined());
-        Assert.assertFalse(executeForResult(readAttribute(properties, "string"), slaveClient).isDefined());
+        Assert.assertFalse(executeForResult(readAttribute(properties, "string"), secondaryClient).isDefined());
 
         // Test the ignored model
         final PathAddress ignored = PathAddress.pathAddress(PathElement.pathElement(PROFILE, "ignored"), PathElement.pathElement(SUBSYSTEM, VersionedExtensionCommon.SUBSYSTEM_NAME));
@@ -258,12 +272,12 @@ public class OperationTransformationTestCase {
         final ModelNode writeIgnoredString = writeAttribute(ignored, "string", "${org.jboss.domain.tests.string:abc}");
         executeForResult(writeIgnoredString, client);
         Assert.assertTrue(executeForResult(readAttribute(ignored, "string"), client).isDefined());
-        executeForFailure(readAttribute(ignored, "string"), slaveClient);
+        executeForFailure(readAttribute(ignored, "string"), secondaryClient);
 
         final ModelNode writeIgnoredInt = writeAttribute(ignored, "int", "${org.jboss.domain.tests.int:1}");
         executeForResult(writeIgnoredInt, client);
         Assert.assertTrue(executeForResult(readAttribute(ignored, "int"), client).isDefined());
-        executeForFailure(readAttribute(ignored, "int"), slaveClient);
+        executeForFailure(readAttribute(ignored, "int"), secondaryClient);
     }
 
     static ModelNode createAdd(PathAddress address) {
@@ -308,4 +322,20 @@ public class OperationTransformationTestCase {
         Assert.assertEquals(version.getMicro(), v.get(MANAGEMENT_MICRO_VERSION).asInt());
     }
 
+    private List<String> checkHostControllerLogFile(WildFlyManagedConfiguration appConfiguration, String containString) throws IOException {
+        final File logFile = new File(appConfiguration.getDomainDirectory(), "log" + File.separator + "host-controller.log");
+        if (!logFile.exists()) {
+            throw new IOException("Log file '" + logFile + "' does not exist");
+        }
+        List<String> linesFound = new ArrayList<>();
+        try (Reader reader = new FileReader(logFile); BufferedReader in = new BufferedReader(reader)) {
+            String line;
+            while ((line = in.readLine()) != null) {
+                if (line.contains(containString)) {
+                    linesFound.add(line);
+                }
+            }
+        }
+        return linesFound;
+    }
 }

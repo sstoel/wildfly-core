@@ -21,18 +21,6 @@
  */
 package org.wildfly.extension.requestcontroller;
 
-import org.jboss.as.server.suspend.CountingRequestCountCallback;
-import org.jboss.as.server.suspend.ServerActivity;
-import org.jboss.as.server.suspend.ServerActivityCallback;
-import org.jboss.as.server.suspend.SuspendController;
-import org.jboss.msc.service.Service;
-import org.jboss.msc.service.ServiceName;
-import org.jboss.msc.service.StartContext;
-import org.jboss.msc.service.StartException;
-import org.jboss.msc.service.StopContext;
-import org.jboss.msc.value.InjectedValue;
-import org.wildfly.extension.requestcontroller.logging.RequestControllerLogger;
-
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
@@ -45,6 +33,18 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+
+import org.jboss.as.server.suspend.CountingRequestCountCallback;
+import org.jboss.as.server.suspend.ServerActivity;
+import org.jboss.as.server.suspend.ServerActivityCallback;
+import org.jboss.as.server.suspend.SuspendController;
+import org.jboss.msc.service.Service;
+import org.jboss.msc.service.ServiceName;
+import org.jboss.msc.service.StartContext;
+import org.jboss.msc.service.StartException;
+import org.jboss.msc.service.StopContext;
+import org.jboss.msc.value.InjectedValue;
+import org.wildfly.extension.requestcontroller.logging.RequestControllerLogger;
 
 /**
  * A controller that manages the active requests that are running in the container.
@@ -397,20 +397,20 @@ public class RequestController implements Service<RequestController>, ServerActi
     }
 
     private QueuedTask findForcedTask() {
-        QueuedTask task = null;
+        QueuedTask forcedTask = null;
+        QueuedTask task;
         List<QueuedTask> storage = new ArrayList<>();
-        while (task == null && !taskQueue.isEmpty()) {
-            QueuedTask tmp = taskQueue.poll();
-            if(tmp.forceRun) {
-                task = tmp;
+        while (forcedTask == null && (task = taskQueue.poll()) != null) {
+            if (task.forceRun) {
+                forcedTask = task;
             } else {
-                storage.add(tmp);
+                storage.add(task);
             }
         }
-        //this screws the order somewhat, but the container is suspending anyway, and the order
-        //was never guarenteed. if we push them back onto the front we will need to just go through them again
+        // this screws the order somewhat, but the container is suspending anyway, and the order
+        // was never guarenteed. if we push them back onto the front we will need to just go through them again
         taskQueue.addAll(storage);
-        return task;
+        return forcedTask;
     }
 
     private static final class ControlPointIdentifier {
@@ -484,19 +484,9 @@ public class RequestController implements Service<RequestController>, ServerActi
         }
 
         public boolean runRequest() {
-            if(state.compareAndSet(0, 1)) {
+            if (state.compareAndSet(0, 1)) {
                 cancel();
-                executor.execute(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            controlPoint.beginExistingRequest();
-                            task.run();
-                        } finally {
-                            controlPoint.requestComplete();
-                        }
-                    }
-                });
+                executor.execute(new ControlPointTask(task, controlPoint));
                 return true;
             } else {
                 return false;

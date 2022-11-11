@@ -32,7 +32,7 @@ import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.UnknownHostException;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -114,7 +114,7 @@ public final class Main {
         );
         StdioContext.setStdioContextSelector(new SimpleStdioContextSelector(context));
 
-        create(args, new String(authKey, Charset.forName("US-ASCII")));
+        create(args, new String(authKey, StandardCharsets.US_ASCII));
 
         while (in.read() != -1) {}
         exit();
@@ -217,8 +217,8 @@ public final class Main {
         ConfigurationFile.InteractionPolicy domainConfigInteractionPolicy = ConfigurationFile.InteractionPolicy.STANDARD;
         String modulePath = null;
 
-        // Note the java.security.manager shouldn't be set, but we'll check to ensure the security manager gets enabled
-        boolean securityManagerEnabled = System.getSecurityManager() != null || hostSystemProperties.containsKey("java.security.manager");
+        // Note the java.security.manager property shouldn't be set, but we'll check to ensure the security manager should be enabled
+        boolean securityManagerEnabled = System.getSecurityManager() != null || isJavaSecurityManagerConfigured(hostSystemProperties);
 
         final int argsLength = args.length;
         for (int i = 0; i < argsLength; i++) {
@@ -367,7 +367,7 @@ public final class Main {
                     if (initialHostConfig == null) {
                         return new HostControllerEnvironmentWrapper(HostControllerEnvironmentWrapper.HostControllerEnvironmentStatus.ERROR);
                     }
-                } else if (arg.startsWith(CommandLineConstants.MASTER_ADDRESS)) {
+                } else if (arg.startsWith(CommandLineConstants.PRIMARY_ADDRESS)) {
 
                     int idx = arg.indexOf('=');
                     if (idx == arg.length() - 1) {
@@ -379,9 +379,9 @@ public final class Main {
                         return new HostControllerEnvironmentWrapper(HostControllerEnvironmentWrapper.HostControllerEnvironmentStatus.ERROR);
                     }
                     value = fixPossibleIPv6URL(value);
-                    hostSystemProperties.put(HostControllerEnvironment.JBOSS_DOMAIN_MASTER_ADDRESS, value);
-                    WildFlySecurityManager.setPropertyPrivileged(HostControllerEnvironment.JBOSS_DOMAIN_MASTER_ADDRESS, value);
-                } else if (arg.startsWith(CommandLineConstants.MASTER_PORT)) {
+                    hostSystemProperties.put(HostControllerEnvironment.JBOSS_DOMAIN_PRIMARY_ADDRESS, value);
+                    WildFlySecurityManager.setPropertyPrivileged(HostControllerEnvironment.JBOSS_DOMAIN_PRIMARY_ADDRESS, value);
+                } else if (arg.startsWith(CommandLineConstants.PRIMARY_PORT)) {
 
                     int idx = arg.indexOf('=');
                     if (idx == arg.length() - 1) {
@@ -389,13 +389,13 @@ public final class Main {
                         return new HostControllerEnvironmentWrapper(HostControllerEnvironmentWrapper.HostControllerEnvironmentStatus.ERROR);
                     }
                     String value = idx > -1 ? arg.substring(idx + 1) : args[++i];
-                    final Integer port = parsePort(value, CommandLineConstants.MASTER_PORT);
+                    final Integer port = parsePort(value, CommandLineConstants.PRIMARY_PORT);
                     if (port == null) {
                         return new HostControllerEnvironmentWrapper(HostControllerEnvironmentWrapper.HostControllerEnvironmentStatus.ERROR);
                     }
 
-                    hostSystemProperties.put(HostControllerEnvironment.JBOSS_DOMAIN_MASTER_PORT, value);
-                    WildFlySecurityManager.setPropertyPrivileged(HostControllerEnvironment.JBOSS_DOMAIN_MASTER_PORT, value);
+                    hostSystemProperties.put(HostControllerEnvironment.JBOSS_DOMAIN_PRIMARY_PORT, value);
+                    WildFlySecurityManager.setPropertyPrivileged(HostControllerEnvironment.JBOSS_DOMAIN_PRIMARY_PORT, value);
                 } else if (CommandLineConstants.ADMIN_ONLY.equals(arg)) {
                     initialRunningMode = RunningMode.ADMIN_ONLY;
                 } else if (arg.startsWith(CommandLineConstants.SYS_PROP)) {
@@ -477,6 +477,11 @@ public final class Main {
                 pmAddress, pmPort, pcSocketConfig.getBindAddress(), pcSocketConfig.getBindPort(), defaultJVM, domainConfig,
                 initialDomainConfig, hostConfig, initialHostConfig, initialRunningMode, backupDomainFiles, cachedDc,
                 productConfig, securityManagerEnabled, startTime, processType, hostConfigInteractionPolicy, domainConfigInteractionPolicy));
+    }
+
+    private static boolean isJavaSecurityManagerConfigured(final Map<String, String> props) {
+        final String value = props.get("java.security.manager");
+        return value != null && !"allow".equals(value) && !"disallow".equals(value);
     }
 
     private static String parseValue(final String arg, final String key) {
@@ -624,7 +629,7 @@ public final class Main {
         private final UnknownHostException uhe;
 
         private PCSocketConfig() {
-            boolean preferIPv6 = Boolean.valueOf(WildFlySecurityManager.getPropertyPrivileged("java.net.preferIPv6Addresses", "false"));
+            boolean preferIPv6 = Boolean.parseBoolean(WildFlySecurityManager.getPropertyPrivileged("java.net.preferIPv6Addresses", "false"));
             this.defaultBindAddress = preferIPv6 ? "::1" : "127.0.0.1";
             UnknownHostException toCache = null;
             try {

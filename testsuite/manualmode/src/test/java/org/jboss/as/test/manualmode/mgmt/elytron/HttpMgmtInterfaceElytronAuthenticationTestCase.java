@@ -22,7 +22,7 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.apache.commons.io.FileUtils;
 import org.jboss.as.test.integration.management.util.CLIWrapper;
@@ -31,20 +31,21 @@ import org.jboss.as.test.integration.security.common.CoreUtils;
 import static org.apache.http.HttpStatus.SC_OK;
 import static org.apache.http.HttpStatus.SC_UNAUTHORIZED;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
+import org.jboss.dmr.ModelNode;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ServerControl;
 import org.wildfly.core.testrunner.ServerController;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 
 /**
  * Test for authentication through http-interface secured by Elytron http-authentication-factory.
  *
  * @author olukas
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
 public class HttpMgmtInterfaceElytronAuthenticationTestCase {
 
@@ -57,6 +58,8 @@ public class HttpMgmtInterfaceElytronAuthenticationTestCase {
     private static final String CORRECT_PASSWORD = "password";
 
     private static String host;
+
+    private static String existingHttpManagementFactory;
 
     @Inject
     private static ServerController CONTROLLER;
@@ -72,6 +75,12 @@ public class HttpMgmtInterfaceElytronAuthenticationTestCase {
         try (CLIWrapper cli = new CLIWrapper(true)) {
             final String levelStr = "";
             final List<String> roles = new ArrayList<>();
+
+            cli.sendLine("/core-service=management/management-interface=http-interface:read-attribute(name=http-authentication-factory)");
+            ModelNode res = cli.readAllAsOpResult().getResponseNode().get("result");
+            if (res.isDefined()) {
+                existingHttpManagementFactory = res.asString();
+            }
 
             cli.sendLine(String.format("/subsystem=elytron/filesystem-realm=%s:add(path=\"%s\", %s)", MANAGEMENT_FILESYSTEM_NAME, escapePath(fsRealmPath), levelStr));
             cli.sendLine(String.format("/subsystem=elytron/filesystem-realm=%s:add-identity(identity=%s)", MANAGEMENT_FILESYSTEM_NAME, USER));
@@ -100,6 +109,11 @@ public class HttpMgmtInterfaceElytronAuthenticationTestCase {
     public static void resetServerConfiguration() throws Exception {
         try (CLIWrapper cli = new CLIWrapper(true)) {
             FileUtils.deleteQuietly(tempFolder);
+            String restoreMgmtAuth = existingHttpManagementFactory == null
+                    ? "/core-service=management/management-interface=http-interface:undefine-attribute(name=http-authentication-factory)"
+                    : String.format(
+                    "/core-service=management/management-interface=http-interface:write-attribute(name=http-authentication-factory,value=%s)",
+                    existingHttpManagementFactory);
             cli.sendLine(String.format(
                     "/core-service=management/management-interface=http-interface:undefine-attribute(name=http-authentication-factory)",
                     MANAGEMENT_FILESYSTEM_NAME));

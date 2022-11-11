@@ -22,18 +22,17 @@
 
 package org.jboss.as.server.deployment.annotation;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.lang.ref.Reference;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.jboss.as.server.deployment.AttachmentList;
 import org.jboss.as.server.deployment.Attachments;
 import org.jboss.as.server.deployment.DeploymentPhaseContext;
 import org.jboss.as.server.deployment.DeploymentUnit;
@@ -42,19 +41,12 @@ import org.jboss.as.server.deployment.DeploymentUnitProcessor;
 import org.jboss.as.server.deployment.DeploymentUtils;
 import org.jboss.as.server.deployment.SubDeploymentMarker;
 import org.jboss.as.server.deployment.module.AdditionalModuleSpecification;
+import org.jboss.as.server.deployment.module.ModuleDependency;
 import org.jboss.as.server.deployment.module.ModuleRootMarker;
 import org.jboss.as.server.deployment.module.ResourceRoot;
-import org.jboss.as.server.logging.ServerLogger;
-import org.jboss.as.server.moduleservice.ModuleIndexBuilder;
 import org.jboss.jandex.Index;
-import org.jboss.jandex.Indexer;
-import org.jboss.modules.Module;
 import org.jboss.modules.ModuleIdentifier;
-import org.jboss.modules.ModuleLoadException;
 import org.jboss.modules.ModuleLoader;
-import org.jboss.modules.Resource;
-import org.jboss.modules.filter.PathFilter;
-import org.jboss.modules.filter.PathFilters;
 
 /**
  * Processor responsible for creating and attaching a {@link CompositeIndex} for a deployment.
@@ -69,6 +61,8 @@ public class CompositeIndexProcessor implements DeploymentUnitProcessor {
     public void deploy(DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
         final DeploymentUnit deploymentUnit = phaseContext.getDeploymentUnit();
         final ModuleLoader moduleLoader = deploymentUnit.getAttachment(Attachments.SERVICE_MODULE_LOADER);
+        final Reference<AnnotationIndexSupport> indexSupportRef = deploymentUnit.getAttachment(Attachments.ANNOTATION_INDEX_SUPPORT);
+        assert indexSupportRef != null;
 
         final Boolean computeCompositeIndex = deploymentUnit.getAttachment(Attachments.COMPUTE_COMPOSITE_ANNOTATION_INDEX);
         if (computeCompositeIndex != null && !computeCompositeIndex) {
@@ -82,32 +76,62 @@ public class CompositeIndexProcessor implements DeploymentUnitProcessor {
         Map<ModuleIdentifier, CompositeIndex> additionalAnnotationIndexes = new HashMap<ModuleIdentifier, CompositeIndex>();
         final List<ModuleIdentifier> additionalModuleIndexes = deploymentUnit.getAttachmentList(Attachments.ADDITIONAL_ANNOTATION_INDEXES);
         final List<Index> indexes = new ArrayList<Index>();
+
+        Map<ModuleIdentifier, DeploymentUnit> subdeploymentDependencies = buildSubdeploymentDependencyMap(deploymentUnit);
+
         for (final ModuleIdentifier moduleIdentifier : additionalModuleIndexes) {
             AdditionalModuleSpecification additional = additionalModuleSpecificationMap.get(moduleIdentifier);
             if(additional != null) {
+                // This module id refers to a deployment-specific module created based on a MANIFEST.MF Class-Path entry
+                // or jboss-deployment-structure.xml or equivalent jboss-all.xml content. Obtain indexes from its resources.
+                final List<Index> moduleIndexes = new ArrayList<>();
                 for(ResourceRoot resource : additional.getResourceRoots()) {
                     ResourceRootIndexer.indexResourceRoot(resource);
                     Index indexAttachment = resource.getAttachment(Attachments.ANNOTATION_INDEX);
                     if(indexAttachment != null) {
                         indexes.add(indexAttachment);
+                        moduleIndexes.add(indexAttachment);
                     }
+                }
+                if (!moduleIndexes.isEmpty()) {
+                    additionalAnnotationIndexes.put(moduleIdentifier, new CompositeIndex(moduleIndexes));
+                }
+            } else if (subdeploymentDependencies.containsKey(moduleIdentifier)) {
+                // This module id refers to a subdeployment. Find the indices for its resources.
+                List<ResourceRoot> resourceRoots = subdeploymentDependencies.get(moduleIdentifier).getAttachment(Attachments.RESOURCE_ROOTS);
+                final List<ResourceRoot> allResourceRoots = new ArrayList<>();
+                if (resourceRoots != null) {
+                    allResourceRoots.addAll(resourceRoots);
+                }
+                final ResourceRoot deploymentRoot = subdeploymentDependencies.get(moduleIdentifier).getAttachment(Attachments.DEPLOYMENT_ROOT);
+                if (ModuleRootMarker.isModuleRoot(deploymentRoot)) {
+                    allResourceRoots.add(deploymentRoot);
+                }
+                final List<Index> moduleIndexes = new ArrayList<>();
+                for (ResourceRoot resourceRoot : allResourceRoots) {
+                    Index index = resourceRoot.getAttachment(Attachments.ANNOTATION_INDEX);
+                    if (index != null) {
+                        indexes.add(index);
+                        moduleIndexes.add(index);
+                    }
+                }
+                if (!moduleIndexes.isEmpty()) {
+                    additionalAnnotationIndexes.put(moduleIdentifier, new CompositeIndex(moduleIndexes));
                 }
             } else {
-                try {
-                    Module module = moduleLoader.loadModule(moduleIdentifier);
-                    final CompositeIndex additionalIndex = ModuleIndexBuilder.buildCompositeIndex(module);
-                    if (additionalIndex != null) {
-                        indexes.addAll(additionalIndex.indexes);
-                        additionalAnnotationIndexes.put(moduleIdentifier, additionalIndex);
-                    } else {
-                        final Index index = calculateModuleIndex(module);
-                        indexes.add(index);
-                    }
-                } catch (ModuleLoadException e) {
-                    throw new DeploymentUnitProcessingException(e);
-                } catch (IOException e) {
-                    throw new DeploymentUnitProcessingException(e);
+                // This module id refers to a module external to the deployment. Get the indices from the support object.
+                CompositeIndex externalModuleIndexes;
+                AnnotationIndexSupport annotationIndexSupport = indexSupportRef.get();
+                if (annotationIndexSupport != null) {
+                    externalModuleIndexes = annotationIndexSupport.getAnnotationIndices(moduleIdentifier.toString(), moduleLoader);
+                } else {
+                    // This implies the DeploymentUnitService was restarted after the original operation that held
+                    // the strong ref to the AnnotationIndexSupport. So we can't benefit from caching. Just calculate
+                    // the indices without worrying about caching.
+                    externalModuleIndexes = AnnotationIndexSupport.indexModule(moduleIdentifier.toString(), moduleLoader);
                 }
+                indexes.addAll(externalModuleIndexes.indexes);
+                additionalAnnotationIndexes.put(moduleIdentifier, externalModuleIndexes);
             }
         }
         deploymentUnit.putAttachment(Attachments.ADDITIONAL_ANNOTATION_INDEXES_BY_MODULE, additionalAnnotationIndexes);
@@ -142,6 +166,26 @@ public class CompositeIndexProcessor implements DeploymentUnitProcessor {
         deploymentUnit.putAttachment(Attachments.COMPOSITE_ANNOTATION_INDEX, new CompositeIndex(indexes));
     }
 
+    private Map<ModuleIdentifier, DeploymentUnit> buildSubdeploymentDependencyMap(DeploymentUnit deploymentUnit) {
+        Set<ModuleIdentifier> depModuleIdentifiers = new HashSet<>();
+        for (ModuleDependency dep: deploymentUnit.getAttachment(Attachments.MODULE_SPECIFICATION).getAllDependencies()) {
+            depModuleIdentifiers.add(dep.getIdentifier());
+        }
+
+        DeploymentUnit top = deploymentUnit.getParent()==null?deploymentUnit:deploymentUnit.getParent();
+        Map<ModuleIdentifier, DeploymentUnit> res = new HashMap<>();
+        AttachmentList<DeploymentUnit> subDeployments = top.getAttachment(Attachments.SUB_DEPLOYMENTS);
+        if (subDeployments != null) {
+            for (DeploymentUnit subDeployment : subDeployments) {
+                ModuleIdentifier moduleIdentifier = subDeployment.getAttachment(Attachments.MODULE_IDENTIFIER);
+                if (depModuleIdentifiers.contains(moduleIdentifier)) {
+                    res.put(moduleIdentifier, subDeployment);
+                }
+            }
+        }
+        return res;
+    }
+
     /**
      * Loops through all resource roots that have been made available transitively via Class-Path entries, and
      * adds them to the list of roots to be processed.
@@ -165,23 +209,6 @@ public class CompositeIndexProcessor implements DeploymentUnitProcessor {
             }
         }
         return additionalRoots;
-    }
-
-    private Index calculateModuleIndex(final Module module) throws ModuleLoadException, IOException {
-        final Indexer indexer = new Indexer();
-        final PathFilter filter = PathFilters.getDefaultImportFilter();
-        final Iterator<Resource> iterator = module.iterateResources(filter);
-        while (iterator.hasNext()) {
-            Resource resource = iterator.next();
-            if(resource.getName().endsWith(".class")) {
-                try (InputStream in = resource.openStream()) {
-                    indexer.index(in);
-                } catch (Exception e) {
-                    ServerLogger.DEPLOYMENT_LOGGER.cannotIndexClass(resource.getName(), resource.getURL().toExternalForm(), e);
-                }
-            }
-        }
-        return indexer.complete();
     }
 
     public void undeploy(DeploymentUnit deploymentUnit) {

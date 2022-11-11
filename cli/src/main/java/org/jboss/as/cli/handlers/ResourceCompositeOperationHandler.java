@@ -21,6 +21,9 @@
  */
 package org.jboss.as.cli.handlers;
 
+import static org.wildfly.common.Assert.checkNotNullParam;
+import static org.wildfly.common.Assert.checkNotEmptyParam;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
@@ -81,15 +84,10 @@ public class ResourceCompositeOperationHandler extends BaseOperationCommand {
             String... operations) {
         super(ctx, command, true);
 
-        if(command == null) {
-            throw new IllegalArgumentException("Command name can't be null.");
-        }
+        checkNotNullParam("command", command);
   //      this.commandName = command;
 
-        if(operations == null || operations.length == 0) {
-            throw new IllegalArgumentException("There must be at least one operation.");
-        }
-        ops = operations;
+        ops = checkNotEmptyParam("operations", operations);
 
         this.idProperty = idProperty;
 
@@ -121,10 +119,10 @@ public class ResourceCompositeOperationHandler extends BaseOperationCommand {
                 }
                 DefaultOperationRequestAddress address = new DefaultOperationRequestAddress();
                 if(isDependsOnProfile() && ctx.isDomainMode()) {
-                    final String profileName = profile.getValue(ctx.getParsedCommandLine());
                     if(profile == null) {
                         return Collections.emptyList();
                     }
+                    final String profileName = profile.getValue(ctx.getParsedCommandLine());
                     address.toNode(Util.PROFILE, profileName);
                 }
                 for(OperationRequestAddress.Node node : getRequiredAddress()) {

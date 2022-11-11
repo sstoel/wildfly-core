@@ -32,7 +32,9 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RES
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import org.jboss.as.controller.CapabilityRegistry;
 import org.jboss.as.controller.ControlledProcessState;
@@ -45,6 +47,8 @@ import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.ProcessType;
 import org.jboss.as.controller.ResourceBuilder;
 import org.jboss.as.controller.ResourceDefinition;
+import org.jboss.as.controller.RunningMode;
+import org.jboss.as.controller.RunningModeControl;
 import org.jboss.as.controller.TestModelControllerService;
 import org.jboss.as.controller.descriptions.NonResolvingResourceDescriptionResolver;
 import org.jboss.as.controller.operations.common.Util;
@@ -56,7 +60,6 @@ import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
-import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceContainer;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceTarget;
@@ -75,7 +78,7 @@ public abstract class AbstractControllerTestBase {
 
     protected ServiceContainer container;
     protected ModelController controller;
-    protected final ProcessType processType;
+    protected volatile ProcessType processType;
     protected CapabilityRegistry capabilityRegistry;
 
     protected AbstractControllerTestBase(ProcessType processType) {
@@ -162,8 +165,7 @@ public abstract class AbstractControllerTestBase {
         container = ServiceContainer.Factory.create("test");
         ServiceTarget target = container.subTarget();
         ModelControllerService svc = createModelControllerService(processType);
-        ServiceBuilder<ModelController> builder = target.addService(ServiceName.of("ModelController"), svc);
-        builder.install();
+        target.addService(ServiceName.of("ModelController")).setInstance(svc).install();
         svc.awaitStartup(30, TimeUnit.SECONDS);
         controller = svc.getValue();
         capabilityRegistry = svc.getCapabilityRegistry();
@@ -176,7 +178,7 @@ public abstract class AbstractControllerTestBase {
         if (container != null) {
             container.shutdown();
             try {
-                container.awaitTermination(5, TimeUnit.SECONDS);
+                container.awaitTermination(30, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             } finally {
@@ -196,8 +198,16 @@ public abstract class AbstractControllerTestBase {
     public class ModelControllerService extends TestModelControllerService {
 
         public ModelControllerService(final ProcessType processType) {
-            super(processType, new EmptyConfigurationPersister(), new ControlledProcessState(true),
-                    ResourceBuilder.Factory.create(PathElement.pathElement("root"), new NonResolvingResourceDescriptionResolver()).build()
+            this(processType, new RunningModeControl(RunningMode.NORMAL));
+        }
+
+        public ModelControllerService(final ProcessType processType, RunningModeControl runningModeControl) {
+            this(processType, runningModeControl, null);
+        }
+
+        public ModelControllerService(final ProcessType processType, RunningModeControl runningModeControl, Supplier<ExecutorService> executorService) {
+            super(processType, runningModeControl, executorService, new EmptyConfigurationPersister(), new ControlledProcessState(true),
+                    ResourceBuilder.Factory.create(PathElement.pathElement("root"), NonResolvingResourceDescriptionResolver.INSTANCE).build()
             );
         }
 

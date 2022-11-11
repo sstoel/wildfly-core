@@ -60,8 +60,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
@@ -74,8 +76,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Pattern;
 
 import org.jboss.as.controller.ControlledProcessState;
-import org.jboss.as.controller.ControlledProcessStateService;
-import org.jboss.as.controller.OperationFailedException;
+import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.notification.Notification;
 import org.jboss.as.controller.notification.NotificationHandler;
@@ -90,6 +91,7 @@ import org.jboss.as.server.deployment.scanner.ZipCompletionScanner.NonScannableZ
 import org.jboss.as.server.deployment.scanner.api.DeploymentOperations;
 import org.jboss.as.server.deployment.scanner.api.DeploymentScanner;
 import org.jboss.as.server.deployment.scanner.logging.DeploymentScannerLogger;
+import org.jboss.as.server.deployment.transformation.DeploymentTransformer;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
 
@@ -143,7 +145,7 @@ class FileSystemDeploymentService implements DeploymentScanner, NotificationHand
     private final Map<File, IncompleteDeploymentStatus> incompleteDeployments = new HashMap<File, IncompleteDeploymentStatus>();
 
     private final ScheduledExecutorService scheduledExecutor;
-    private final ControlledProcessStateService processStateService;
+    private volatile ProcessStateNotifier processStateNotifier;
     private volatile DeploymentOperations.Factory deploymentOperationsFactory;
     private volatile DeploymentOperations deploymentOperations;
 
@@ -158,11 +160,15 @@ class FileSystemDeploymentService implements DeploymentScanner, NotificationHand
     private final ModelNode resourceAddress;
     private final String relativeTo;
     private final String relativePath;
-    private final PropertyChangeListener propertyChangeListener;
+    private volatile PropertyChangeListener propertyChangeListener;
     private Future<?> undeployScanTask;
 
     private volatile boolean deploymentDirAccessible = true;
     private volatile boolean lastScanSuccessful = true;
+
+    @SuppressWarnings("deprecation")
+    private final DeploymentTransformer deploymentTransformer;
+
 
     @Override
     public void handleNotification(Notification notification) {
@@ -265,47 +271,19 @@ class FileSystemDeploymentService implements DeploymentScanner, NotificationHand
 
     FileSystemDeploymentService(final PathAddress resourceAddress, final String relativeTo, final File deploymentDir, final File relativeToDir,
                                 final DeploymentOperations.Factory deploymentOperationsFactory,
-                                final ScheduledExecutorService scheduledExecutor,
-                                final ControlledProcessStateService processStateService)
-            throws OperationFailedException {
+                                final ScheduledExecutorService scheduledExecutor) {
 
         assert resourceAddress != null;
         assert resourceAddress.size() > 0;
         assert scheduledExecutor != null;
         assert deploymentDir != null;
 
-        this.resourceAddress = resourceAddress.toModelNode();
+        this.resourceAddress = resourceAddress.toModelNode().asObject();
         this.resourceAddress.protect();
         this.relativeTo = relativeTo;
         this.deploymentDir = deploymentDir;
         this.deploymentOperationsFactory = deploymentOperationsFactory;
         this.scheduledExecutor = scheduledExecutor;
-        this.processStateService = processStateService;
-        if(processStateService != null) {
-            this.propertyChangeListener = new PropertyChangeListener() {
-                @Override
-                public void propertyChange(PropertyChangeEvent evt) {
-                    if (ControlledProcessState.State.RUNNING == evt.getNewValue()) {
-                        synchronized (this) {
-                            if (scanEnabled) {
-                                undeployScanTask = scheduledExecutor.submit(new UndeployScanRunnable());
-                            }
-                        }
-                    } else if (ControlledProcessState.State.STOPPING == evt.getNewValue()) {
-                        //let's prevent the starting of a new scan
-                        scanEnabled = false;
-                        if(undeployScanTask != null) {
-                            undeployScanTask.cancel(true);
-                            undeployScanTask = null;
-                        }
-                        processStateService.removePropertyChangeListener(propertyChangeListener);
-                    }
-                }
-            };
-            this.processStateService.addPropertyChangeListener(propertyChangeListener);
-        } else {
-            this.propertyChangeListener = null;
-        }
         if (relativeToDir != null) {
             String fullDir = deploymentDir.getAbsolutePath();
             String relDir = relativeToDir.getAbsolutePath();
@@ -317,6 +295,7 @@ class FileSystemDeploymentService implements DeploymentScanner, NotificationHand
         } else {
             relativePath = null;
         }
+        this.deploymentTransformer = loadDeploymentTransformer();
     }
 
     @Override
@@ -421,6 +400,41 @@ class FileSystemDeploymentService implements DeploymentScanner, NotificationHand
     void setDeploymentOperationsFactory(final DeploymentOperations.Factory factory) {
         assert factory != null : "factory is null";
         this.deploymentOperationsFactory = factory;
+    }
+
+    /** Set the ProcessStateNotifier to allow this object to trigger cleanup tasks when
+     * the process reaches {@code RUNNING} state. We use a setter instead
+     * of constructor injection to allow DeploymentScannerService to set it on the boot-time scanner */
+    void setProcessStateNotifier(ProcessStateNotifier notifier) {
+        assert this.processStateNotifier == null;
+        this.processStateNotifier = notifier;
+        if (notifier != null) {
+            this.propertyChangeListener = new PropertyChangeListener() {
+                @Override
+                public void propertyChange(PropertyChangeEvent evt) {
+                    if (ControlledProcessState.State.RUNNING == evt.getNewValue()) {
+                        synchronized (FileSystemDeploymentService.this) {
+                            if (scanEnabled) {
+                                undeployScanTask = scheduledExecutor.submit(new UndeployScanRunnable());
+                            }
+                        }
+                    } else if (ControlledProcessState.State.STOPPING == evt.getNewValue()) {
+                        //let's prevent the starting of a new scan
+                        synchronized (FileSystemDeploymentService.this) {
+                            scanEnabled = false;
+                            if (undeployScanTask != null) {
+                                undeployScanTask.cancel(true);
+                                undeployScanTask = null;
+                            }
+                        }
+                        processStateNotifier.removePropertyChangeListener(this);
+                    }
+                }
+            };
+            this.processStateNotifier.addPropertyChangeListener(propertyChangeListener);
+        } else {
+            this.propertyChangeListener = null;
+        }
     }
 
     /**
@@ -662,7 +676,7 @@ class FileSystemDeploymentService implements DeploymentScanner, NotificationHand
     private void executeScannerTasks(List<ScannerTask> scannerTasks, DeploymentOperations deploymentOperations,
                                      boolean oneOffScan) throws InterruptedException {
         // Process the tasks
-        if (scannerTasks.size() > 0) {
+        if (!scannerTasks.isEmpty()) {
             List<ModelNode> updates = new ArrayList<ModelNode>(scannerTasks.size());
 
             for (ScannerTask task : scannerTasks) {
@@ -770,7 +784,7 @@ class FileSystemDeploymentService implements DeploymentScanner, NotificationHand
             if(rollbackOnRuntimeFailure) {
                 forcedUndeployScan();
             }
-            processStateService.removePropertyChangeListener(propertyChangeListener);
+            processStateNotifier.removePropertyChangeListener(propertyChangeListener);
         }
     }
 
@@ -1062,6 +1076,14 @@ class FileSystemDeploymentService implements DeploymentScanner, NotificationHand
 
     private long addContentAddingTask(final String path, final boolean archive, final String deploymentName,
                                       final File deploymentFile, final long timestamp, final ScanContext scanContext) {
+        if (deploymentTransformer != null) {
+            try {
+                deploymentTransformer.transform(deploymentFile.toPath(), deploymentFile.toPath());
+                deploymentFile.setLastModified(timestamp);
+            } catch (IOException ioe) {
+                throw new RuntimeException(ioe);
+            }
+        }
         if (scanContext.registeredDeployments.containsKey(deploymentName)) {
             scanContext.scannerTasks.add(new ReplaceTask(path, archive, deploymentName, deploymentFile, timestamp));
         } else {
@@ -1340,6 +1362,11 @@ class FileSystemDeploymentService implements DeploymentScanner, NotificationHand
         } finally {
             safeClose(fos);
         }
+    }
+
+    private static DeploymentTransformer loadDeploymentTransformer() {
+        Iterator<DeploymentTransformer> iter = ServiceLoader.load(DeploymentTransformer.class, DeploymentAddHandler.class.getClassLoader()).iterator();
+        return iter.hasNext() ? iter.next() : null;
     }
 
     private static List<File> listDirectoryChildren(File directory) {

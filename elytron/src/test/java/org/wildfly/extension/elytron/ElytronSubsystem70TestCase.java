@@ -20,34 +20,14 @@ package org.wildfly.extension.elytron;
 
 import java.io.IOException;
 
-import org.jboss.as.subsystem.test.AbstractSubsystemBaseTest;
-
 /**
  *
  * @author <a href="mailto:darran.lofthouse@jboss.com">Darran Lofthouse</a>
  */
-public class ElytronSubsystem70TestCase extends AbstractSubsystemBaseTest {
+public class ElytronSubsystem70TestCase extends AbstractElytronSubsystemBaseTest {
 
     public ElytronSubsystem70TestCase() {
         super(ElytronExtension.SUBSYSTEM_NAME, new ElytronExtension());
-    }
-
-    @Override
-    protected String getSubsystemXsdPath() throws Exception {
-        return "schema/wildfly-elytron_7_0.xsd";
-    }
-
-    @Override
-    protected String[] getSubsystemTemplatePaths() throws IOException {
-        return new String[]{
-                "/subsystem-templates/elytron.xml",
-                "/subsystem-templates/elytron-empty.xml"
-        };
-    }
-
-    @Override
-    public void testSchemaOfSubsystemTemplates() throws Exception {
-        //
     }
 
     @Override

@@ -21,7 +21,7 @@ import static org.jboss.as.test.manualmode.auditlog.AbstractLogFieldsOfLogTestCa
 
 import java.io.IOException;
 import java.util.concurrent.BlockingQueue;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.client.helpers.Operations;
@@ -43,14 +43,14 @@ import org.junit.runner.RunWith;
 import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 import org.wildfly.core.testrunner.ServerControl;
 import org.wildfly.core.testrunner.ServerController;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 import org.xnio.IoUtils;
 
 /**
  *
  * @author Emmanuel Hugonnet (c) 2017 Red Hat, inc.
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
 public class AuditLogBootingSyslogTest {
     private final ModelNode userAuthAddress = Operations.createAddress("subsystem", "elytron", "configurable-sasl-server-factory", "configured");
@@ -231,14 +231,18 @@ public class AuditLogBootingSyslogTest {
     }
 
     void resetElytron(final CompositeOperationBuilder compositeOp) {
-        ModelNode op = Operations.createOperation("map-remove", userAuthAddress);
+        ModelNode op = Operations.createOperation("map-clear", userAuthAddress);
         op.get("name").set("properties");
-        op.get("key").set(DEFAULT_USER_KEY);
         compositeOp.addStep(op.clone());
         op = Operations.createOperation("map-put", userAuthAddress);
         op.get("name").set("properties");
         op.get("key").set(DEFAULT_USER_KEY);
         op.get("value").set("$local");
+        compositeOp.addStep(op.clone());
+        op = Operations.createOperation("map-put", userAuthAddress);
+        op.get("name").set("properties");
+        op.get("key").set("wildfly.sasl.local-user.challenge-path");
+        op.get("value").set("${jboss.server.temp.dir}/auth");
         compositeOp.addStep(op.clone());
         compositeOp.addStep(Operations.createRemoveOperation(PathAddress.parseCLIStyleAddress("/subsystem=elytron/credential-store=test").toModelNode()));
         compositeOp.addStep(Operations.createWriteAttributeOperation(userIdentRealmAddress, "identity", "$local"));

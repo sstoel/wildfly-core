@@ -21,8 +21,6 @@
  */
 package org.jboss.as.test.integration.management.cli;
 
-import com.google.common.base.Charsets;
-import com.google.common.io.Files;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -34,14 +32,17 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpression;
 import javax.xml.xpath.XPathFactory;
-import org.apache.commons.io.FileUtils;
 
+import com.google.common.base.Charsets;
+import com.google.common.io.Files;
+import org.codehaus.plexus.util.FileUtils;
 import org.jboss.as.cli.Util;
 import org.jboss.as.test.integration.management.base.AbstractCliTestBase;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
@@ -56,7 +57,7 @@ import org.junit.runner.RunWith;
 import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.NodeList;
-import org.wildfly.core.testrunner.WildflyTestRunner;
+import org.wildfly.core.testrunner.WildFlyRunner;
 import org.xnio.IoUtils;
 
 /**
@@ -64,7 +65,7 @@ import org.xnio.IoUtils;
  *
  * @author Ivo Studensky
  */
-@RunWith(WildflyTestRunner.class)
+@RunWith(WildFlyRunner.class)
 public class ModuleTestCase extends AbstractCliTestBase {
 
     private static final String MODULE_NAME = "org.jboss.test.cli.climoduletest";

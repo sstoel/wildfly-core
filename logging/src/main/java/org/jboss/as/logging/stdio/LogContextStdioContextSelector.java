@@ -22,6 +22,9 @@
 
 package org.jboss.as.logging.stdio;
 
+import java.security.AccessController;
+import java.security.PrivilegedAction;
+
 import org.jboss.as.logging.CommonAttributes;
 import org.jboss.logmanager.Level;
 import org.jboss.logmanager.LogContext;
@@ -50,16 +53,42 @@ public class LogContextStdioContextSelector implements StdioContextSelector {
         final Logger root = logContext.getLogger(CommonAttributes.ROOT_LOGGER_NAME);
         StdioContext stdioContext = root.getAttachment(STDIO_CONTEXT_ATTACHMENT_KEY);
         if (stdioContext == null) {
-            stdioContext = StdioContext.create(
-                    new NullInputStream(),
-                    new LoggingOutputStream(logContext.getLogger("stdout"), Level.INFO),
-                    new LoggingOutputStream(logContext.getLogger("stderr"), Level.ERROR)
-            );
-            final StdioContext appearing = root.attachIfAbsent(STDIO_CONTEXT_ATTACHMENT_KEY, stdioContext);
+            // Create the StdioContext
+            stdioContext = createContext(logContext);
+            final StdioContext appearing = attachIfAbsent(root, stdioContext);
             if (appearing != null) {
                 stdioContext = appearing;
             }
         }
         return stdioContext;
+    }
+
+    private static StdioContext createContext(final LogContext logContext) {
+        if (System.getSecurityManager() == null) {
+            return StdioContext.create(
+                    new NullInputStream(),
+                    new LoggingOutputStream(logContext.getLogger("stdout"), Level.INFO),
+                    new LoggingOutputStream(logContext.getLogger("stderr"), Level.ERROR)
+            );
+        }
+
+        // Create the StdioContext using a privileged action. StdioContext.create() requires the "createStdioContext"
+        // RuntimePermission. If a deployment or a dependency of the deployment attempts to write to System.out or
+        // System.err with the security manager enabled then this could throw a security exception without the
+        // privileged action. We should not block writing to those streams as they could be "logging" an important
+        // error.
+        return AccessController.doPrivileged((PrivilegedAction<StdioContext>) () -> StdioContext.create(
+                new NullInputStream(),
+                new LoggingOutputStream(logContext.getLogger("stdout"), Level.INFO),
+                new LoggingOutputStream(logContext.getLogger("stderr"), Level.ERROR)
+        ));
+    }
+
+    private static StdioContext attachIfAbsent(final Logger logger, final StdioContext context) {
+        if (System.getSecurityManager() == null) {
+            return logger.attachIfAbsent(STDIO_CONTEXT_ATTACHMENT_KEY, context);
+        }
+        return AccessController.doPrivileged((PrivilegedAction<StdioContext>) () ->
+                logger.attachIfAbsent(STDIO_CONTEXT_ATTACHMENT_KEY, context));
     }
 }

@@ -37,6 +37,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
+import org.jboss.as.patching.logging.PatchLogger;
+
 /**
  * @author Brian Stansberry (c) 2012 Red Hat Inc.
  */
@@ -116,7 +118,10 @@ public class ZipUtils {
             final ZipEntry entry = entries.nextElement();
             final String name = entry.getName();
             final File current = new File(patchDir, name);
-            if(entry.isDirectory()) {
+            if (! current.getCanonicalFile().toPath().startsWith(patchDir.getCanonicalFile().toPath())) {
+                throw PatchLogger.ROOT_LOGGER.entryOutsideOfPatchDirectory(current.getCanonicalPath());
+            }
+            if (entry.isDirectory()) {
                 continue;
             } else {
                 if(! current.getParentFile().exists()) {

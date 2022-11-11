@@ -16,9 +16,6 @@ limitations under the License.
 
 package org.wildfly.core.embedded;
 
-import java.security.AccessController;
-import java.security.PrivilegedAction;
-
 import org.jboss.as.controller.client.ModelControllerClient;
 
 /**
@@ -48,29 +45,24 @@ public interface EmbeddedManagedProcess {
      */
     void stop();
 
-    static ClassLoader getTccl() {
-        if (System.getSecurityManager() == null) {
-            return Thread.currentThread().getContextClassLoader();
-        }
-        return AccessController.doPrivileged(new PrivilegedAction<ClassLoader>() {
-            @Override
-            public ClassLoader run() {
-                return Thread.currentThread().getContextClassLoader();
-            }
-        });
-    }
+    /**
+     * Returns the current process state of this managed process.
+     * <p>
+     * The returned value is a String representation of one of the possible {@code ControlledProcessState.State} values.
+     *
+     * @return The current process state, or {@code null} if currently the process state is unknown.
+     * @throws UnsupportedOperationException if the requested operation is not supported by the implementation of this embedded server.
+     */
+    String getProcessState();
 
-    static void setTccl(final ClassLoader cl) {
-        if (System.getSecurityManager() == null) {
-            Thread.currentThread().setContextClassLoader(cl);
-        } else {
-            AccessController.doPrivileged(new PrivilegedAction<Object>() {
-                @Override
-                public Object run() {
-                    Thread.currentThread().setContextClassLoader(cl);
-                    return null;
-                }
-            });
-        }
-    }
+    /**
+     * Check if the implementation of this interface is able to use getProcessState() to retrieve the current process state.
+     * <p>
+     * The implementation class could be an implementation comming from an older server version that does not support to check
+     * the process state directly.
+     *
+     * @return Whether the implementation supports to query for the process state.
+     */
+    boolean canQueryProcessState();
+
 }

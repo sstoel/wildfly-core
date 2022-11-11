@@ -206,7 +206,7 @@ public abstract class MapAttributeDefinition extends AttributeDefinition {
                 if (newValue.getType() == ModelType.LIST) {
                     int listSize = newValue.asList().size();
                     List<Property> propertyList = newValue.asPropertyList();
-                    if (propertyList.size() == 0) {
+                    if (propertyList.isEmpty()) {
                         //The list cannot be converted to a map
                         if (listSize == 0) {
                             return new ModelNode();
@@ -346,12 +346,12 @@ public abstract class MapAttributeDefinition extends AttributeDefinition {
 
         /**
          * Gets whether undefined list elements are valid. In the unlikely case {@link #setAllowNullElement(boolean)}
-         * has been called, that value is returned; otherwise the value of {@link #isAllowNull()} is used.
+         * has been called, that value is returned; otherwise the value of {@link #isNillable()} is used.
          *
          * @return {@code true} if undefined list elements are valid
          */
         public boolean getAllowNullElement() {
-            return allowNullElement == null ? isAllowNull() : allowNullElement;
+            return allowNullElement == null ? isNillable() : allowNullElement;
         }
 
         /**
@@ -372,7 +372,7 @@ public abstract class MapAttributeDefinition extends AttributeDefinition {
                 ParameterValidator mapElementValidator = getElementValidator();
                 // Subclasses must call setElementValidator before calling this
                 assert mapElementValidator != null;
-                result = new MapValidator(getElementValidator(), isAllowNull(), getMinSize(), getMaxSize());
+                result = new MapValidator(getElementValidator(), isNillable(), getMinSize(), getMaxSize());
             }
             return result;
         }

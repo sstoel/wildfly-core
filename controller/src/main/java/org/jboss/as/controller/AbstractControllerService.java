@@ -22,13 +22,32 @@
 
 package org.jboss.as.controller;
 
+import static org.jboss.as.controller.client.impl.AdditionalBootCliScriptInvoker.CLI_SCRIPT_PROPERTY;
+import static org.jboss.as.controller.client.impl.AdditionalBootCliScriptInvoker.MARKER_DIRECTORY_PROPERTY;
+import static org.jboss.as.controller.client.impl.AdditionalBootCliScriptInvoker.SKIP_RELOAD_PROPERTY;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FAILED;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FAILURE_DESCRIPTION;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OUTCOME;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RELOAD;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESTART;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SHUTDOWN;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUCCESS;
 import static org.jboss.as.controller.logging.ControllerLogger.ROOT_LOGGER;
 
+import java.io.BufferedWriter;
+import java.io.Closeable;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.ServiceLoader;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import org.jboss.as.controller.OperationContext.Stage;
 import org.jboss.as.controller.access.management.DelegatingConfigurableAuthorizer;
@@ -40,39 +59,47 @@ import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.capability.registry.CapabilityScope;
 import org.jboss.as.controller.capability.registry.RegistrationPoint;
 import org.jboss.as.controller.capability.registry.RuntimeCapabilityRegistration;
+import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.client.Operation;
 import org.jboss.as.controller.client.OperationAttachments;
 import org.jboss.as.controller.client.OperationMessageHandler;
 import org.jboss.as.controller.client.OperationResponse;
+import org.jboss.as.controller.client.impl.AdditionalBootCliScriptInvoker;
 import org.jboss.as.controller.descriptions.DescriptionProvider;
+import org.jboss.as.controller.extension.ExpressionResolverExtension;
 import org.jboss.as.controller.extension.MutableRootResourceRegistrationProvider;
+import org.jboss.as.controller.extension.ResolverExtensionRegistry;
 import org.jboss.as.controller.logging.ControllerLogger;
 import org.jboss.as.controller.notification.NotificationHandlerRegistry;
 import org.jboss.as.controller.notification.NotificationSupport;
 import org.jboss.as.controller.operations.common.Util;
+import org.jboss.as.controller.persistence.ConfigurationExtension;
 import org.jboss.as.controller.persistence.ConfigurationPersistenceException;
 import org.jboss.as.controller.persistence.ConfigurationPersister;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.controller.services.path.PathManager;
 import org.jboss.dmr.ModelNode;
+import org.jboss.modules.Module;
+import org.jboss.modules.ModuleLoadException;
+import org.jboss.modules.filter.PathFilter;
 import org.jboss.msc.service.Service;
+import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceContainer;
 import org.jboss.msc.service.ServiceController;
+import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceTarget;
 import org.jboss.msc.service.StabilityMonitor;
 import org.jboss.msc.service.StartContext;
 import org.jboss.msc.service.StartException;
 import org.jboss.msc.service.StopContext;
-import org.jboss.msc.service.ValueService;
-import org.jboss.msc.value.ImmediateValue;
-import org.jboss.msc.value.InjectedValue;
 import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**
  * A base class for controller services.
  *
  * @author <a href="mailto:david.lloyd@redhat.com">David M. Lloyd</a>
+ * @author <a href="mailto:ropalka@redhat.com">Richard Opalka</a>
  */
 public abstract class AbstractControllerService implements Service<ModelController> {
 
@@ -147,6 +174,25 @@ public abstract class AbstractControllerService implements Service<ModelControll
             RuntimeCapability.Builder.of("org.wildfly.management.executor", ExecutorService.class)
                     .build();
 
+    /**
+     * Capability users of the controller use to read process state and get notification of state changes.
+     * This capability isn't necessarily directly related to this class but we declare it
+     * here as it's as good a place as any at this time.
+     */
+    protected static final RuntimeCapability<Void> PROCESS_STATE_NOTIFIER_CAPABILITY =
+            RuntimeCapability.Builder.of("org.wildfly.management.process-state-notifier", ProcessStateNotifier.class)
+                    .build();
+
+    /**
+     * Name of a capability that extensions that provide {@link ExpressionResolverExtension} implementations
+     * can use to register their extensions with the core {@link ExpressionResolver}.
+     *
+     * @deprecated Will be removed in an upcoming major version.
+     */
+    @Deprecated
+    protected static final String EXPRESSION_RESOLVER_EXTENSION_REGISTRY_CAPABILITY_NAME =
+            "org.wildfly.management.expression-resolver-extension-registry";
+
     private static final OperationDefinition INIT_CONTROLLER_OP = new SimpleOperationDefinitionBuilder("boottime-controller-initializer-step", null)
         .setPrivateEntry()
         .build();
@@ -158,8 +204,8 @@ public abstract class AbstractControllerService implements Service<ModelControll
     private final ResourceDefinition rootResourceDefinition;
     private final ControlledProcessState processState;
     private final OperationStepHandler prepareStep;
-    private final InjectedValue<ExecutorService> injectedExecutorService = new InjectedValue<ExecutorService>();
-    private final InjectedValue<ControllerInstabilityListener> injectedInstabilityListener = new InjectedValue<ControllerInstabilityListener>();
+    private final Supplier<ExecutorService> executorService;
+    private final Supplier<ControllerInstabilityListener> instabilityListener;
     private final ExpressionResolver expressionResolver;
     private volatile ModelControllerImpl controller;
     private volatile StabilityMonitor stabilityMonitor;
@@ -167,29 +213,8 @@ public abstract class AbstractControllerService implements Service<ModelControll
     private final ManagedAuditLogger auditLogger;
     private final BootErrorCollector bootErrorCollector;
     private final CapabilityRegistry capabilityRegistry;
-
-    /**
-     * Construct a new instance.
-     *
-     * @param processType             the type of process being controlled
-     * @param runningModeControl      the controller of the process' running mode
-     * @param configurationPersister  the configuration persister
-     * @param processState            the controlled process state
-     * @param rootDescriptionProvider the root description provider
-     * @param prepareStep             the prepare step to prepend to operation execution
-     * @param expressionResolver      the expression resolver
-     * @param auditLogger             the audit logger
-     */
-    @Deprecated
-    protected AbstractControllerService(final ProcessType processType, final RunningModeControl runningModeControl,
-                                        final ConfigurationPersister configurationPersister,
-                                        final ControlledProcessState processState, final DescriptionProvider rootDescriptionProvider,
-                                        final OperationStepHandler prepareStep, final ExpressionResolver expressionResolver,
-                                        final ManagedAuditLogger auditLogger, DelegatingConfigurableAuthorizer authorizer, ManagementSecurityIdentitySupplier securityIdentitySupplier) {
-        this(processType, runningModeControl, configurationPersister, processState, null, rootDescriptionProvider,
-                prepareStep, expressionResolver, auditLogger, authorizer, securityIdentitySupplier, new CapabilityRegistry(processType.isServer()));
-
-    }
+    private final ConfigurationExtension configExtension;
+    private final RuntimeCapability<ResolverExtensionRegistry> extensionRegistryCapability;
 
     /**
      * Construct a new instance.
@@ -205,14 +230,15 @@ public abstract class AbstractControllerService implements Service<ModelControll
      * @param authorizer              handles authorization
      * @param capabilityRegistry      the capability registry
      */
+    @Deprecated
     protected AbstractControllerService(final ProcessType processType, final RunningModeControl runningModeControl,
                                         final ConfigurationPersister configurationPersister,
                                         final ControlledProcessState processState, final ResourceDefinition rootResourceDefinition,
                                         final OperationStepHandler prepareStep, final ExpressionResolver expressionResolver,
                                         final ManagedAuditLogger auditLogger, final DelegatingConfigurableAuthorizer authorizer,
                                         final ManagementSecurityIdentitySupplier securityIdentitySupplier, final CapabilityRegistry capabilityRegistry) {
-        this(processType, runningModeControl, configurationPersister, processState, rootResourceDefinition, null,
-                prepareStep, expressionResolver, auditLogger, authorizer, securityIdentitySupplier, capabilityRegistry);
+        this(null, null, processType, runningModeControl, configurationPersister, processState, rootResourceDefinition, null,
+                prepareStep, expressionResolver, auditLogger, authorizer, securityIdentitySupplier, capabilityRegistry, null);
     }
 
     /**
@@ -234,9 +260,9 @@ public abstract class AbstractControllerService implements Service<ModelControll
                                         final ConfigurationPersister configurationPersister,
                                         final ControlledProcessState processState, final DescriptionProvider rootDescriptionProvider,
                                         final OperationStepHandler prepareStep, final ExpressionResolver expressionResolver) {
-        this(processType, runningModeControl, configurationPersister, processState, null, rootDescriptionProvider,
+        this(null, null, processType, runningModeControl, configurationPersister, processState, null, rootDescriptionProvider,
                 prepareStep, expressionResolver, AuditLogger.NO_OP_LOGGER, new DelegatingConfigurableAuthorizer(), new ManagementSecurityIdentitySupplier(),
-                new CapabilityRegistry(processType.isServer()));
+                new CapabilityRegistry(processType.isServer()), null);
 
     }
 
@@ -258,9 +284,9 @@ public abstract class AbstractControllerService implements Service<ModelControll
                                         final ConfigurationPersister configurationPersister,
                                         final ControlledProcessState processState, final ResourceDefinition rootResourceDefinition,
                                         final OperationStepHandler prepareStep, final ExpressionResolver expressionResolver) {
-        this(processType, runningModeControl, configurationPersister, processState, rootResourceDefinition, null,
+        this(null, null, processType, runningModeControl, configurationPersister, processState, rootResourceDefinition, null,
                 prepareStep, expressionResolver, AuditLogger.NO_OP_LOGGER, new DelegatingConfigurableAuthorizer(), new ManagementSecurityIdentitySupplier(),
-                new CapabilityRegistry(processType.isServer()));
+                new CapabilityRegistry(processType.isServer()), null);
     }
 
     /**
@@ -281,18 +307,74 @@ public abstract class AbstractControllerService implements Service<ModelControll
                                         final ResourceDefinition rootResourceDefinition, final OperationStepHandler prepareStep,
                                         final ExpressionResolver expressionResolver, final ManagedAuditLogger auditLogger,
                                         final DelegatingConfigurableAuthorizer authorizer) {
-        this(processType, runningModeControl, configurationPersister, processState, rootResourceDefinition, null,
+        this(null, null, processType, runningModeControl, configurationPersister, processState, rootResourceDefinition, null,
                 prepareStep, expressionResolver, auditLogger, authorizer, new ManagementSecurityIdentitySupplier(),
-                new CapabilityRegistry(processType.isServer()));
+                new CapabilityRegistry(processType.isServer()), null);
 
     }
+    /**
+     * Construct a new instance.
+     *
+     * @param processType             the type of process being controlled
+     * @param runningModeControl      the controller of the process' running mode
+     * @param configurationPersister  the configuration persister
+     * @param processState            the controlled process state
+     * @param rootResourceDefinition  the root resource definition
+     * @param prepareStep             the prepare step to prepend to operation execution
+     * @param expressionResolver      the expression resolver
+     * @param auditLogger             the audit logger
+     * @param authorizer              handles authorization
+     * @param capabilityRegistry      the capability registry
+     */
+    @Deprecated
+    protected AbstractControllerService(final Supplier<ExecutorService> executorService,
+                                        final Supplier<ControllerInstabilityListener> instabilityListener,
+                                        final ProcessType processType, final RunningModeControl runningModeControl,
+                                        final ConfigurationPersister configurationPersister,
+                                        final ControlledProcessState processState, final ResourceDefinition rootResourceDefinition,
+                                        final OperationStepHandler prepareStep, final ExpressionResolver expressionResolver,
+                                        final ManagedAuditLogger auditLogger, final DelegatingConfigurableAuthorizer authorizer,
+                                        final ManagementSecurityIdentitySupplier securityIdentitySupplier,
+                                        final CapabilityRegistry capabilityRegistry) {
+        this(executorService, instabilityListener, processType, runningModeControl, configurationPersister, processState, rootResourceDefinition, null,
+                prepareStep, expressionResolver, auditLogger, authorizer, securityIdentitySupplier, capabilityRegistry, null);
+    }
 
-    private AbstractControllerService(final ProcessType processType, final RunningModeControl runningModeControl,
+    /**
+     * Construct a new instance.
+     *
+     * @param processType             the type of process being controlled
+     * @param runningModeControl      the controller of the process' running mode
+     * @param configurationPersister  the configuration persister
+     * @param processState            the controlled process state
+     * @param rootResourceDefinition  the root resource definition
+     * @param prepareStep             the prepare step to prepend to operation execution
+     * @param expressionResolver      the expression resolver
+     * @param auditLogger             the audit logger
+     * @param authorizer              handles authorization
+     * @param capabilityRegistry      the capability registry
+     */
+    protected AbstractControllerService(final Supplier<ExecutorService> executorService,
+                                        final Supplier<ControllerInstabilityListener> instabilityListener,
+                                        final ProcessType processType, final RunningModeControl runningModeControl,
+                                        final ConfigurationPersister configurationPersister,
+                                        final ControlledProcessState processState, final ResourceDefinition rootResourceDefinition,
+                                        final OperationStepHandler prepareStep, final ExpressionResolver expressionResolver,
+                                        final ManagedAuditLogger auditLogger, final DelegatingConfigurableAuthorizer authorizer,
+                                        final ManagementSecurityIdentitySupplier securityIdentitySupplier,
+                                        final CapabilityRegistry capabilityRegistry, final ConfigurationExtension configExtension) {
+        this(executorService, instabilityListener, processType, runningModeControl, configurationPersister, processState, rootResourceDefinition, null,
+                prepareStep, expressionResolver, auditLogger, authorizer, securityIdentitySupplier, capabilityRegistry, configExtension);
+    }
+
+    private AbstractControllerService(final Supplier<ExecutorService> executorService,
+                                      final Supplier<ControllerInstabilityListener> instabilityListener,
+                                      final ProcessType processType, final RunningModeControl runningModeControl,
                                       final ConfigurationPersister configurationPersister, final ControlledProcessState processState,
                                       final ResourceDefinition rootResourceDefinition, final DescriptionProvider rootDescriptionProvider,
                                       final OperationStepHandler prepareStep, final ExpressionResolver expressionResolver, final ManagedAuditLogger auditLogger,
                                       final DelegatingConfigurableAuthorizer authorizer, final ManagementSecurityIdentitySupplier securityIdentitySupplier,
-                                      final CapabilityRegistry capabilityRegistry) {
+                                      final CapabilityRegistry capabilityRegistry, final ConfigurationExtension configExtension) {
         assert rootDescriptionProvider == null: "description provider cannot be used anymore";
         assert rootResourceDefinition != null: "Null root resource definition";
         assert expressionResolver != null : "Null expressionResolver";
@@ -300,6 +382,8 @@ public abstract class AbstractControllerService implements Service<ModelControll
         assert authorizer != null : "Null authorizer";
         assert securityIdentitySupplier != null : "Null securityIdentitySupplier";
         assert capabilityRegistry!=null : "Null capabilityRegistry";
+        this.executorService = executorService;
+        this.instabilityListener = instabilityListener;
         this.processType = processType;
         this.runningModeControl = runningModeControl;
         this.configurationPersister = configurationPersister;
@@ -307,11 +391,19 @@ public abstract class AbstractControllerService implements Service<ModelControll
         this.processState = processState;
         this.prepareStep = prepareStep;
         this.expressionResolver = expressionResolver;
+        if (expressionResolver instanceof ResolverExtensionRegistry) {
+            this.extensionRegistryCapability =
+                    RuntimeCapability.Builder.of(EXPRESSION_RESOLVER_EXTENSION_REGISTRY_CAPABILITY_NAME,
+                            (ResolverExtensionRegistry) expressionResolver).build();
+        } else {
+            this.extensionRegistryCapability = null;
+        }
         this.auditLogger = auditLogger;
         this.authorizer = authorizer;
         this.securityIdentitySupplier = securityIdentitySupplier;
         this.bootErrorCollector = new BootErrorCollector();
         this.capabilityRegistry = capabilityRegistry.createShadowCopy(); //create shadow copy of proper registry so changes can only be visible by .publish()
+        this.configExtension = configExtension;
     }
 
     @Override
@@ -324,7 +416,7 @@ public abstract class AbstractControllerService implements Service<ModelControll
         final ServiceController<?> serviceController = context.getController();
         final ServiceContainer container = serviceController.getServiceContainer();
         final ServiceTarget target = context.getChildTarget();
-        final ExecutorService executorService = injectedExecutorService.getOptionalValue();
+        final ExecutorService executorService = this.executorService != null ? this.executorService.get() : null;
 
         final NotificationSupport notificationSupport = NotificationSupport.Factory.create(executorService);
         WritableAuthorizerConfiguration authorizerConfig = authorizer.getWritableAuthorizerConfiguration();
@@ -336,7 +428,7 @@ public abstract class AbstractControllerService implements Service<ModelControll
                 configurationPersister, processType, runningModeControl, prepareStep,
                 processState, executorService, expressionResolver, authorizer, securityIdentitySupplier, auditLogger, notificationSupport,
                 bootErrorCollector, createExtraValidationStepHandler(), capabilityRegistry, getPartialModelIndicator(),
-                injectedInstabilityListener.getOptionalValue());
+                instabilityListener != null ? instabilityListener.get() : null);
 
         // Initialize the model
         initModel(controller.getManagementModel(), controller.getModelControllerResource());
@@ -352,12 +444,19 @@ public abstract class AbstractControllerService implements Service<ModelControll
             rootResourceRegistration.registerCapability(CLIENT_FACTORY_CAPABILITY);
             rootResourceRegistration.registerCapability(NOTIFICATION_REGISTRY_CAPABILITY);
             ModelControllerClientFactory clientFactory = new ModelControllerClientFactoryImpl(controller, securityIdentitySupplier);
-            target.addService(CLIENT_FACTORY_CAPABILITY.getCapabilityServiceName(),
-                    new ValueService<ModelControllerClientFactory>(new ImmediateValue<ModelControllerClientFactory>(clientFactory)))
-                    .install();
-            target.addService(NOTIFICATION_REGISTRY_CAPABILITY.getCapabilityServiceName(),
-                    new ValueService<NotificationHandlerRegistry>(new ImmediateValue<NotificationHandlerRegistry>(controller.getNotificationRegistry())))
-                    .install();
+            final ServiceName clientFactorySN = CLIENT_FACTORY_CAPABILITY.getCapabilityServiceName();
+            final ServiceBuilder<?> clientFactorySB = target.addService(clientFactorySN);
+            clientFactorySB.setInstance(new SimpleService(clientFactorySB.provides(clientFactorySN), clientFactory));
+            clientFactorySB.install();
+            final ServiceName notifyRegistrySN = NOTIFICATION_REGISTRY_CAPABILITY.getCapabilityServiceName();
+            final ServiceBuilder<?> notifyRegistrySB = target.addService(notifyRegistrySN);
+            notifyRegistrySB.setInstance(new SimpleService(notifyRegistrySB.provides(notifyRegistrySN), controller.getNotificationRegistry()));
+            notifyRegistrySB.install();
+        }
+        if (extensionRegistryCapability != null) {
+            capabilityRegistry.registerCapability(
+                    new RuntimeCapabilityRegistration(extensionRegistryCapability, CapabilityScope.GLOBAL, new RegistrationPoint(PathAddress.EMPTY_ADDRESS, null)));
+            rootResourceRegistration.registerCapability(extensionRegistryCapability);
         }
         capabilityRegistry.publish();  // These are visible immediately; no waiting for finishBoot
                                        // We publish even if we didn't register anything in case parent services did
@@ -379,6 +478,7 @@ public abstract class AbstractControllerService implements Service<ModelControll
                     } finally {
                         processState.setRunning();
                     }
+                    postBoot();
                 } catch (Throwable t) {
                     container.shutdown();
                     if (t instanceof StackOverflowError) {
@@ -471,7 +571,7 @@ public abstract class AbstractControllerService implements Service<ModelControll
                            MutableRootResourceRegistrationProvider parallelBootRootResourceRegistrationProvider) throws ConfigurationPersistenceException {
         return controller.boot(bootOperations, OperationMessageHandler.logging, ModelController.OperationTransactionControl.COMMIT,
                 rollbackOnRuntimeFailure, parallelBootRootResourceRegistrationProvider, skipModelValidation,
-                getPartialModelIndicator().isModelPartial());
+                getPartialModelIndicator().isModelPartial(), configExtension);
     }
 
     /** @deprecated internal use only  only for use by legacy test controllers */
@@ -538,8 +638,21 @@ public abstract class AbstractControllerService implements Service<ModelControll
         capabilityRegistry.publish();
     }
 
+    protected void finishBoot(boolean readOnly) throws ConfigurationPersistenceException {
+        controller.finishBoot(readOnly);
+        configurationPersister.successfulBoot();
+        capabilityRegistry.publish();
+    }
+
+    protected void clearBootingReadOnlyFlag() {
+        controller.clearBootingReadOnlyFlag();
+    }
+
     protected void bootThreadDone() {
 
+    }
+
+    protected void postBoot() {
     }
 
     protected NotificationSupport getNotificationSupport() {
@@ -582,7 +695,7 @@ public abstract class AbstractControllerService implements Service<ModelControll
                 }
             }
         };
-        final ExecutorService executorService = injectedExecutorService.getOptionalValue();
+        final ExecutorService executorService = this.executorService != null ? this.executorService.get() : null;
         try {
             if (executorService != null) {
                 try {
@@ -627,12 +740,8 @@ public abstract class AbstractControllerService implements Service<ModelControll
         return controller;
     }
 
-    public InjectedValue<ExecutorService> getExecutorServiceInjector() {
-        return injectedExecutorService;
-    }
-
-    protected InjectedValue<ControllerInstabilityListener> getContainerInstabilityInjector() {
-        return injectedInstabilityListener;
+    protected ExecutorService getExecutorService() {
+        return executorService != null ? executorService.get() : null;
     }
 
     protected void setConfigurationPersister(final ConfigurationPersister persister) {
@@ -698,6 +807,21 @@ public abstract class AbstractControllerService implements Service<ModelControll
      */
     protected ModelControllerServiceInitializationParams getModelControllerServiceInitializationParams() {
         return null;
+    }
+
+    protected void executeAdditionalCliBootScript() {
+        // Do this check here so we don't need to load the additional class for the normal use-cases
+        final String additionalBootCliScriptPath =
+                WildFlySecurityManager.getPropertyPrivileged(CLI_SCRIPT_PROPERTY, null);
+
+        ROOT_LOGGER.debug("Checking -D" + CLI_SCRIPT_PROPERTY + " to see if additional CLI operations are needed");
+        if (additionalBootCliScriptPath == null) {
+            ROOT_LOGGER.debug("No additional CLI operations are needed");
+            return;
+        }
+
+        AdditionalBootCliScriptInvocation invocation = AdditionalBootCliScriptInvocation.create(additionalBootCliScriptPath,this);
+        invocation.invoke();
     }
 
     /**
@@ -798,5 +922,302 @@ public abstract class AbstractControllerService implements Service<ModelControll
         void controllerUnstable();
     }
 
-}
+    private static final class SimpleService<V> implements Service {
 
+        private final Consumer<V> injector;
+        private final V value;
+
+        private SimpleService(final Consumer<V> injector, final V value) {
+            this.injector = injector;
+            this.value = value;
+        }
+
+        @Override
+        public void start(final StartContext context) {
+            injector.accept(value);
+        }
+
+        @Override
+        public void stop(final StopContext context) {
+            injector.accept(null);
+        }
+
+        @Override
+        public Object getValue() {
+            return value;
+        }
+    }
+
+    private static class AdditionalBootCliScriptInvocation {
+        private final AbstractControllerService controllerService;
+        private final File additionalBootCliScript;
+        private final boolean keepAlive;
+        // Will be null if keepAlive=true
+        private final File doneMarker;
+        // Will be null if keepAlive=true
+        private final File restartInitiated;
+        // Will be null if keepAlive=true
+        private final File embeddedServerNeedsRestart;
+
+        public AdditionalBootCliScriptInvocation(AbstractControllerService controllerService, File additionalBootCliScript, boolean keepAlive, File markerDirectory) {
+            this.controllerService = controllerService;
+            this.additionalBootCliScript = additionalBootCliScript;
+            this.keepAlive = keepAlive;
+            this.doneMarker = markerDirectory == null ? null : new File(markerDirectory, "wf-cli-invoker-result");
+            this.restartInitiated = markerDirectory == null ? null : new File(markerDirectory, "wf-cli-shutdown-initiated");
+            this.embeddedServerNeedsRestart = markerDirectory == null ? null : new File(markerDirectory, "wf-restart-embedded-server");
+        }
+
+        static AdditionalBootCliScriptInvocation create(String additionalBootCliScriptPath, AbstractControllerService controllerService) {
+
+            boolean keepAlive = Boolean.parseBoolean(WildFlySecurityManager.getPropertyPrivileged(SKIP_RELOAD_PROPERTY, "false"));
+            final String markerDirectoryProperty =
+                    WildFlySecurityManager.getPropertyPrivileged(MARKER_DIRECTORY_PROPERTY, null);
+            if (keepAlive && markerDirectoryProperty == null) {
+                throw ROOT_LOGGER.cliScriptPropertyDefinedWithoutMarkerDirectoryWhenNotSkippingReload(SKIP_RELOAD_PROPERTY, CLI_SCRIPT_PROPERTY, MARKER_DIRECTORY_PROPERTY);
+            }
+
+            if (controllerService.processType != ProcessType.STANDALONE_SERVER &&
+                    controllerService.processType != ProcessType.EMBEDDED_SERVER) {
+                throw ROOT_LOGGER.propertyCanOnlyBeUsedWithStandaloneOrEmbeddedServer(CLI_SCRIPT_PROPERTY);
+            }
+            if (controllerService.runningModeControl.getRunningMode() != RunningMode.ADMIN_ONLY) {
+                throw ROOT_LOGGER.propertyCanOnlyBeUsedWithAdminOnlyModeServer(CLI_SCRIPT_PROPERTY);
+            }
+            File additionalBootCliScriptFile = new File(additionalBootCliScriptPath);
+            if (!additionalBootCliScriptFile.exists()) {
+                throw ROOT_LOGGER.couldNotFindDirectorySpecifiedByProperty(additionalBootCliScriptPath, CLI_SCRIPT_PROPERTY);
+            }
+
+            File markerDirectory = null;
+            if (markerDirectoryProperty != null) {
+                markerDirectory = new File(markerDirectoryProperty);
+                if (!markerDirectory.exists()) {
+                    throw ROOT_LOGGER.couldNotFindDirectorySpecifiedByProperty(markerDirectoryProperty, MARKER_DIRECTORY_PROPERTY);
+                }
+            }
+
+            return new AdditionalBootCliScriptInvocation(controllerService, additionalBootCliScriptFile, keepAlive, markerDirectory);
+        }
+
+        void invoke() {
+            ROOT_LOGGER.checkingForPresenceOfRestartMarkerFile();
+            if (restartInitiated != null && restartInitiated.exists()) {
+                ROOT_LOGGER.foundRestartMarkerFile(restartInitiated);
+                try (ModelControllerClient client = controllerService.controller.createBootClient(controllerService.executorService.get())) {
+                    // The shutdown takes us back to admin-only mode, we now need to reload into normal mode
+                    // remove the marker first
+                    deleteFile(restartInitiated);
+
+                    executeReload(client, true);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            } else {
+                ROOT_LOGGER.noRestartMarkerFile();
+                if (keepAlive) {
+                    ROOT_LOGGER.initialisedAdditionalBootCliScriptSystemKeepingAlive(additionalBootCliScript, doneMarker);
+                } else {
+                    ROOT_LOGGER.initialisedAdditionalBootCliScriptSystemNotKeepingAlive(additionalBootCliScript);
+                }
+                executeAdditionalCliScript();
+            }
+        }
+
+        private void executeAdditionalCliScript() {
+            boolean success = false;
+            Throwable originalException = null;
+            try {
+                deleteFile(doneMarker);
+                deleteFile(embeddedServerNeedsRestart);
+
+                try ( InvokerLoader loader = new InvokerLoader()) {
+
+                    assert loader.getInvoker() != null : "No invoker found";
+
+                    try ( ModelControllerClient client = controllerService.controller.createBootClient(controllerService.executorService.get())) {
+
+                        ROOT_LOGGER.executingBootCliScript(additionalBootCliScript);
+
+                        loader.getInvoker().runCliScript(client, additionalBootCliScript);
+
+                        ROOT_LOGGER.completedRunningBootCliScript();
+
+                        if (!keepAlive) {
+                            boolean restart = controllerService.processState.checkRestartRequired();
+                            if (restart) {
+                                executeRestart(client);
+                            } else {
+                                executeReload(client, false);
+                            }
+                        }
+                        success = true;
+                    }
+                }
+            } catch (IOException e) {
+                originalException = new UncheckedIOException(e);
+            } catch (Throwable ex) {
+                if (ex instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                originalException = ex;
+            } finally {
+                clearProperties();
+                Throwable suppressed = originalException; // OK to be null
+                try {
+                    if (doneMarker != null) {
+                        doneMarker.createNewFile();
+                        try (BufferedWriter writer = new BufferedWriter(new FileWriter(doneMarker))) {
+                            writer.write(success ? SUCCESS : FAILED);
+                            writer.write('\n');
+                        }
+                    }
+                } catch (IOException ex) {
+                    if (originalException != null) {
+                        originalException.addSuppressed(ex);
+                        suppressed = originalException;
+                    } else {
+                        suppressed = new UncheckedIOException(ex);
+                    }
+                }
+                if (suppressed != null) {
+                    if (suppressed instanceof RuntimeException) {
+                        throw (RuntimeException) suppressed;
+                    }
+                    if (suppressed instanceof Error) {
+                        throw (Error) suppressed;
+                    }
+                }
+            }
+        }
+
+        private void executeRestart(ModelControllerClient client) {
+            if (controllerService.processType == ProcessType.STANDALONE_SERVER) {
+                executeRestartNormalServer(client);
+            } else {
+                recordRestartEmbeddedServer();
+            }
+        }
+
+        private void executeRestartNormalServer(ModelControllerClient client) {
+            try {
+                ModelNode shutdown = Util.createOperation(SHUTDOWN, PathAddress.EMPTY_ADDRESS);
+                shutdown.get(RESTART).set(true);
+                // Since we cannot clear system properties for a shutdown, we write a marker here to
+                // skip running the cli script again
+                Files.createFile(restartInitiated.toPath());
+
+                ROOT_LOGGER.restartingServerAfterBootCliScript(restartInitiated, CLI_SCRIPT_PROPERTY, SKIP_RELOAD_PROPERTY, MARKER_DIRECTORY_PROPERTY);
+
+                ModelNode result = client.execute(shutdown);
+                if (result.get(OUTCOME).asString().equals(FAILED)) {
+                    throw new RuntimeException(result.get(FAILURE_DESCRIPTION).asString());
+                }
+            } catch (IOException e) {
+                try {
+                    deleteFile(restartInitiated);
+                } catch (IOException ex) {
+                    e = ex;
+                }
+                throw new RuntimeException(e);
+            }
+        }
+
+        private void recordRestartEmbeddedServer() {
+            try {
+                Files.createFile(embeddedServerNeedsRestart.toPath());
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        private void executeReload(ModelControllerClient client, boolean afterRestart) {
+            try {
+                ModelNode reload = Util.createOperation(RELOAD, PathAddress.EMPTY_ADDRESS);
+                clearProperties();
+                if (!afterRestart) {
+                    ROOT_LOGGER.reloadingServerToNormalModeAfterAdditionalBootCliScript(CLI_SCRIPT_PROPERTY, SKIP_RELOAD_PROPERTY, MARKER_DIRECTORY_PROPERTY);
+                } else {
+                    ROOT_LOGGER.reloadingServerToNormalModeAfterRestartAfterAdditionalBootCliScript(CLI_SCRIPT_PROPERTY, SKIP_RELOAD_PROPERTY, MARKER_DIRECTORY_PROPERTY);
+                }
+                ModelNode result = client.execute(reload);
+                if (result.get(OUTCOME).asString().equals(FAILED)) {
+                    throw new RuntimeException(result.get(FAILURE_DESCRIPTION).asString());
+                }
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            } finally {
+                clearProperties();
+            }
+        }
+
+        private void clearProperties() {
+            WildFlySecurityManager.clearPropertyPrivileged(CLI_SCRIPT_PROPERTY);
+            WildFlySecurityManager.clearPropertyPrivileged(SKIP_RELOAD_PROPERTY);
+            WildFlySecurityManager.clearPropertyPrivileged(MARKER_DIRECTORY_PROPERTY);
+        }
+
+        private void deleteFile(File file) throws IOException {
+            if (file != null) {
+                Path path = file.toPath();
+                if (Files.exists(path)) {
+                    Files.delete(path);
+                }
+            }
+        }
+
+        private static class InvokerLoader implements Closeable {
+
+            private final AdditionalBootCliScriptInvoker invoker;
+            private TemporaryModuleLayer tempModuleLayer;
+
+            private InvokerLoader() {
+                // Ability to override the invoker in unit tests where we don't have all the modules set up
+                String testInvoker = WildFlySecurityManager.getPropertyPrivileged("org.wildfly.test.override.cli.boot.invoker", null);
+                if (testInvoker != null) {
+                    try {
+                        invoker = (AdditionalBootCliScriptInvoker) Class.forName(testInvoker).newInstance();
+                        return;
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+
+                // We are running in a proper server, load the invoker normally
+                this.tempModuleLayer = TemporaryModuleLayer.create(new PathFilter() {
+                    @Override
+                    public boolean accept(String path) {
+                        return path.startsWith("org/jboss/as/cli/main") || path.startsWith("org/aesh/main");
+                    }
+                });
+
+                try {
+                    Module module = tempModuleLayer.getModuleLoader().loadModule("org.jboss.as.cli");
+                    ServiceLoader<AdditionalBootCliScriptInvoker> sl = module.loadService(AdditionalBootCliScriptInvoker.class);
+                    AdditionalBootCliScriptInvoker invoker = null;
+                    for (AdditionalBootCliScriptInvoker currentInvoker : sl) {
+                        if (invoker != null) {
+                            throw ROOT_LOGGER.moreThanOneInstanceOfAdditionalBootCliScriptInvokerFound(invoker.getClass().getName(), currentInvoker.getClass().getName());
+                        }
+                        invoker = currentInvoker;
+                    }
+                    this.invoker = invoker;
+                } catch (ModuleLoadException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+
+            private AdditionalBootCliScriptInvoker getInvoker() {
+                return invoker;
+            }
+
+            @Override
+            public void close() throws IOException {
+                if (tempModuleLayer != null) {
+                    tempModuleLayer.close();
+                }
+            }
+        }
+    }
+
+}

@@ -23,6 +23,7 @@
 package org.jboss.as.controller.management;
 
 import java.util.List;
+import java.util.Map;
 
 import org.xnio.OptionMap;
 
@@ -55,13 +56,6 @@ public interface HttpInterfaceCommonPolicy {
     String getSaslAuthenticationFactory();
 
     /**
-     * Get the name of the security realm to secure the HTTP interface, or {@code null} if one has not been defined.
-     *
-     * @return Get the name of the security realm to secure the HTTP interface.
-     */
-    String getSecurityRealm();
-
-    /**
      * Is the management console enabled, is set to {@code false} the console should not be made available.
      *
      * @return {@code true} if the management console should be made available, {@code false} otherwise.
@@ -90,6 +84,34 @@ public interface HttpInterfaceCommonPolicy {
      * @return The list of origins that the server should accept requests from.
      */
     List<String> getAllowedOrigins();
+
+    /**
+     * A set of HTTP headers that should be set on each response based on matching the key of the map as being a prefix of the requested path.
+     *
+     * A prefix is inclusive of an exact match.
+     *
+     * @return A {@link Map} of the constant headers to be set on each response with the key being used as the prefix.
+     */
+    Map<String, List<Header>> getConstantHeaders();
+
+    static class Header {
+        final String name;
+        final String value;
+
+        Header(String name, String value) {
+            this.name = name;
+            this.value = value;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+    }
 
 }
 

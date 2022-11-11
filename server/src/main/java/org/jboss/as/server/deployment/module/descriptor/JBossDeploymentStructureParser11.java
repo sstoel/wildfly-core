@@ -911,7 +911,7 @@ public class JBossDeploymentStructureParser11 implements XMLElementReader<ParseR
                 case XMLStreamConstants.START_ELEMENT: {
                     switch (Element.of(reader.getName())) {
                         case TRANSFORMER:
-                            parseTransformer(reader, moduleSpec.getClassFileTransformers());
+                            parseTransformer(reader, moduleSpec.getClassTransformers());
                             break;
                         default:
                             throw unexpectedContent(reader);
@@ -985,33 +985,6 @@ public class JBossDeploymentStructureParser11 implements XMLElementReader<ParseR
         }
         throw endOfDocument(reader.getLocation());
     }
-
-    private static void parseEndDocument(final XMLStreamReader reader) throws XMLStreamException {
-        while (reader.hasNext()) {
-            switch (reader.next()) {
-                case XMLStreamConstants.END_DOCUMENT: {
-                    return;
-                }
-                case XMLStreamConstants.CHARACTERS: {
-                    if (!reader.isWhiteSpace()) {
-                        throw unexpectedContent(reader);
-                    }
-                    // ignore
-                    break;
-                }
-                case XMLStreamConstants.COMMENT:
-                case XMLStreamConstants.SPACE: {
-                    // ignore
-                    break;
-                }
-                default: {
-                    throw unexpectedContent(reader);
-                }
-            }
-        }
-        return;
-    }
-
 
     private static void parseExclusions(final XMLStreamReader reader, final ModuleStructureSpec specBuilder) throws XMLStreamException {
 

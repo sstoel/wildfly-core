@@ -54,7 +54,6 @@ import org.jboss.as.server.deployment.MountType;
 import org.jboss.as.server.deployment.Phase;
 import org.jboss.as.server.deployment.module.ExtensionListEntry;
 import org.jboss.as.server.deployment.module.ResourceRoot;
-import org.jboss.as.server.services.security.VaultReaderException;
 import org.jboss.as.server.suspend.ServerActivity;
 import org.jboss.invocation.proxy.MethodIdentifier;
 import org.jboss.logging.BasicLogger;
@@ -64,7 +63,6 @@ import org.jboss.logging.annotations.LogMessage;
 import org.jboss.logging.annotations.Message;
 import org.jboss.logging.annotations.MessageLogger;
 import org.jboss.logging.annotations.Param;
-import org.jboss.modules.Module;
 import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoadException;
 import org.jboss.msc.service.ServiceNotFoundException;
@@ -140,9 +138,9 @@ public interface ServerLogger extends BasicLogger {
      * Message for when a pre-computed annotation index cannot be loaded
      * @param index name of the annotation index
      */
-    @LogMessage(level = ERROR)
-    @Message(id = 2, value = "Could not read provided index: %s")
-    void cannotLoadAnnotationIndex(String index);
+    @LogMessage(level = WARN)
+    @Message(id = 2, value = "Loading failed for the annotation index \"%s\" with the following exception: %s")
+    void cannotLoadAnnotationIndex(String index, String message);
 
     @LogMessage(level = WARN)
     @Message(id = 3, value = "Could not index class %s at %s")
@@ -233,12 +231,12 @@ public interface ServerLogger extends BasicLogger {
     void cannotAddURLStreamHandlerFactory(@Cause Exception cause, String moduleID);
 
     @LogMessage(level = INFO)
-    @Message(id = 25, value = "%s started in %dms - Started %d of %d services (%d services are lazy, passive or on-demand)")
-    void startedClean(String prettyVersionString, long time, int startedServices, int allServices, int passiveOnDemandServices);
+    @Message(id = 25, value = "%s started in %dms - Started %d of %d services (%d services are lazy, passive or on-demand) %s")
+    void startedClean(String prettyVersionString, long time, int startedServices, int allServices, int passiveOnDemandServices, String append);
 
     @LogMessage(level = ERROR)
-    @Message(id = 26, value = "%s started (with errors) in %dms - Started %d of %d services (%d services failed or missing dependencies, %d services are lazy, passive or on-demand)")
-    void startedWitErrors(String prettyVersionString, long time, int startedServices, int allServices, int problemServices, int passiveOnDemandServices);
+    @Message(id = 26, value = "%s started (with errors) in %dms - Started %d of %d services (%d services failed or missing dependencies, %d services are lazy, passive or on-demand) %s")
+    void startedWitErrors(String prettyVersionString, long time, int startedServices, int allServices, int problemServices, int passiveOnDemandServices, String append);
 
     @LogMessage(level = INFO)
     @Message(id = 27, value = "Starting deployment of \"%s\" (runtime-name: \"%s\")")
@@ -368,8 +366,8 @@ public interface ServerLogger extends BasicLogger {
     void caughtExceptionDuringBoot(@Cause Exception e);
 
 
-    @Message(id = 56, value = "Server boot has failed in an unrecoverable manner; exiting. See previous messages for details.")
-    String unsuccessfulBoot();
+    @Message(id = 56, value = "Server boot has failed in an unrecoverable manner; exiting. See previous messages for details. %s")
+    String unsuccessfulBoot(String append);
 
     /**
      * Logs an error message indicating the content for a configured deployment was unavailable at boot but boot
@@ -573,6 +571,14 @@ public interface ServerLogger extends BasicLogger {
     String argStartMode();
 
     /**
+     * Instructions for the {@link CommandLineConstants#GRACEFUL_STARTUP} command line argument
+     *
+     * @return the message
+     */
+    @Message(id = Message.NONE, value ="Start the server gracefully, queuing or cleanly rejecting requests until the server is fully started")
+    String argGracefulStartup();
+
+    /**
      * Instructions for the {@link CommandLineConstants#GIT_REPO} command line argument.
      *
      * @return the message
@@ -646,8 +652,8 @@ public interface ServerLogger extends BasicLogger {
      *
      * @return a RuntimeException wrapper
      */
-    @Message(id = 76, value = "Error initializing vault --  %s")
-    VaultReaderException cannotCreateVault(@Param Throwable cause, Throwable msg);
+//    @Message(id = 76, value = "Error initializing vault --  %s")
+//    VaultReaderException cannotCreateVault(@Param Throwable cause, Throwable msg);
 
 //    /**
 //     * Creates an error message indicating that connecting to the HC failed.
@@ -784,7 +790,7 @@ public interface ServerLogger extends BasicLogger {
 //                                                                                       String secureSocketBindingAttr);
 
     @Message(id = 115, value = "System property %s cannot be set via the xml configuration file or from a management client; " +
-            "it's value must be known at initial process start so it can only set from the commmand line")
+            "it's value must be known at initial process start so it can only set from the command line")
     OperationFailedException systemPropertyNotManageable(String propertyName);
 
 
@@ -927,11 +933,11 @@ public interface ServerLogger extends BasicLogger {
     @Message(id = 156, value = "Failed to index deployment root for annotations")
     DeploymentUnitProcessingException deploymentIndexingFailed(@Cause Throwable cause);
 
-    @Message(id = 157, value = "No Seam Integration jar present: %s")
-    DeploymentUnitProcessingException noSeamIntegrationJarPresent(Module module);
+//    @Message(id = 157, value = "No Seam Integration jar present: %s")
+//    DeploymentUnitProcessingException noSeamIntegrationJarPresent(Module module);
 
     @Message(id = 158, value = "Failed to instantiate a %s")
-    DeploymentUnitProcessingException failedToInstantiateClassFileTransformer(String clazz, @Cause Exception cause);
+    DeploymentUnitProcessingException failedToInstantiateClassTransformer(String clazz, @Cause Exception cause);
 
     @Message(id = 159, value = "No deployment repository available.")
     DeploymentUnitProcessingException noDeploymentRepositoryAvailable();
@@ -1162,8 +1168,8 @@ public interface ServerLogger extends BasicLogger {
      * @param e underlying exception
      * @return {@link org.jboss.as.server.services.security.VaultReaderException}
      */
-    @Message(id = 227, value = "Security exception accessing the vault")
-    VaultReaderException vaultReaderException(@Cause Exception e);
+//    @Message(id = 227, value = "Security exception accessing the vault")
+//    VaultReaderException vaultReaderException(@Cause Exception e);
 
     // No longer used
 //    @Message(id = 228, value = "Security Exception")
@@ -1275,7 +1281,7 @@ public interface ServerLogger extends BasicLogger {
     @Message(id = 258, value = "Cannot explode a subdeployment of an unexploded deployment")
     OperationFailedException cannotExplodeSubDeploymentOfUnexplodedDeployment();
 
-    @Message(id = 259, value = "If attribute secure-socket-binding is defined one of ssl-context or security-realm must also be defined")
+    @Message(id = 259, value = "If attribute secure-socket-binding is defined ssl-context must also be defined")
     OperationFailedException secureSocketBindingRequiresSSLContext();
 
     @LogMessage(level = INFO)
@@ -1296,7 +1302,7 @@ public interface ServerLogger extends BasicLogger {
 
     @LogMessage(level = WARN)
     @Message(id = 265, value = "Invalid value '%s' for system property '%s' -- value must be a non-negative integer")
-    void invalidPoolCoreSize(String val, String configSysProp);
+    void invalidPoolSize(String val, String configSysProp);
 
 //    @LogMessage(level = WARN)
 //    @Message(id = 266, value = "Server home is set to '%s', but server real home is '%s' - unpredictable results may occur.")
@@ -1336,6 +1342,60 @@ public interface ServerLogger extends BasicLogger {
     @Message(id = 274, value = "Excluded dependency %s via jboss-deployment-structure.xml does not exist.")
     void excludedDependenciesNotExist(String dependency);
 
+    @Message(id = 275, value = "Maximum number of allowed jar resources reached for global-directory module name '%s'. The maximum allowed is %d files")
+    RuntimeException maximumNumberOfJarResources(String globalDirectory, long max);
+
+    @Message(id = 276, value = "There is an error in opening zip file %s")
+    StartException errorOpeningZipFile(String filename, @Cause Throwable throwable);
+
+    @Message(id = 277, value = "Failed to load SSH Credentials %s")
+    RuntimeException failedToLoadSSHCredentials(@Cause Throwable cause, String message);
+
+    @LogMessage(level = INFO)
+    @Message(id = 278, value = "The configuration history is managed through Git")
+    void usingGit();
+
+    @LogMessage(level = INFO)
+    @Message(id = 279, value = "Git initialized in %s")
+    void gitRespositoryInitialized(String name);
+
+    @Message(id = 280, value = "Unable to initialise the git repository.")
+    IllegalArgumentException unableToInitialiseGitRepository(@Cause Throwable cause);
+
+    @LogMessage(level = WARN)
+    @Message(id = 281, value = "System property %s is set. This should only be used for standalone clients. Setting this on the server will override your profile configuration.")
+    void wildflyConfigUrlIsSet(String property);
+
+    @LogMessage(level = INFO)
+    @Message(id = 282, value = "Server is starting with graceful startup disabled; external requests may receive failure responses until startup completes.")
+    void startingNonGraceful();
+
+    @LogMessage(level = INFO)
+    @Message(id = 283, value = "A non-graceful startup was requested in conjunction with a suspended startup. The server will start suspended.")
+    void disregardingNonGraceful();
+
+    @Message(id = 284, value = "Failed to restore the configuration after failing to initialize the repository %s")
+    RuntimeException failedToRestoreConfiguration(@Cause Exception cause, String repository);
+
+    @LogMessage(level = WARN)
+    @Message(id = 285, value = "Vault support has been removed, no vault resources will be initialised.")
+    void vaultSupportRemoved();
+
+    @Message(id = 286, value = "Failed to index static module %s for annotations")
+    DeploymentUnitProcessingException staticModuleIndexingFailed(String moduleId, @Cause Throwable cause);
+
+    @Message(id = 287, value = "Security realms are no longer supported, please migrate references to them from the configuration.")
+    XMLStreamException securityRealmReferencesUnsupported();
+
+    @Message(id = 288, value = "Unable to create tmp dir for auth tokens as file already exists.")
+    IllegalStateException unableToCreateTempDirForAuthTokensFileExists();
+
+    @Message(id = 289, value = "Unable to create auth dir %s.")
+    IllegalStateException unableToCreateAuthDir(String dir);
+
+    @Message(id = 290, value = "Couldn't find the specified YAML file %s")
+    IllegalArgumentException unableToFindYaml(String file);
+
     ////////////////////////////////////////////////
     //Messages without IDs
 
@@ -1345,22 +1405,12 @@ public interface ServerLogger extends BasicLogger {
     @Message(id = Message.NONE, value = "The attribute '%s' has changed from '%s' to '%s'")
     String jmxAttributeChange(String name, String oldState, String stateString);
 
-    @LogMessage(level = INFO)
-    @Message(id = Message.NONE, value = "The configuration history is managed through Git")
-    void usingGit();
-
     @Message(id = Message.NONE, value = "Repository initialized")
     String repositoryInitialized();
 
     @Message(id = Message.NONE, value = "Adding .gitignore")
     String addingIgnored();
 
-    @LogMessage(level = INFO)
-    @Message(id = Message.NONE, value = "Git initialized in %s")
-    void gitRespositoryInitialized(String name);
-
-    @LogMessage(level = DEBUG)
-    @Message(id = Message.NONE, value = "Deleting file %s")
-    void deletingFile(Path name);
-
+    @Message(id = Message.NONE, value = "- Server configuration file in use: %s")
+    String serverConfigFileInUse(String serverConfigFile);
 }

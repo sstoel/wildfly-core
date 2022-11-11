@@ -147,7 +147,7 @@ class SaslServerDefinitions {
         .setDefaultValue(new ModelNode(ElytronDescriptionConstants.LESS_THAN))
         .setRequires(ElytronDescriptionConstants.PROVIDER_VERSION)
         .setAllowedValues(ElytronDescriptionConstants.LESS_THAN, ElytronDescriptionConstants.GREATER_THAN)
-        .setValidator(EnumValidator.create(Comparison.class, true, true))
+        .setValidator(EnumValidator.create(Comparison.class))
         .setMinSize(1)
         .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
         .build();
@@ -168,14 +168,13 @@ class SaslServerDefinitions {
         .setAllowExpression(true)
         .setXmlName("predefined")
         .setAllowedValues(NamePredicate.names())
-        .setValidator(EnumValidator.create(NamePredicate.class, true, true))
+        .setValidator(EnumValidator.create(NamePredicate.class))
         .setMinSize(1)
         .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
         .setAlternatives(ElytronDescriptionConstants.PATTERN_FILTER)
         .build();
 
-    static final SimpleAttributeDefinition PATTERN_FILTER = new SimpleAttributeDefinitionBuilder(RegexAttributeDefinitions.PATTERN)
-        .setName(ElytronDescriptionConstants.PATTERN_FILTER)
+    static final SimpleAttributeDefinition PATTERN_FILTER = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.PATTERN_FILTER, RegexAttributeDefinitions.PATTERN)
         .setAlternatives(ElytronDescriptionConstants.PREDEFINED_FILTER)
         .setXmlName(ElytronDescriptionConstants.PATTERN)
         .build();
@@ -393,7 +392,7 @@ class SaslServerDefinitions {
 
                     boolean enabling = ENABLING.resolveModelAttribute(context, model).asBoolean();
                     if (enabling == false) {
-                        predicate = predicate.negate();
+                        predicate = predicate != null ? predicate.negate() : null;
                     }
                 }
 

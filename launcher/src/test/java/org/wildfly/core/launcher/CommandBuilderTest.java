@@ -40,12 +40,15 @@ import org.wildfly.core.launcher.Arguments.Argument;
 public class CommandBuilderTest {
 
     private static final Path WILDFLY_HOME;
+    private static final Path WILDFLY_BOOTABLE_JAR;
 
     static {
         WILDFLY_HOME = Paths.get(System.getProperty("wildfly.launcher.home")).toAbsolutePath().normalize();
+        WILDFLY_BOOTABLE_JAR = Paths.get(System.getProperty("wildfly.launcher.bootable.jar")).toAbsolutePath().normalize();
 
-        // Create some default directories
+        // Create some default directories and empty bootable fake jar file
         try {
+            Files.createFile(WILDFLY_BOOTABLE_JAR);
             Files.createDirectories(WILDFLY_HOME.resolve("modules"));
             Files.createDirectories(WILDFLY_HOME.resolve("configuration"));
             Files.createDirectories(WILDFLY_HOME.resolve("data"));
@@ -64,6 +67,7 @@ public class CommandBuilderTest {
                 .addJavaOption("-Djava.security.manager")
                 .addJavaOption("-Djava.net.preferIPv4Stack=true")
                 .addJavaOption("-Djava.net.preferIPv4Stack=false")
+                .addModuleOption("-javaagent:test-agent1.jar")
                 .setBindAddressHint("management", "0.0.0.0");
 
         // Get all the commands
@@ -81,6 +85,9 @@ public class CommandBuilderTest {
 
         Assert.assertTrue("Missing -secmgr option", commands.contains("-secmgr"));
 
+        Assert.assertTrue("Missing jboss-modules.jar", commands.stream().anyMatch(entry -> entry.matches("-javaagent:.*jboss-modules.jar$")));
+        Assert.assertTrue("Missing test-agent1.jar", commands.contains("-javaagent:test-agent1.jar"));
+
         // If we're using Java 9+ ensure the modular JDK options were added
         testModularJvmArguments(commands, 1);
 
@@ -95,6 +102,58 @@ public class CommandBuilderTest {
 
         // The value saved should be the last value added
         Assert.assertTrue("java.net.preferIPv4Stack should be set to false", commandBuilder.getJavaOptions().contains("-Djava.net.preferIPv4Stack=false"));
+
+        // Rename the binding address
+        commandBuilder.setBindAddressHint(null);
+        commands = commandBuilder.buildArguments();
+        Assert.assertFalse("Binding address should have been removed", commands.contains("-b=0.0.0.0"));
+    }
+
+    @Test
+    public void testBootableJarBuilder() {
+        // Set up a bootable command builder
+        final BootableJarCommandBuilder commandBuilder = BootableJarCommandBuilder.of(WILDFLY_BOOTABLE_JAR)
+                .setInstallDir(Paths.get("foo"))
+                .setInstallDir(Paths.get("bar"))
+                .setBindAddressHint("0.0.0.0")
+                .setDebug(true, 5005)
+                .addJavaOption("-Djava.security.manager")
+                .addJavaOption("-Djava.net.preferIPv4Stack=true")
+                .addJavaOption("-Djava.net.preferIPv4Stack=false")
+                .setBindAddressHint("management", "0.0.0.0");
+
+        // Get all the commands
+        List<String> commands = commandBuilder.buildArguments();
+
+        Assert.assertTrue("--install-dir is missing", commands.contains("--install-dir=bar"));
+
+        Assert.assertTrue("Missing -b=0.0.0.0", commands.contains("-b=0.0.0.0"));
+
+        Assert.assertTrue("Missing -b=0.0.0.0", commands.contains("-bmanagement=0.0.0.0"));
+
+        Assert.assertTrue("Missing debug argument", commands.contains(String.format(StandaloneCommandBuilder.DEBUG_FORMAT, "y", 5005)));
+
+        // If we're using Java 12+. the enhanced security manager option must be set.
+        testEnhancedSecurityManager(commands, 1);
+        // Bootable JAR handles JPMS arguments thanks to its Manifest file.
+        testJPMSArguments(commands, 0);
+        // A system property should only be added ones
+        long count = 0L;
+        for (String s : commandBuilder.getJavaOptions()) {
+            if (s.contains("java.net.preferIPv4Stack")) {
+                count++;
+            }
+        }
+        Assert.assertEquals("There should be only one java.net.preferIPv4Stack system property", 1, count);
+
+        // Install dir should be added once.
+        count = 0L;
+        for (String s : commandBuilder.getServerArguments()) {
+            if (s.contains("--install-dir")) {
+                count++;
+            }
+        }
+        Assert.assertEquals("There should be only one --install-dir", 1, count);
 
         // Rename the binding address
         commandBuilder.setBindAddressHint(null);
@@ -121,7 +180,7 @@ public class CommandBuilderTest {
 
         Assert.assertTrue("Missing -b=0.0.0.0", commands.contains("-b=0.0.0.0"));
 
-        Assert.assertTrue("Missing -b=0.0.0.0", commands.contains("--master-address=0.0.0.0"));
+        Assert.assertTrue("Missing -b=0.0.0.0", commands.contains("--primary-address=0.0.0.0"));
 
         Assert.assertTrue("Missing -b=0.0.0.0", commands.contains("-bmanagement=0.0.0.0"));
 
@@ -141,7 +200,7 @@ public class CommandBuilderTest {
     @Test
     public void testCliBuilder() {
         // Set up a standalone command builder
-        final CliCommandBuilder commandBuilder = CliCommandBuilder.of(WILDFLY_HOME)
+        final CliCommandBuilder commandBuilder = CliCommandBuilder.asModularLauncher(WILDFLY_HOME)
                 .addJavaOption("-Djava.net.preferIPv4Stack=true")
                 .addJavaOption("-Djava.net.preferIPv4Stack=false");
 
@@ -197,22 +256,37 @@ public class CommandBuilderTest {
         Assert.assertTrue("Missing -Dprop3=value3", stringArgs.contains("-Dprop3=value3"));
     }
 
-    private void testModularJvmArguments(final Collection<String> command, final int expectedCount) {
-        // If we're using Java 9+ ensure the modular JDK options were added
-        if (Jvm.current().isModular()) {
-            assertArgumentExists(command, "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED", expectedCount);
-            assertArgumentExists(command, "--add-exports=jdk.unsupported/sun.reflect=ALL-UNNAMED", expectedCount);
-            assertArgumentExists(command, "--add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED", expectedCount);
-            assertArgumentExists(command, "--add-modules=java.se", expectedCount);
+    private void testEnhancedSecurityManager(final Collection<String> command, final int expectedCount) {
+        // If we're using Java 12+ ensure enhanced security manager option was added
+        if (Jvm.current().enhancedSecurityManagerAvailable()) {
+            assertArgumentExists(command, "-Djava.security.manager=allow", expectedCount);
         } else {
-            Assert.assertFalse("Did not expect \"--add-exports=java.base/sun.nio.ch=ALL-UNNAMED\" to be in the command list",
-                    command.contains("--add-exports=java.base/sun.nio.ch=ALL-UNNAMED"));
-            Assert.assertFalse("Did not expect \"--add-exports=jdk.unsupported/sun.reflect=ALL-UNNAMED\" to be in the command list",
-                    command.contains("--add-exports=jdk.unsupported/sun.reflect=ALL-UNNAMED"));
-            Assert.assertFalse("Did not expect \"--add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED\" to be in the command list",
-                    command.contains("--add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED"));
-            Assert.assertFalse("Did not expect \"--add-modules=java.se\" to be in the command list", command.contains("--add-modules=java.se"));
+            Assert.assertFalse("Did not expect \"-Djava.security.manager=allow\" to be in the command list",
+                    command.contains("-Djava.security.manager=allow"));
         }
+    }
+
+    private void testJPMSArguments(final Collection<String> command, final int expectedCount) {
+        // Check exports and opens
+        assertArgumentExists(command, "--add-exports=java.desktop/sun.awt=ALL-UNNAMED", expectedCount);
+        assertArgumentExists(command, "--add-exports=java.naming/com.sun.jndi.ldap=ALL-UNNAMED", expectedCount);
+        assertArgumentExists(command, "--add-exports=java.naming/com.sun.jndi.url.ldap=ALL-UNNAMED", expectedCount);
+        assertArgumentExists(command, "--add-exports=java.naming/com.sun.jndi.url.ldaps=ALL-UNNAMED", expectedCount);
+        assertArgumentExists(command, "--add-exports=jdk.naming.dns/com.sun.jndi.dns=ALL-UNNAMED", expectedCount);
+        assertArgumentExists(command, "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED", expectedCount);
+        assertArgumentExists(command, "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED", expectedCount);
+        assertArgumentExists(command, "--add-opens=java.base/java.io=ALL-UNNAMED", expectedCount);
+        assertArgumentExists(command, "--add-opens=java.base/java.security=ALL-UNNAMED", expectedCount);
+        assertArgumentExists(command, "--add-opens=java.base/java.util=ALL-UNNAMED", expectedCount);
+        assertArgumentExists(command, "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED", expectedCount);
+        assertArgumentExists(command, "--add-opens=java.management/javax.management=ALL-UNNAMED", expectedCount);
+        assertArgumentExists(command, "--add-opens=java.naming/javax.naming=ALL-UNNAMED", expectedCount);
+        assertArgumentExists(command, "--add-modules=java.se", expectedCount);
+    }
+
+    private void testModularJvmArguments(final Collection<String> command, final int expectedCount) {
+        testEnhancedSecurityManager(command, expectedCount);
+        testJPMSArguments(command, expectedCount);
     }
 
     private static void assertArgumentExists(final Collection<String> args, final String arg, final int expectedCount) {
