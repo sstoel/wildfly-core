@@ -22,12 +22,15 @@
 
 package org.jboss.as.server.deployment.reflect;
 
+import java.util.jar.Manifest;
+
 import org.jboss.as.server.logging.ServerLogger;
 import org.jboss.as.server.deployment.Attachments;
 import org.jboss.as.server.deployment.DeploymentPhaseContext;
 import org.jboss.as.server.deployment.DeploymentUnit;
 import org.jboss.as.server.deployment.DeploymentUnitProcessingException;
 import org.jboss.as.server.deployment.DeploymentUnitProcessor;
+import org.jboss.as.server.deployment.ManifestHelper;
 import org.jboss.modules.Module;
 
 /**
@@ -39,6 +42,13 @@ public final class InstallReflectionIndexProcessor implements DeploymentUnitProc
 
     public void deploy(final DeploymentPhaseContext phaseContext) throws DeploymentUnitProcessingException {
         DeploymentUnit deploymentUnit = phaseContext.getDeploymentUnit();
+
+        // OSGi fragments do not have a module
+        Manifest manifest = deploymentUnit.getAttachment(Attachments.OSGI_MANIFEST);
+        if (ManifestHelper.hasMainAttributeValue(manifest, "Fragment-Host")) {
+            return;
+        }
+
         Module module = deploymentUnit.getAttachment(Attachments.MODULE);
         if (module == null) {
             throw ServerLogger.ROOT_LOGGER.nullModuleAttachment(deploymentUnit);
