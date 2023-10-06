@@ -1,19 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2014 Red Hat, Inc., and individual contributors
- * as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.wildfly.extension.elytron;
@@ -77,6 +64,7 @@ interface ElytronDescriptionConstants {
     String AUTHORIZATION_NAME = "authorization-name";
     String AUTHORIZATION_REALM = "authorization-realm";
     String AUTHORIZATION_REALMS = "authorization-realms";
+    String AUTH_METHOD = "auth-method";
     String AUTOFLUSH = "autoflush";
     String AVAILABLE_MECHANISMS = "available-mechanisms";
 
@@ -192,6 +180,7 @@ interface ElytronDescriptionConstants {
     String ENCODED = "encoded";
     String ENCRYPTION = "encryption";
     String ENTRY = "entry";
+    String ENCODING = "encoding";
     String ENTRY_TYPE = "entry-type";
     String EVIDENCE_DECODER = "evidence-decoder";
     String EVIDENCE_DECODERS = "evidence-decoders";
@@ -254,6 +243,7 @@ interface ElytronDescriptionConstants {
     String IDENTITY = "identity";
     String IDENTITY_MAPPING = "identity-mapping";
     String IDENTITY_REALM = "identity-realm";
+    String IGNORE_UNAVAILABLE_REALMS = "ignore-unavailable-realms";
     String IMPLEMENTATION = "implementation";
     String IMPLEMENTATION_PROPERTIES = "implementation-properties";
     String IMPORT_CERTIFICATE = "import-certificate";
@@ -585,6 +575,7 @@ interface ElytronDescriptionConstants {
     String TRUST_MANAGER = "trust-manager";
     String TRUST_MANAGERS = "trust-managers";
     String TRUSTED_SECURITY_DOMAINS = "trusted-security-domains";
+    String TRUSTED_VIRTUAL_SECURITY_DOMAINS = "trusted-virtual-security-domains";
     String TYPE = "type";
 
     String RELOAD = "reload";
@@ -608,6 +599,8 @@ interface ElytronDescriptionConstants {
     String VERIFY_INTEGRITY = "verify-integrity";
     String VERSION = "version";
     String VERSION_COMPARISON = "version-comparison";
+    String VIRTUAL_SECURITY_DOMAIN = "virtual-security-domain";
+    String VIRTUAL_SECURITY_DOMAIN_CREATION = "virtual-security-domain-creation";
 
     String WANT_CLIENT_AUTH = "want-client-auth";
     String WEBSITE = "website";

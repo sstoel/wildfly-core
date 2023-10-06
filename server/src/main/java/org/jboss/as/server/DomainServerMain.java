@@ -1,26 +1,16 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2010, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server;
+
+import static org.jboss.as.server.DomainServerCommunicationServices.createAuthenticationContext;
+
+import static org.jboss.as.process.protocol.StreamUtils.readBoolean;
+import static org.jboss.as.process.protocol.StreamUtils.readFully;
+import static org.jboss.as.process.protocol.StreamUtils.readInt;
+import static org.jboss.as.process.protocol.StreamUtils.readUTFZBytes;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -28,13 +18,11 @@ import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.PrintStream;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import org.jboss.as.network.NetworkUtils;
 
+import org.jboss.as.network.NetworkUtils;
 import org.jboss.as.process.ExitCodes;
 import org.jboss.as.process.ProcessController;
-import org.jboss.as.process.protocol.StreamUtils;
 import org.jboss.as.process.stdin.Base64InputStream;
 import org.jboss.as.server.logging.ServerLogger;
 import org.jboss.as.server.mgmt.domain.HostControllerClient;
@@ -59,6 +47,7 @@ import org.jboss.stdio.NullInputStream;
 import org.jboss.stdio.SimpleStdioContextSelector;
 import org.jboss.stdio.StdioContext;
 import org.jboss.threads.AsyncFuture;
+import org.wildfly.security.auth.client.AuthenticationContext;
 
 /**
  * The main entry point for domain-managed server instances.
@@ -66,6 +55,12 @@ import org.jboss.threads.AsyncFuture;
  * @author <a href="mailto:david.lloyd@redhat.com">David M. Lloyd</a>
  */
 public final class DomainServerMain {
+
+    /**
+     * Cache of the latest {@code AuthenticationContext} based on updates received
+     * from the process controller.
+     */
+    private static volatile AuthenticationContext latestAuthenticationContext;
 
     private DomainServerMain() {
     }
@@ -97,7 +92,7 @@ public final class DomainServerMain {
 
         final byte[] asAuthBytes = new byte[ProcessController.AUTH_BYTES_ENCODED_LENGTH];
         try {
-            StreamUtils.readFully(initialInput, asAuthBytes);
+            readFully(initialInput, asAuthBytes);
         } catch (IOException e) {
             e.printStackTrace();
             SystemExiter.abort(ExitCodes.FAILED);
@@ -133,14 +128,13 @@ public final class DomainServerMain {
         Throwable caught = null;
         for (;;) {
             try {
-                final String scheme = StreamUtils.readUTFZBytes(initialInput);
-//                String scheme = "remote";
-                final String hostName = StreamUtils.readUTFZBytes(initialInput);
-                final int port = StreamUtils.readInt(initialInput);
-                final boolean managementSubsystemEndpoint = StreamUtils.readBoolean(initialInput);
-                final byte[] authBytes = new byte[ProcessController.AUTH_BYTES_ENCODED_LENGTH];
-                StreamUtils.readFully(initialInput, authBytes);
-                final String authKey = new String(authBytes, StandardCharsets.US_ASCII);
+                final String scheme = readUTFZBytes(initialInput);
+
+                final String hostName = readUTFZBytes(initialInput);
+                final int port = readInt(initialInput);
+                final boolean managementSubsystemEndpoint = readBoolean(initialInput);
+
+                final String serverAuthToken = readUTFZBytes(initialInput);
                 URI hostControllerUri = new URI(scheme, null, NetworkUtils.formatPossibleIpv6Address(hostName), port, null, null, null);
                 // Get the host-controller server client
                 final ServiceContainer container = containerFuture.get();
@@ -149,7 +143,9 @@ public final class DomainServerMain {
                     final HostControllerClient client = getRequiredService(container,
                             HostControllerConnectionService.SERVICE_NAME, HostControllerClient.class);
                     // Reconnect to the host-controller
-                    client.reconnect(hostControllerUri, authKey, managementSubsystemEndpoint);
+                    AuthenticationContext replacementAuthenticationContext = createAuthenticationContext(client.getServerName(), serverAuthToken);
+                    latestAuthenticationContext = replacementAuthenticationContext;
+                    client.reconnect(hostControllerUri, replacementAuthenticationContext, managementSubsystemEndpoint);
                 }
 
             } catch (InterruptedIOException e) {
@@ -186,6 +182,15 @@ public final class DomainServerMain {
             }
         }
         throw new IllegalStateException(); // not reached
+    }
+
+    /**
+     * Get the latest {@code AuthenticationContext} or {@code null} if an update has not been received.
+     *
+     * @return the latest {@code AuthenticationContext} or {@code null} if an update has not been received.
+     */
+    static AuthenticationContext getLatestAuthenticationContext() {
+        return latestAuthenticationContext;
     }
 
     static <T> T getRequiredService(final ServiceContainer container, final ServiceName serviceName, Class<T> type) {

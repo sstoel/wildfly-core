@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2015, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.test.integration.logging.operations;
@@ -88,7 +71,7 @@ public class CustomFormattersTestCase extends AbstractLoggingOperationsTestCase 
         testUndefine(CUSTOM_FORMATTER_ADDRESS, "class", true);
 
         // Change the module which should require a restart
-        result = testWrite(CUSTOM_FORMATTER_ADDRESS, "module", "sun.jdk");
+        result = testWrite(CUSTOM_FORMATTER_ADDRESS, "module", "org.slf4j.impl");
         // Check the state
         step1 = Operations.readResult(result).get("step-1");
         Assert.assertTrue("Should be in reload-required state: " + result, step1.get("response-headers").get("operation-requires-reload").asBoolean());

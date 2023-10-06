@@ -1,27 +1,11 @@
 /*
-* JBoss, Home of Professional Open Source.
-* Copyright 2013, Red Hat Middleware LLC, and individual contributors
-* as indicated by the @author tags. See the copyright.txt file in the
-* distribution for a full listing of individual contributors.
-*
-* This is free software; you can redistribute it and/or modify it
-* under the terms of the GNU Lesser General Public License as
-* published by the Free Software Foundation; either version 2.1 of
-* the License, or (at your option) any later version.
-*
-* This software is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-* Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public
-* License along with this software; if not, write to the Free
-* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA, or see the FSF site: http://www.fsf.org.
-*/
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 package org.jboss.as.host.controller.discovery;
 
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.PRIMARY;
 import static org.jboss.as.host.controller.discovery.Constants.ACCESS_KEY;
 import static org.jboss.as.host.controller.discovery.Constants.LOCATION;
 import static org.jboss.as.host.controller.discovery.Constants.PREFIX;
@@ -58,7 +42,7 @@ import org.jboss.dmr.ModelNode;
 public class S3Discovery implements DiscoveryOption {
 
     // The name of the S3 file that will store the domain controller's host and port
-    private static final String DC_FILE_NAME="jboss-domain-master-data";
+    private static final String DC_FILE_NAME="jboss-domain-primary-data";
 
     // The access key to AWS (S3)
     private String access_key = null;
@@ -129,7 +113,7 @@ public class S3Discovery implements DiscoveryOption {
                     }
                     return -1;
                 }});
-            writeToFile(data, "master");
+            writeToFile(data, PRIMARY);
         } catch (Exception e) {
             ROOT_LOGGER.cannotWriteDomainControllerData(e);
         }
@@ -138,7 +122,7 @@ public class S3Discovery implements DiscoveryOption {
     @Override
     public List<RemoteDomainControllerConnectionConfiguration> discover() {
         // Read the domain controller data from an S3 file
-        List<DomainControllerData> dataDc = readFromFile("master");
+        List<DomainControllerData> dataDc = readFromFile(PRIMARY);
         List<RemoteDomainControllerConnectionConfiguration> options = new ArrayList<>(dataDc.size());
         for (DomainControllerData data : dataDc) {
             if (data != null) {
@@ -171,7 +155,7 @@ public class S3Discovery implements DiscoveryOption {
     @Override
     public void cleanUp() {
         // Remove the S3 file
-        remove("master");
+        remove(PRIMARY);
     }
 
     @Override

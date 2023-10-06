@@ -1,20 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- *
- * Copyright 2018 Red Hat, Inc., and individual contributors
- * as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.logging.handlers;
@@ -41,6 +27,7 @@ import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleOperationDefinition;
 import org.jboss.as.controller.SimpleOperationDefinitionBuilder;
+import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.descriptions.ResourceDescriptionResolver;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.transform.description.ResourceTransformationDescriptionBuilder;
@@ -61,7 +48,7 @@ import org.jboss.dmr.ModelType;
  * @author <a href="mailto:tomaz.cerar@redhat.com">Tomaz Cerar</a>
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-public abstract class AbstractHandlerDefinition extends TransformerResourceDefinition {
+public abstract class AbstractHandlerDefinition extends SimpleResourceDefinition {
 
     public static final String UPDATE_OPERATION_NAME = "update-properties";
     public static final String CHANGE_LEVEL_OPERATION_NAME = "change-log-level";
@@ -209,29 +196,36 @@ public abstract class AbstractHandlerDefinition extends TransformerResourceDefin
         }
     }
 
-    @Override
-    public void registerTransformers(final KnownModelVersion modelVersion,
-                                     final ResourceTransformationDescriptionBuilder rootResourceBuilder,
-                                     final ResourceTransformationDescriptionBuilder loggingProfileBuilder) {
-        if (modelVersion.hasTransformers()) {
-            final PathElement pathElement = getPathElement();
-            final ResourceTransformationDescriptionBuilder resourceBuilder = rootResourceBuilder.addChildResource(pathElement);
-            final ResourceTransformationDescriptionBuilder loggingProfileResourceBuilder = loggingProfileBuilder.addChildResource(pathElement);
-            registerResourceTransformers(modelVersion, resourceBuilder, loggingProfileResourceBuilder);
-        }
-    }
+    static class AbstractHandlerTransformerDefinition extends TransformerResourceDefinition {
 
-    /**
-     * Register the transformers for the resource.
-     *
-     * @param modelVersion          the model version we're registering
-     * @param resourceBuilder       the builder for the resource
-     * @param loggingProfileBuilder the builder for the logging profile
-     */
-    protected void registerResourceTransformers(final KnownModelVersion modelVersion,
-                                                final ResourceTransformationDescriptionBuilder resourceBuilder,
-                                                final ResourceTransformationDescriptionBuilder loggingProfileBuilder) {
-        // do nothing by default
+        AbstractHandlerTransformerDefinition(PathElement pathElement) {
+            super(pathElement);
+        }
+
+        @Override
+        public void registerTransformers(final KnownModelVersion modelVersion,
+                                         final ResourceTransformationDescriptionBuilder rootResourceBuilder,
+                                         final ResourceTransformationDescriptionBuilder loggingProfileBuilder) {
+            if (modelVersion.hasTransformers()) {
+                final PathElement pathElement = getPathElement();
+                final ResourceTransformationDescriptionBuilder resourceBuilder = rootResourceBuilder.addChildResource(pathElement);
+                final ResourceTransformationDescriptionBuilder loggingProfileResourceBuilder = loggingProfileBuilder.addChildResource(pathElement);
+                registerResourceTransformers(modelVersion, resourceBuilder, loggingProfileResourceBuilder);
+            }
+        }
+
+        /**
+         * Register the transformers for the resource.
+         *
+         * @param modelVersion          the model version we're registering
+         * @param resourceBuilder       the builder for the resource
+         * @param loggingProfileBuilder the builder for the logging profile
+         */
+        void registerResourceTransformers(final KnownModelVersion modelVersion,
+                                          final ResourceTransformationDescriptionBuilder resourceBuilder,
+                                          final ResourceTransformationDescriptionBuilder loggingProfileBuilder) {
+            // do nothing by default
+        }
     }
 
     /**

@@ -1,19 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source
- * Copyright 2021 Red Hat Inc. and/or its affiliates and other contributors
- * as indicated by the @authors tag. All rights reserved.
- * See the copyright.txt in the distribution for a
- * full listing of individual contributors.
- * This copyrighted material is made available to anyone wishing to use,
- * modify, copy, or redistribute it subject to the terms and conditions
- * of the GNU Lesser General Public License, v. 2.1.
- * This program is distributed in the hope that it will be useful, but WITHOUT A
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public License,
- * v.2.1 along with this distribution; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA  02110-1301, USA.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.wildfly.test.integration.elytron.ssl;
 
@@ -104,7 +91,6 @@ public class OpenSslTlsTestCase {
     @Inject
     protected ManagementClient managementClient;
 
-    private static final String javaSpecVersion = System.getProperty("java.specification.version");
     private static final String PASSWORD = "Elytron";
 
     private static final String SERVER_KEY_STORE_NAME = "serverKS";
@@ -134,11 +120,6 @@ public class OpenSslTlsTestCase {
     private static final String TEST_JAR = "test.jar";
 
     @BeforeClass
-    public static void noJDK14Plus() {
-        Assume.assumeFalse("Avoiding JDK 14+ due to https://issues.jboss.org/browse/WFCORE-4532", getJavaSpecVersion() >= 14);
-    }
-
-    @BeforeClass
     public static void isOpenSSL111OrHigher() {
         Assume.assumeTrue("OpenSSL version in use does not support TLS 1.3", isOpenSslTls13Enabled());
     }
@@ -157,10 +138,6 @@ public class OpenSslTlsTestCase {
             return false;
         }
         return false;
-    }
-
-    private static int getJavaSpecVersion() {
-        return Integer.parseInt(javaSpecVersion);
     }
 
     static class ServerSetup extends TestRunnerConfigSetupTask {

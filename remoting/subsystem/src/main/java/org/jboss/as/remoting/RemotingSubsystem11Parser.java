@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.remoting;
@@ -38,17 +21,19 @@ import static org.jboss.as.remoting.CommonAttributes.SECURITY_REALM;
 import static org.jboss.as.remoting.CommonAttributes.SOCKET_BINDING;
 
 import java.util.EnumSet;
+import java.util.LinkedList;
 import java.util.List;
-import javax.xml.stream.XMLStreamConstants;
+import java.util.Map;
+
 import javax.xml.stream.XMLStreamException;
 
+import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.controller.parsing.ParseUtils;
 import org.jboss.dmr.ModelNode;
-import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
 import org.wildfly.common.Assert;
 
@@ -57,7 +42,7 @@ import org.wildfly.common.Assert;
  *
  * @author Jaikiran Pai
  */
-class RemotingSubsystem11Parser extends RemotingSubsystem10Parser implements XMLStreamConstants, XMLElementReader<List<ModelNode>> {
+class RemotingSubsystem11Parser extends RemotingSubsystem10Parser {
 
     @Override
     public void readElement(XMLExtendedStreamReader reader, List<ModelNode> list) throws XMLStreamException {
@@ -92,6 +77,7 @@ class RemotingSubsystem11Parser extends RemotingSubsystem10Parser implements XML
         }
     }
 
+    @Override
     void parseConnector(final XMLExtendedStreamReader reader, final ModelNode address, final List<ModelNode> list) throws XMLStreamException {
 
         String name = null;
@@ -211,7 +197,7 @@ class RemotingSubsystem11Parser extends RemotingSubsystem10Parser implements XML
                     break;
                 }
                 case USERNAME: {
-                    username = RemoteOutboundConnectionResourceDefinition.USERNAME.parse(value, reader);
+                    username = parse(RemoteOutboundConnectionResourceDefinition.USERNAME, value, reader);
                     break;
                 }
                 case SECURITY_REALM: {
@@ -292,7 +278,7 @@ class RemotingSubsystem11Parser extends RemotingSubsystem10Parser implements XML
             visited.add(element);
             switch (element) {
                 case PROPERTIES: {
-                    parseProperties(reader, address.toModelNode(), operations);
+                    parseProperties(reader, address.toModelNode(), new LinkedList<>());
                     break;
                 }
                 default: {
@@ -331,7 +317,7 @@ class RemotingSubsystem11Parser extends RemotingSubsystem10Parser implements XML
 
         final PathAddress address = PathAddress.pathAddress(PathAddress.pathAddress(parentAddress), PathElement.pathElement(CommonAttributes.OUTBOUND_CONNECTION, name));
         // create add operation add it to the list of operations
-        operations.add(GenericOutboundConnectionAdd.getAddOperation(name, uri, address));
+        operations.add(Util.createAddOperation(address, Map.of(GenericOutboundConnectionResourceDefinition.URI.getName(), new ModelNode(uri))));
         // parse the nested elements
         final EnumSet<Element> visited = EnumSet.noneOf(Element.class);
         while (reader.hasNext() && reader.nextTag() != END_ELEMENT) {
@@ -342,7 +328,7 @@ class RemotingSubsystem11Parser extends RemotingSubsystem10Parser implements XML
             visited.add(element);
             switch (element) {
                 case PROPERTIES: {
-                    parseProperties(reader, address.toModelNode(), operations);
+                    parseProperties(reader, new ModelNode(), new LinkedList<>());
                     break;
                 }
                 default: {
@@ -350,8 +336,6 @@ class RemotingSubsystem11Parser extends RemotingSubsystem10Parser implements XML
                 }
             }
         }
-
-
     }
 
     static ModelNode getConnectionAddOperation(final String connectionName, final String outboundSocketBindingRef, PathAddress address) {
@@ -380,6 +364,10 @@ class RemotingSubsystem11Parser extends RemotingSubsystem10Parser implements XML
         }
 
         return addOperation;
+    }
+
+    private static ModelNode parse(AttributeDefinition ad, String value, XMLExtendedStreamReader reader) throws XMLStreamException {
+        return ad.getParser().parse(ad,value,reader);
     }
 
 }

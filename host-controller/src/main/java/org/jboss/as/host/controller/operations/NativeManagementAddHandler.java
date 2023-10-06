@@ -1,27 +1,11 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.host.controller.operations;
 
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.NATIVE_INTERFACE;
 import static org.jboss.as.controller.management.Capabilities.SASL_AUTHENTICATION_FACTORY_CAPABILITY;
 import static org.jboss.as.controller.management.Capabilities.SSL_CONTEXT_CAPABILITY;
 import static org.jboss.as.host.controller.logging.HostControllerLogger.ROOT_LOGGER;
@@ -41,6 +25,7 @@ import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.management.BaseNativeInterfaceAddStepHandler;
 import org.jboss.as.controller.management.NativeInterfaceCommonPolicy;
 import org.jboss.as.host.controller.resources.NativeManagementResourceDefinition;
+import org.jboss.as.host.controller.security.SaslWrappingService;
 import org.jboss.as.network.NetworkInterfaceBinding;
 import org.jboss.as.remoting.management.ManagementRemotingServices;
 import org.jboss.dmr.ModelNode;
@@ -92,10 +77,13 @@ public class NativeManagementAddHandler extends BaseNativeInterfaceAddStepHandle
 
         ServiceName saslAuthenticationFactoryName = saslAuthenticationFactory != null ? context.getCapabilityServiceName(
                 SASL_AUTHENTICATION_FACTORY_CAPABILITY, saslAuthenticationFactory, SaslAuthenticationFactory.class) : null;
+        saslAuthenticationFactoryName = SaslWrappingService.install(serviceTarget, saslAuthenticationFactoryName, NATIVE_INTERFACE);
+
         String sslContext = commonPolicy.getSSLContext();
         ServiceName sslContextName = sslContext != null ? context.getCapabilityServiceName(SSL_CONTEXT_CAPABILITY, sslContext, SSLContext.class) : null;
 
         NativeManagementServices.installManagementWorkerService(serviceTarget, context.getServiceRegistry(false));
+
         ManagementRemotingServices.installDomainConnectorServices(context, serviceTarget, ManagementRemotingServices.MANAGEMENT_ENDPOINT,
                 nativeManagementInterfaceBinding, hostControllerInfo.getNativeManagementPort(), options, saslAuthenticationFactoryName, sslContextName);
         return Arrays.asList(REMOTING_BASE.append("server", MANAGEMENT_CONNECTOR), nativeManagementInterfaceBinding);

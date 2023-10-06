@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat Middleware LLC, and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.remoting;
 
@@ -27,8 +10,10 @@ import static org.jboss.as.remoting.ConnectorCommon.SASL_PROTOCOL;
 import static org.jboss.as.remoting.ConnectorCommon.SERVER_NAME;
 import static org.jboss.as.remoting.ConnectorResource.CONNECTOR_CAPABILITY;
 
-import org.jboss.as.controller.ModelVersion;
-import org.jboss.as.controller.OperationStepHandler;
+import java.util.Collection;
+import java.util.List;
+
+import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.ReloadRequiredWriteAttributeHandler;
 import org.jboss.as.controller.SimpleAttributeDefinition;
@@ -57,7 +42,6 @@ public class HttpConnectorResource extends SimpleResourceDefinition {
     static final SimpleAttributeDefinition AUTHENTICATION_PROVIDER = new SimpleAttributeDefinitionBuilder(CommonAttributes.AUTHENTICATION_PROVIDER, ModelType.STRING)
             .setDefaultValue(null)
             .setRequired(false)
-            .setAttributeMarshaller(new WrappedAttributeMarshaller(Attribute.NAME))
             .addAccessConstraint(RemotingExtension.REMOTING_SECURITY_DEF)
             .setRestartAllServices()
             .build();
@@ -73,7 +57,7 @@ public class HttpConnectorResource extends SimpleResourceDefinition {
             .addAccessConstraint(SensitiveTargetAccessConstraintDefinition.SECURITY_REALM_REF)
             .addAccessConstraint(RemotingExtension.REMOTING_SECURITY_DEF)
             .setRestartAllServices()
-            .setDeprecated(ModelVersion.create(6))
+            .setDeprecated(RemotingSubsystemModel.VERSION_6_0_0.getVersion())
             .build();
 
     static final SimpleAttributeDefinition SASL_AUTHENTICATION_FACTORY = new SimpleAttributeDefinitionBuilder(ConnectorCommon.SASL_AUTHENTICATION_FACTORY)
@@ -82,26 +66,21 @@ public class HttpConnectorResource extends SimpleResourceDefinition {
             .setRestartAllServices()
             .build();
 
-    static final HttpConnectorResource INSTANCE = new HttpConnectorResource();
+    static final Collection<AttributeDefinition> ATTRIBUTES = List.of(AUTHENTICATION_PROVIDER, CONNECTOR_REF, SECURITY_REALM, SERVER_NAME, SASL_AUTHENTICATION_FACTORY, SASL_PROTOCOL);
 
-    private HttpConnectorResource() {
+    HttpConnectorResource() {
         super(new Parameters(PATH, RemotingExtension.getResourceDescriptionResolver(HTTP_CONNECTOR))
-                .setAddHandler(HttpConnectorAdd.INSTANCE)
-                .setRemoveHandler(HttpConnectorRemove.INSTANCE)
+                .setAddHandler(new HttpConnectorAdd())
+                .setRemoveHandler(new HttpConnectorRemove())
                 // expose a common connector capability (WFCORE-4875)
                 .setCapabilities(CONNECTOR_CAPABILITY, HTTP_CONNECTOR_CAPABILITY));
     }
 
     @Override
     public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-        final OperationStepHandler writeHandler = new ReloadRequiredWriteAttributeHandler(AUTHENTICATION_PROVIDER,
-                CONNECTOR_REF, SECURITY_REALM, SERVER_NAME, SASL_AUTHENTICATION_FACTORY, SASL_PROTOCOL);
-        resourceRegistration.registerReadWriteAttribute(AUTHENTICATION_PROVIDER, null, writeHandler);
-        resourceRegistration.registerReadWriteAttribute(CONNECTOR_REF, null, writeHandler);
-        resourceRegistration.registerReadWriteAttribute(SECURITY_REALM, null, writeHandler);
-        resourceRegistration.registerReadWriteAttribute(SERVER_NAME, null, writeHandler);
-        resourceRegistration.registerReadWriteAttribute(SASL_AUTHENTICATION_FACTORY, null, writeHandler);
-        resourceRegistration.registerReadWriteAttribute(SASL_PROTOCOL, null, writeHandler);
+        for (AttributeDefinition attribute : ATTRIBUTES) {
+            resourceRegistration.registerReadWriteAttribute(attribute, null, ReloadRequiredWriteAttributeHandler.INSTANCE);
+        }
     }
 
     @Override

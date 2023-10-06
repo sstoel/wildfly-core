@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller;
@@ -58,7 +41,6 @@ class ParallelBootOperationContext extends AbstractOperationContext {
     private final OperationContextImpl primaryContext;
     private final List<ParsedBootOp> runtimeOps;
     private final Thread controllingThread;
-    private Step lockStep;
     private final int operationId;
     private final ModelControllerImpl controller;
 
@@ -80,8 +62,11 @@ class ParallelBootOperationContext extends AbstractOperationContext {
         AbstractOperationContext.controllingThread.set(controllingThread);
     }
 
-    void close() {
+    @Override
+    public void close() {
         AbstractOperationContext.controllingThread.remove();
+        this.lockStep = null;
+        super.close();
     }
 
     @Override
@@ -212,7 +197,7 @@ class ParallelBootOperationContext extends AbstractOperationContext {
         if(lockStep == null) {
             try {
                 controller.acquireWriteLock(operationId, true);
-                lockStep = activeStep;
+                recordWriteLock();
             } catch (InterruptedException e) {
                 cancelled = true;
                 Thread.currentThread().interrupt();
@@ -420,8 +405,8 @@ class ParallelBootOperationContext extends AbstractOperationContext {
     }
 
     @Override
-    void releaseStepLocks(Step step) {
-        if(lockStep == step) {
+    void releaseStepLocks(AbstractStep step) {
+        if(step.matches(lockStep)) {
             controller.releaseWriteLock(operationId);
             lockStep = null;
         }

@@ -1,19 +1,10 @@
 /*
- * Copyright 2021 JBoss by Red Hat.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.test.manualmode.management.persistence;
+
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RUNNING_MODE;
 
 import java.io.File;
 import java.io.IOException;
@@ -22,6 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import jakarta.inject.Inject;
+import java.util.Iterator;
+import java.util.regex.Pattern;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.client.helpers.Operations;
@@ -31,8 +24,8 @@ import org.jboss.as.test.shared.TimeoutUtil;
 import org.jboss.dmr.ModelNode;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.Server;
@@ -45,11 +38,11 @@ import org.wildfly.security.manager.WildFlySecurityManager;
  * Simple test to check that we can apply YAML configuration over an existing standard configuration.
  * Checking that reloading doesn't break the resulting configuration.
  * Testing the cli ops are compatible with the YAML changes.
+ *
  * @author Emmanuel Hugonnet (c) 2021 Red Hat, Inc.
  */
 @RunWith(WildFlyRunner.class)
 @ServerControl(manual = true)
-@Ignore
 public class YamlExtensionTestCase {
 
     private static final ModelNode READ_CONFIG = Util.createEmptyOperation("read-config-as-xml", PathAddress.EMPTY_ADDRESS);
@@ -66,10 +59,11 @@ public class YamlExtensionTestCase {
 
     @BeforeClass
     public static void setup() throws Exception {
+        Assume.assumeTrue("Layer testing provides a different XML file than the standard one which results in failures", System.getProperty("ts.layers") == null);
         testYaml = new File(YamlExtensionTestCase.class.getResource("test.yml").toURI()).toPath().toAbsolutePath();
         cliScript = new File(YamlExtensionTestCase.class.getResource("test.cli").toURI()).toPath().toAbsolutePath();
-        expectedXml = new String(Files.readAllBytes(new File(YamlExtensionTestCase.class.getResource("test.xml").toURI()).toPath()));
-        expectedBootCLiXml = new String(Files.readAllBytes(new File(YamlExtensionTestCase.class.getResource("testWithCli.xml").toURI()).toPath()));
+        expectedXml = loadFile(new File(YamlExtensionTestCase.class.getResource("test.xml").toURI()).toPath());
+        expectedBootCLiXml = loadFile(new File(YamlExtensionTestCase.class.getResource("testWithCli.xml").toURI()).toPath());
         originalJvmArgs = WildFlySecurityManager.getPropertyPrivileged("jvm.args", null);
         Path target = new File("target").toPath();
         markerDirectory = Files.createDirectories(target.resolve("yaml").resolve("cli-boot-ops"));
@@ -77,6 +71,21 @@ public class YamlExtensionTestCase {
                 target.resolve(WildFlySecurityManager.getPropertyPrivileged("jboss.home", "toto")).resolve("standalone").resolve("configuration").resolve("bootable-groups.properties"), StandardCopyOption.REPLACE_EXISTING);
         Files.copy(new File(YamlExtensionTestCase.class.getResource("bootable-users.properties").toURI()).toPath(),
                 target.resolve(WildFlySecurityManager.getPropertyPrivileged("jboss.home", "toto")).resolve("standalone").resolve("configuration").resolve("bootable-users.properties"), StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private static String loadFile(Path file) throws IOException {
+        Iterator<String> iter = Files.readAllLines(file).iterator();
+        StringBuilder builder = new StringBuilder();
+        while (iter.hasNext()) {
+            String cleanLine = removeWhiteSpaces(iter.next());
+            if (!cleanLine.isBlank()) {
+                builder.append(cleanLine);
+                if (iter.hasNext()) {
+                    builder.append("\n");
+                }
+            }
+        }
+        return builder.toString();
     }
 
     @After
@@ -128,13 +137,36 @@ public class YamlExtensionTestCase {
             }
             WildFlySecurityManager.setPropertyPrivileged("jvm.args", sb.toString());
             container.start(null, null, Server.StartMode.ADMIN_ONLY, System.out, false, null, null, null, null, new Path[]{testYaml});
-            String xml = readXmlConfig();
-            compareXML(expectedBootCLiXml, xml);
             container.waitForLiveServerToReload(TimeoutUtil.adjust(5000));
+            waitForRunningMode("NORMAL");
+            String xml = readXmlConfig();
             compareXML(expectedBootCLiXml, xml);
         } finally {
             container.stop();
         }
+    }
+
+    private void waitForRunningMode(String runningMode) throws Exception {
+        // Following a reload to normal mode, we might read the running mode too early and hit the admin-only server
+        // Cycle around a bit to make sure we get the server reloaded into normal mode
+        long end = System.currentTimeMillis() + TimeoutUtil.adjust(10000);
+        while (true) {
+            try {
+                Thread.sleep(100);
+                Assert.assertEquals(runningMode, getRunningMode());
+                break;
+            } catch (Throwable e) {
+                if (System.currentTimeMillis() >= end) {
+                    throw e;
+                }
+            }
+        }
+    }
+
+    String getRunningMode() throws Exception {
+        ModelNode op = Util.getReadAttributeOperation(PathAddress.EMPTY_ADDRESS, RUNNING_MODE);
+        ModelNode result = container.getClient().executeForResult(op);
+        return result.asString();
     }
 
     private void compareXML(String expected, String result) {
@@ -142,9 +174,9 @@ public class YamlExtensionTestCase {
         String[] resultLines = result.split(System.lineSeparator());
         for (int i = 0; i < expectedLines.length; i++) {
             if (i < resultLines.length) {
-                Assert.assertEquals("Expected " + expectedLines[i] + " but got " + resultLines[i] + " in "+ System.lineSeparator() + result,expectedLines[i], resultLines[i]);
+                Assert.assertEquals("Expected " + expectedLines[i] + " but got " + resultLines[i] + " in " + System.lineSeparator() + result, removeWhiteSpaces(expectedLines[i]), removeWhiteSpaces(resultLines[i]));
             } else {
-                Assert.fail("Missing line " + expectedLines[i] + " in "+ System.lineSeparator() + result);
+                Assert.fail("Missing line " + expectedLines[i] + " in " + System.lineSeparator() + result);
             }
         }
 
@@ -152,7 +184,11 @@ public class YamlExtensionTestCase {
 
     private String readXmlConfig() throws IOException {
         try (ModelControllerClient client = container.getClient().getControllerClient()) {
-            return Operations.readResult(client.execute(READ_CONFIG)).asString().replace("\\\"", "\"");
+            return removeWhiteSpaces(Operations.readResult(client.execute(READ_CONFIG)).asString().replace("\\\"", "\"").replace("\r\n", "\n"));
         }
+    }
+
+    private static String removeWhiteSpaces(String line) {
+        return Pattern.compile ("(^\\s*$\\r?\\n)+", Pattern.MULTILINE).matcher(line.stripTrailing()).replaceAll("");
     }
 }

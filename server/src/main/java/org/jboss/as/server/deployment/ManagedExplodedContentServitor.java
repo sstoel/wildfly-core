@@ -1,21 +1,11 @@
 /*
-Copyright 2016 Red Hat, Inc.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server.deployment;
 
+import static org.jboss.as.server.ServerService.SERVER_ENVIRONMENT_CAPABILITY_NAME;
 import static org.jboss.as.server.Services.requireServerExecutor;
 
 import java.io.IOException;
@@ -29,15 +19,14 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import org.jboss.as.controller.OperationContext;
 import org.jboss.as.repository.ContentRepository;
 import org.jboss.as.repository.ExplodedContentException;
 import org.jboss.as.server.ServerEnvironment;
-import org.jboss.as.server.ServerEnvironmentService;
 import org.jboss.msc.Service;
 import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
-import org.jboss.msc.service.ServiceTarget;
 import org.jboss.msc.service.StartContext;
 import org.jboss.msc.service.StartException;
 import org.jboss.msc.service.StopContext;
@@ -61,11 +50,11 @@ class ManagedExplodedContentServitor implements Service {
     private final byte[] hash;
     private volatile Path deploymentRoot;
 
-    static ServiceController<?> addService(final ServiceTarget serviceTarget, final ServiceName serviceName, final String managementName, final byte[] hash) {
-        final ServiceBuilder<?> sb = serviceTarget.addService(serviceName);
+    static ServiceController<?> addService(OperationContext context, final ServiceName serviceName, final String managementName, final byte[] hash) {
+        final ServiceBuilder<?> sb = context.getCapabilityServiceTarget().addService(serviceName);
         final Consumer<VirtualFile> vfConsumer = sb.provides(serviceName);
         final Supplier<ContentRepository> crSupplier = sb.requires(ContentRepository.SERVICE_NAME);
-        final Supplier<ServerEnvironment> seSupplier = sb.requires(ServerEnvironmentService.SERVICE_NAME);
+        final Supplier<ServerEnvironment> seSupplier = sb.requires(context.getCapabilityServiceName(SERVER_ENVIRONMENT_CAPABILITY_NAME, ServerEnvironment.class));
         final Supplier<ExecutorService> esSupplier = requireServerExecutor(sb);
         sb.setInstance(new ManagedExplodedContentServitor(managementName, hash, vfConsumer, crSupplier, seSupplier, esSupplier));
         return sb.install();

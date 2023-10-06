@@ -1,19 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2017 Red Hat, Inc., and individual contributors
- * as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.wildfly.extension.elytron;
 
@@ -33,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.nio.charset.Charset;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.function.Supplier;
@@ -104,6 +92,12 @@ class AuditResourceDefinitions {
             .setDefaultValue(new ModelNode(Format.SIMPLE.toString()))
             .setAllowedValues(Format.SIMPLE.toString(), Format.JSON.toString())
             .setRestartAllServices()
+            .build();
+
+    static final SimpleAttributeDefinition ENCODING = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.ENCODING, ModelType.STRING, true)
+            .setAllowExpression(true)
+            .setRestartAllServices()
+            .setValidator(new EncodingNameValidator())
             .build();
 
     static final SimpleAttributeDefinition SERVER_ADDRESS = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.SERVER_ADDRESS, ModelType.STRING, false)
@@ -206,7 +200,7 @@ class AuditResourceDefinitions {
     }
 
     static ResourceDefinition getFileAuditLogResourceDefinition() {
-        AttributeDefinition[] attributes = new AttributeDefinition[] { PATH, RELATIVE_TO, AUTOFLUSH, SYNCHRONIZED, FORMAT };
+        AttributeDefinition[] attributes = new AttributeDefinition[] { PATH, RELATIVE_TO, AUTOFLUSH, SYNCHRONIZED, FORMAT, ENCODING };
         AbstractAddStepHandler add = new TrivialAddHandler<SecurityEventListener>(SecurityEventListener.class, attributes, SECURITY_EVENT_LISTENER_RUNTIME_CAPABILITY) {
 
             @Override
@@ -222,6 +216,7 @@ class AuditResourceDefinitions {
 
                 final String path = PATH.resolveModelAttribute(context, model).asString();
                 final String relativeTo = RELATIVE_TO.resolveModelAttribute(context, model).asStringOrNull();
+                final String encoding = ENCODING.resolveModelAttribute(context, model).asStringOrNull();
 
                 if (relativeTo != null) {
                     serviceBuilder.addDependency(PathManagerService.SERVICE_NAME, PathManager.class, pathManager);
@@ -244,6 +239,7 @@ class AuditResourceDefinitions {
                             endpoint = FileAuditEndpoint.builder().setLocation(resolvedPath.toPath())
                                     .setSyncOnAccept(synv)
                                     .setFlushOnAccept(autoflush)
+                                    .setCharset(encoding != null ? Charset.forName(encoding) : null)
                                     .setDateTimeFormatterSupplier(dateTimeFormatterSupplier).build();
                         } catch (IOException e) {
                             throw ROOT_LOGGER.unableToStartService(e);
@@ -263,7 +259,7 @@ class AuditResourceDefinitions {
     }
 
     static ResourceDefinition getPeriodicRotatingFileAuditLogResourceDefinition() {
-        AttributeDefinition[] attributes = new AttributeDefinition[] {PATH, RELATIVE_TO, AUTOFLUSH, SYNCHRONIZED, FORMAT, PERIODIC_SUFFIX };
+        AttributeDefinition[] attributes = new AttributeDefinition[] {PATH, RELATIVE_TO, AUTOFLUSH, SYNCHRONIZED, FORMAT, ENCODING, PERIODIC_SUFFIX };
         AbstractAddStepHandler add = new TrivialAddHandler<SecurityEventListener>(SecurityEventListener.class, attributes, SECURITY_EVENT_LISTENER_RUNTIME_CAPABILITY) {
 
             @Override
@@ -280,6 +276,7 @@ class AuditResourceDefinitions {
 
                 final String path = PATH.resolveModelAttribute(context, model).asString();
                 final String relativeTo = RELATIVE_TO.resolveModelAttribute(context, model).asStringOrNull();
+                final String encoding = ENCODING.resolveModelAttribute(context, model).asStringOrNull();
 
                 if (relativeTo != null) {
                     serviceBuilder.addDependency(PathManagerService.SERVICE_NAME, PathManager.class, pathManager);
@@ -304,6 +301,7 @@ class AuditResourceDefinitions {
                                     .setLocation(resolvedPath.toPath())
                                     .setSyncOnAccept(synv)
                                     .setFlushOnAccept(autoflush)
+                                    .setCharset(encoding != null ? Charset.forName(encoding) : null)
                                     .setDateTimeFormatterSupplier(dateTimeFormatterSupplier);
 
                             endpoint = builder.build();
@@ -325,7 +323,7 @@ class AuditResourceDefinitions {
     }
 
     static ResourceDefinition getSizeRotatingFileAuditLogResourceDefinition() {
-        AttributeDefinition[] attributes = new AttributeDefinition[] { PATH, RELATIVE_TO, AUTOFLUSH, SYNCHRONIZED, FORMAT, MAX_BACKUP_INDEX, ROTATE_ON_BOOT, ROTATE_SIZE, SIZE_SUFFIX };
+        AttributeDefinition[] attributes = new AttributeDefinition[] { PATH, RELATIVE_TO, AUTOFLUSH, SYNCHRONIZED, FORMAT, ENCODING, MAX_BACKUP_INDEX, ROTATE_ON_BOOT, ROTATE_SIZE, SIZE_SUFFIX };
         AbstractAddStepHandler add = new TrivialAddHandler<SecurityEventListener>(SecurityEventListener.class, attributes, SECURITY_EVENT_LISTENER_RUNTIME_CAPABILITY) {
 
             @Override
@@ -345,6 +343,7 @@ class AuditResourceDefinitions {
 
                 final String path = PATH.resolveModelAttribute(context, model).asString();
                 final String relativeTo = RELATIVE_TO.resolveModelAttribute(context, model).asStringOrNull();
+                final String encoding = ENCODING.resolveModelAttribute(context, model).asStringOrNull();
 
                 if (relativeTo != null) {
                     serviceBuilder.addDependency(PathManagerService.SERVICE_NAME, PathManager.class, pathManager);
@@ -374,6 +373,7 @@ class AuditResourceDefinitions {
                             builder.setLocation(resolvedPath.toPath())
                                     .setSyncOnAccept(synv)
                                     .setFlushOnAccept(autoflush)
+                                    .setCharset(encoding != null ? Charset.forName(encoding) : null)
                                     .setDateTimeFormatterSupplier(dateTimeFormatterSupplier);
 
                             endpoint = builder.build();
@@ -561,5 +561,23 @@ class AuditResourceDefinitions {
         }
     }
 
+    static class EncodingNameValidator extends ModelTypeValidator {
+
+        EncodingNameValidator() {
+            super(ModelType.STRING, true, true, false);
+        }
+
+        @Override
+        public void validateParameter(String parameterName, ModelNode value) throws OperationFailedException {
+            super.validateParameter(parameterName, value);
+            if (value.isDefined()) {
+                try {
+                    Charset.forName(value.asString());
+                } catch (IllegalArgumentException e) {
+                    throw ROOT_LOGGER.invalidEncodingName(value.asString());
+                }
+            }
+        }
+    }
 }
 

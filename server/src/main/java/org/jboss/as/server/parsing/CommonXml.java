@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server.parsing;
@@ -37,16 +20,15 @@ import java.util.TreeSet;
 import javax.xml.XMLConstants;
 import javax.xml.stream.XMLStreamException;
 
+import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.operations.common.NamespaceAddHandler;
 import org.jboss.as.controller.operations.common.SchemaLocationAddHandler;
 import org.jboss.as.controller.parsing.Attribute;
 import org.jboss.as.controller.parsing.Element;
 import org.jboss.as.controller.parsing.Namespace;
-import org.jboss.as.controller.parsing.WriteUtils;
 import org.jboss.as.controller.persistence.ModelMarshallingContext;
 import org.jboss.as.controller.persistence.SubsystemMarshallingContext;
-import org.jboss.as.server.services.net.SocketBindingGroupResourceDefinition;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.Property;
 import org.jboss.staxmapper.XMLElementReader;
@@ -81,19 +63,6 @@ public abstract class CommonXml implements XMLElementReader<List<ModelNode>> {
 
     protected CommonXml(SocketBindingsXml socketBindingsXml) {
         this.socketBindingsXml = socketBindingsXml;
-    }
-
-    /**
-     * @deprecated @deprecated WFCORE-726 Only here for AppClientXml in Full while waiting for a core release
-     */
-    @Deprecated
-    protected CommonXml() {
-        socketBindingsXml = new SocketBindingsXml() {
-            @Override
-            protected void writeExtraAttributes(XMLExtendedStreamWriter writer, ModelNode bindingGroup) throws XMLStreamException {
-                SocketBindingGroupResourceDefinition.PORT_OFFSET.marshallAsAttribute(bindingGroup, writer);
-            }
-        };
     }
 
     protected void parseNamespaces(final XMLExtendedStreamReader reader, final ModelNode address, final List<ModelNode> nodes) {
@@ -171,14 +140,6 @@ public abstract class CommonXml implements XMLElementReader<List<ModelNode>> {
         if (needXsd && !wroteXsd) {
             writer.writeNamespace("xsd", xsdUri);
         }
-    }
-
-    /**
-     * @deprecated {@see WriteUtils#writeElement(XMLExtendedStreamWriter, Element)}
-     */
-    @Deprecated
-    protected static void writeElement(final XMLExtendedStreamWriter writer, final Element element) throws XMLStreamException {
-        WriteUtils.writeElement(writer, element);
     }
 
     protected void writePaths(final XMLExtendedStreamWriter writer, final ModelNode node, final boolean namedPath) throws XMLStreamException {
@@ -288,30 +249,17 @@ public abstract class CommonXml implements XMLElementReader<List<ModelNode>> {
         }
     }
 
-    /**
-     * @deprecated {@see WriteUtils#writeAttribute(XMLExtendedStreamWriter, Attribute, String)}
-     */
-    @Deprecated
-    protected static void writeAttribute(XMLExtendedStreamWriter writer, Attribute attribute, String value)
-            throws XMLStreamException {
-        WriteUtils.writeAttribute(writer, attribute, value);
-    }
-
     protected static void writeContentItem(final XMLExtendedStreamWriter writer, final ModelNode contentItem)
             throws XMLStreamException {
         DeploymentsXml.writeContentItem(writer, contentItem);
     }
 
-    /**
-     * @deprecated {@see WriteUtils#writeNewLine(XMLExtendedStreamWriter)}
-     */
-    @Deprecated
-    protected static void writeNewLine(XMLExtendedStreamWriter writer) throws XMLStreamException {
-        WriteUtils.writeNewLine(writer);
-    }
-
     protected void writeDeploymentOverlays(final XMLExtendedStreamWriter writer, final ModelNode modelNode) throws XMLStreamException {
         deploymentOverlaysXml.writeDeploymentOverlays(writer, modelNode);
+    }
+
+    protected static ModelNode parseAttributeValue(AttributeDefinition ad, String value, XMLExtendedStreamReader reader) throws XMLStreamException {
+        return ad.getParser().parse(ad,value,reader);
     }
 
 }

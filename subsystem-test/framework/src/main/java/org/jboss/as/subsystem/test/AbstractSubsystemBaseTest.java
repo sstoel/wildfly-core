@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.subsystem.test;
@@ -36,6 +19,7 @@ import org.jboss.as.model.test.ModelTestUtils;
 import org.jboss.dmr.ModelNode;
 import org.junit.Assert;
 import org.junit.Assume;
+import org.junit.AssumptionViolatedException;
 import org.junit.Test;
 
 /**
@@ -87,6 +71,7 @@ public abstract class AbstractSubsystemBaseTest extends AbstractSubsystemTest {
      * In that case, you will have to make sure that the corresponding expressions have resolved properties
      * returned by #getResolvedProperties.
      */
+    @Deprecated
     protected String[] getSubsystemTemplatePaths() throws IOException {
         return new String[0];
     }
@@ -163,18 +148,9 @@ public abstract class AbstractSubsystemBaseTest extends AbstractSubsystemTest {
      * To enable a test for validation of the subsystem templates, override both {@link #getSubsystemXsdPath()} and {@link #getSubsystemTemplatePaths()}
      * then add a new test just calling this method.
      */
+    @Deprecated
     protected void testSchemaOfSubsystemTemplates() throws Exception {
-        String schemaPath = getSubsystemXsdPath();
-        Assert.assertTrue("getSubsystemXsdPath() needs to be overridden to enable the validation of the subsystem templates",
-                schemaPath != null);
-        String[] templates = getSubsystemTemplatePaths();
-        Assert.assertTrue("Override getSubsystemTemplatePaths() to activate the validation of the subsystem templates",
-                templates != null && templates.length > 0);
-
-        for (String template : templates) {
-            String content = readResource(template);
-            SchemaValidator.validateXML(content, "subsystem", schemaPath, getResolvedProperties());
-        }
+        throw new AssumptionViolatedException("testSchemaOfSubsystemTemplates is deprecated");
     }
 
     /**

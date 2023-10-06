@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2013, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.subsystem.test;
 
@@ -68,7 +51,7 @@ import org.jboss.msc.service.ServiceContainer;
  * @author <a href="kabir.khan@jboss.com">Kabir Khan</a>
  */
 class MainKernelServicesImpl extends AbstractKernelServicesImpl {
-    private Class<?> testClass;
+    private final Class<?> testClass;
     private static final ModelVersion CURRENT_CORE_VERSION = ModelVersion.create(Version.MANAGEMENT_MAJOR_VERSION,
             Version.MANAGEMENT_MINOR_VERSION, Version.MANAGEMENT_MICRO_VERSION);
 
@@ -93,11 +76,25 @@ class MainKernelServicesImpl extends AbstractKernelServicesImpl {
      * @return the transformed operation
      * @throws IllegalStateException if this is not the test's main model controller
      */
+    @Override
     public TransformedOperation transformOperation(ModelVersion modelVersion, ModelNode operation) throws OperationFailedException {
         return transformOperation(modelVersion, operation, null);
     }
 
-    public TransformedOperation transformOperation(ModelVersion modelVersion, ModelNode operation,
+    /**
+     * Transforms an operation in the main controller to the format expected by the model controller containing
+     * the legacy subsystem
+     *
+     * @param modelVersion the subsystem model version of the legacy subsystem model controller
+     * @param operation the operation to transform
+     * @param attachment attachments propagated from the operation context to the created transformer context.
+     *                   This may be {@code null}. In a non-test scenario, this will be added by operation handlers
+     *                   triggering the transformation, but for tests this needs to be hard-coded. Tests will need to
+     *                   ensure themselves that the relevant attachments get set.
+     * @return the transformed operation
+     * @throws IllegalStateException if this is not the test's main model controller
+     */
+    private TransformedOperation transformOperation(ModelVersion modelVersion, ModelNode operation,
                                                    TransformerOperationAttachment attachment) throws OperationFailedException {
         checkIsMainController();
         PathElement pathElement = PathElement.pathElement(SUBSYSTEM, mainSubsystemName);
@@ -144,6 +141,7 @@ class MainKernelServicesImpl extends AbstractKernelServicesImpl {
      * @throws IllegalStateException if this is not the test's main model controller
      * @throws IllegalStateException if there is no legacy controller containing the version of the subsystem
      */
+    @Override
     public ModelNode executeOperation(final ModelVersion modelVersion, final TransformedOperation op) {
         KernelServices legacy = getLegacyServices(modelVersion);
         ModelNode result = new ModelNode();
@@ -176,19 +174,6 @@ class MainKernelServicesImpl extends AbstractKernelServicesImpl {
     @Override
     public Class<?> getTestClass() {
         return testClass;
-    }
-
-    @Override
-    public TransformerOperationAttachment executeAndGrabTransformerAttachment(ModelNode op) {
-        try {
-            ModelNode wrapper = Util.createEmptyOperation(TransformerAttachmentGrabber.DESC.getName(), PathAddress.EMPTY_ADDRESS);
-            wrapper.get(VALUE).set(op);
-            ModelTestUtils.checkOutcome(executeOperation(wrapper));
-
-            return TransformerAttachmentGrabber.getAttachment();
-        } finally {
-            TransformerAttachmentGrabber.clear();
-        }
     }
 
     @Override

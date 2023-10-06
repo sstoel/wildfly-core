@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2015, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.subsystem.test.transformers.subsystem.map_to_child_resource;
 
@@ -33,6 +16,7 @@ import org.jboss.as.controller.ModelOnlyWriteAttributeHandler;
 import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.SimpleAttributeDefinition;
+import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.SubsystemRegistration;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
@@ -40,8 +24,6 @@ import org.jboss.as.controller.descriptions.NonResolvingResourceDescriptionResol
 import org.jboss.as.controller.parsing.ExtensionParsingContext;
 import org.jboss.as.controller.persistence.SubsystemMarshallingContext;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
-import org.jboss.as.controller.transform.description.ResourceTransformationDescriptionBuilder;
-import org.jboss.as.controller.transform.description.TransformationDescription;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.staxmapper.XMLElementReader;
@@ -57,17 +39,15 @@ public class OldExtension implements Extension {
     public static final String EXTENSION_NAME = "org.jboss.as.test.transformers";
     static final PathElement SUBSYSTEM_PATH = PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM, SUBSYSTEM_NAME);
 
-    static final SimpleAttributeDefinition TEST = new SimpleAttributeDefinition("test", ModelType.STRING, false);
+    static final SimpleAttributeDefinition TEST = new SimpleAttributeDefinitionBuilder("test", ModelType.STRING, false).build();
 
-    static final SimpleAttributeDefinition VALUE = new SimpleAttributeDefinition("value", ModelType.STRING, false);
+    static final SimpleAttributeDefinition VALUE = new SimpleAttributeDefinitionBuilder("value", ModelType.STRING, false).build();
 
     @Override
     public void initialize(final ExtensionContext context) {
-        final SubsystemRegistration registration = context.registerSubsystem(SUBSYSTEM_NAME, ModelVersion.create(2, 0, 0));
+        final SubsystemRegistration registration = context.registerSubsystem(SUBSYSTEM_NAME, ModelVersion.create(1, 0, 0));
         registration.registerXMLElementWriter(new EmptyParser());
-        final ManagementResourceRegistration reg = registration.registerSubsystemModel(new TestResourceDefinition());
-
-        registerTransformers(registration);
+        registration.registerSubsystemModel(new TestResourceDefinition());
     }
 
     @Override
@@ -75,14 +55,7 @@ public class OldExtension implements Extension {
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, EXTENSION_NAME, EmptyParser::new);
     }
 
-    private void registerTransformers(SubsystemRegistration subsystem) {
-        // Register the transformers
-        ResourceTransformationDescriptionBuilder builder = ResourceTransformationDescriptionBuilder.Factory.createSubsystemInstance();
-
-        TransformationDescription.Tools.register(builder.build(), subsystem, ModelVersion.create(1, 0, 0));
-    }
-
-    private class EmptyParser implements XMLElementReader<List<ModelNode>>, XMLElementWriter<SubsystemMarshallingContext> {
+    private static final class EmptyParser implements XMLElementReader<List<ModelNode>>, XMLElementWriter<SubsystemMarshallingContext> {
         @Override
         public void readElement(XMLExtendedStreamReader reader, List<ModelNode> list) throws XMLStreamException {
         }
@@ -92,8 +65,8 @@ public class OldExtension implements Extension {
         }
     }
 
-    protected static class TestResourceDefinition extends SimpleResourceDefinition {
-        protected TestResourceDefinition() {
+    private static final class TestResourceDefinition extends SimpleResourceDefinition {
+        private TestResourceDefinition() {
             super(SUBSYSTEM_PATH,
                     NonResolvingResourceDescriptionResolver.INSTANCE,
                     new ModelOnlyAddStepHandler(TEST),
@@ -111,8 +84,8 @@ public class OldExtension implements Extension {
         }
     }
 
-    protected static class PropertyResourceDefinition extends SimpleResourceDefinition {
-        protected PropertyResourceDefinition() {
+    private static final class PropertyResourceDefinition extends SimpleResourceDefinition {
+        private PropertyResourceDefinition() {
             super(PathElement.pathElement("property"),
                     NonResolvingResourceDescriptionResolver.INSTANCE,
                     new ModelOnlyAddStepHandler(VALUE),

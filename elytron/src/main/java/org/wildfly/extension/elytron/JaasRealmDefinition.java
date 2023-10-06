@@ -1,19 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2021 Red Hat, Inc., and individual contributors
- * as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.wildfly.extension.elytron;
@@ -33,6 +20,7 @@ import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.OperationEntry;
 import org.jboss.as.controller.services.path.PathManager;
+import org.jboss.as.controller.services.path.PathManagerService;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.msc.service.ServiceBuilder;
@@ -139,6 +127,8 @@ public class JaasRealmDefinition extends SimpleResourceDefinition {
                 throw ROOT_LOGGER.failedToLoadCallbackhandlerFromProvidedModule();
             }
 
+            final InjectedValue<PathManager> pathManagerInjector = new InjectedValue<>();
+
             CallbackHandler finalCallbackHandler = callbackhandler;
             TrivialService<SecurityRealm> jaasRealmService = new TrivialService<>(
                     new TrivialService.ValueSupplier<SecurityRealm>() {
@@ -149,7 +139,6 @@ public class JaasRealmDefinition extends SimpleResourceDefinition {
                             String rootPath = null;
                             if (jaasConfigPath != null) {
                                 pathResolver = pathResolver();
-                                final InjectedValue<PathManager> pathManagerInjector = new InjectedValue<>();
                                 File jaasConfigFile = pathResolver.path(jaasConfigPath).relativeTo(relativeTo, pathManagerInjector.getOptionalValue()).resolve();
                                 if (!jaasConfigFile.exists()) {
                                     throw ROOT_LOGGER.jaasFileDoesNotExist(jaasConfigFile.getPath());
@@ -172,8 +161,8 @@ public class JaasRealmDefinition extends SimpleResourceDefinition {
             ServiceBuilder<SecurityRealm> serviceBuilder = serviceTarget.addService(realmName, jaasRealmService);
 
             if (relativeTo != null) {
+                serviceBuilder.addDependency(PathManagerService.SERVICE_NAME, PathManager.class, pathManagerInjector);
                 serviceBuilder.requires(pathName(relativeTo));
-                serviceBuilder.requires(pathName(jaasConfigPath));
             }
 
             commonDependencies(serviceBuilder)

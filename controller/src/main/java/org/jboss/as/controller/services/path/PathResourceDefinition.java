@@ -1,24 +1,7 @@
 /*
-* JBoss, Home of Professional Open Source.
-* Copyright 2012, Red Hat Middleware LLC, and individual contributors
-* as indicated by the @author tags. See the copyright.txt file in the
-* distribution for a full listing of individual contributors.
-*
-* This is free software; you can redistribute it and/or modify it
-* under the terms of the GNU Lesser General Public License as
-* published by the Free Software Foundation; either version 2.1 of
-* the License, or (at your option) any later version.
-*
-* This software is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-* Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public
-* License along with this software; if not, write to the Free
-* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA, or see the FSF site: http://www.fsf.org.
-*/
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package org.jboss.as.controller.services.path;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FILESYSTEM_PATH;
@@ -157,40 +140,12 @@ public abstract class PathResourceDefinition extends SimpleResourceDefinition {
     /**
      * Creates a resource definition for a path resource that does not require that the path details
      * be specified. Interaction with the path manager will not be part of the execution of management
-     * operations.  Only for use by the kernel.
-     * @param pathManager the path manager
-     * @return the resource definition
-     *
-     * @deprecated only for use by the kernel. May be removed at any time.
-     */
-    @Deprecated
-    public static PathResourceDefinition createNamed(PathManagerService pathManager) {
-        return new NamedPathResourceDefinition(false);
-    }
-
-    /**
-     * Creates a resource definition for a path resource that does not require that the path details
-     * be specified. Interaction with the path manager will not be part of the execution of management
      * operations. Only for use by the kernel.
      *
      * @return the resource definition
      */
     public static PathResourceDefinition createNamed() {
         return new NamedPathResourceDefinition(false);
-    }
-
-    /**
-     * Creates a resource definition for a path resource that must have the path specified, but
-     * for which interaction with the path manager should not be part of the execution of management
-     * operations.  Only for use by the kernel.
-     * @param pathManager the path manager
-     * @return the resource definition
-     *
-     * @deprecated only for use by the kernel. May be removed at any time
-     */
-    @Deprecated
-    public static PathResourceDefinition createSpecifiedNoServices(PathManagerService pathManager) {
-        return new SpecifiedNoServicesPathResourceDefinition(false);
     }
 
     /**

@@ -1,19 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2015 Red Hat, Inc., and individual contributors
- * as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.wildfly.extension.elytron;
@@ -30,6 +17,7 @@ import javax.net.ssl.TrustManager;
 import javax.security.sasl.SaslServerFactory;
 
 import org.jboss.as.controller.capability.RuntimeCapability;
+import org.jboss.as.server.security.VirtualDomainMetaData;
 import org.jboss.msc.service.ServiceBuilder;
 import org.wildfly.extension.elytron.capabilities.CredentialSecurityFactory;
 import org.wildfly.extension.elytron.capabilities.PrincipalTransformer;
@@ -226,6 +214,12 @@ class Capabilities {
     static final RuntimeCapability<Void> SECURITY_DOMAIN_RUNTIME_CAPABILITY = RuntimeCapability
         .Builder.of(SECURITY_DOMAIN_CAPABILITY, true, SecurityDomain.class)
         .build();
+
+    static final String VIRTUAL_SECURITY_DOMAIN_CAPABILITY = CAPABILITY_BASE + "virtual-security-domain";
+
+    static final RuntimeCapability<Void> VIRTUAL_SECURITY_DOMAIN_RUNTIME_CAPABILITY = RuntimeCapability
+            .Builder.of(VIRTUAL_SECURITY_DOMAIN_CAPABILITY, true, VirtualDomainMetaData.class)
+            .build();
 
     static final String SECURITY_FACTORY_CAPABILITY_BASE = CAPABILITY_BASE + "security-factory.";
 

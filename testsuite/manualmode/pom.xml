@@ -1,21 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-~ JBoss, Home of Professional Open Source
-~ Copyright 2014, JBoss Inc., and individual contributors as indicated
-~ by the @authors tag.
-~
-~ Licensed under the Apache License, Version 2.0 (the "License");
-~ you may not use this file except in compliance with the License.
-~ You may obtain a copy of the License at
-~
-~ http://www.apache.org/licenses/LICENSE-2.0
-~
-~ Unless required by applicable law or agreed to in writing, software
-~ distributed under the License is distributed on an "AS IS" BASIS,
-~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-~ See the License for the specific language governing permissions and
-~ limitations under the License.
--->
+  ~ Copyright The WildFly Authors
+  ~ SPDX-License-Identifier: Apache-2.0
+  -->
 
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -25,7 +12,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-testsuite</artifactId>
-        <version>20.0.0.Beta3-SNAPSHOT</version>
+        <version>22.0.0.Final-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -53,10 +40,6 @@
             <groupId>jakarta.inject</groupId>
             <artifactId>jakarta.inject-api</artifactId>
             <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.wildfly.core</groupId>
-            <artifactId>wildfly-elytron-integration</artifactId>
         </dependency>
         <dependency>
             <groupId>org.wildfly.core</groupId>
@@ -598,20 +581,11 @@
                                     <goal>test</goal>
                                 </goals>
                                 <configuration>
-                                    <systemProperties>
-                                        <property>
-                                            <name>wildfly.bootable.jar</name>
-                                            <value>true</value>
-                                        </property>
-                                        <property>
-                                            <name>wildfly.bootable.jar.jar</name>
-                                            <value>${project.build.directory}/test-wildfly.jar</value>
-                                        </property>
-                                        <property>
-                                            <name>wildfly.bootable.jar.install.dir</name>
-                                            <value>${project.build.directory}/${server.output.dir.prefix}</value>
-                                        </property>
-                                    </systemProperties>
+                                    <systemPropertyVariables>
+                                        <wildfly.bootable.jar>true</wildfly.bootable.jar>
+                                        <wildfly.bootable.jar.jar>${project.build.directory}/test-wildfly.jar</wildfly.bootable.jar.jar>
+                                        <wildfly.bootable.jar.install.dir>${project.build.directory}/${server.output.dir.prefix}</wildfly.bootable.jar.install.dir>
+                                    </systemPropertyVariables>
                                     <excludes>
                                         <!-- No domain mode support -->
                                         <exclude>org.jboss.as.test.manualmode.management.cli.CLIEmbedHostControllerTestCase.java</exclude>
@@ -669,6 +643,8 @@
                                         
                                         <!-- start/stop/start the server -->
                                         <exclude>org.wildfly.core.test.standalone.mgmt.events.*TestCase</exclude>
+                                        <!-- Requires modification of the process-uuid file inside the Jar -->
+                                        <exclude>org.jboss.as.test.manualmode.logging.ProcessUuidTestCase</exclude>
                                     </excludes>
                                 </configuration>
                             </execution>

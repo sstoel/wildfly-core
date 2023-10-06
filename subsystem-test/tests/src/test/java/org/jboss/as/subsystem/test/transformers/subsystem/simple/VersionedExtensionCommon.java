@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2012, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.subsystem.test.transformers.subsystem.simple;
@@ -68,12 +51,12 @@ import org.jboss.staxmapper.XMLExtendedStreamWriter;
  */
 public abstract class VersionedExtensionCommon implements Extension {
 
-    public static final String SUBSYSTEM_NAME = "test-subsystem";
+    public static final String SUBSYSTEM_NAME = "versioned-subsystem";
     public static final String EXTENSION_NAME = "org.jboss.as.test.transformers";
     static final PathElement SUBSYSTEM_PATH = PathElement.pathElement(ModelDescriptionConstants.SUBSYSTEM, SUBSYSTEM_NAME);
     static final AttributeDefinition TEST_ATTRIBUTE = SimpleAttributeDefinitionBuilder.create("test-attribute", ModelType.STRING).build();
 
-    private SubsystemParser parser = new SubsystemParser(EXTENSION_NAME);
+    private final SubsystemParser parser = new SubsystemParser(EXTENSION_NAME);
 
     public SubsystemParser getParser() {
         return parser;
@@ -114,7 +97,10 @@ public abstract class VersionedExtensionCommon implements Extension {
 
         @SuppressWarnings("deprecation")
         protected TestResourceDefinition(PathElement element, AbstractAddStepHandler addHandler) {
-            super(element, TEST_RESOURCE_DESCRIPTION_RESOLVER, addHandler, NOOP_REMOVE_HANDLER, OperationEntry.Flag.RESTART_NONE, OperationEntry.Flag.RESTART_NONE);
+            super(new Parameters(element, TEST_RESOURCE_DESCRIPTION_RESOLVER)
+                    .setAddHandler(addHandler)
+                    .setRemoveHandler(NOOP_REMOVE_HANDLER)
+                    .setRemoveRestartLevel(OperationEntry.Flag.RESTART_NONE));
         }
     }
 
@@ -133,7 +119,7 @@ public abstract class VersionedExtensionCommon implements Extension {
         }
     }
 
-    private static AbstractRemoveStepHandler NOOP_REMOVE_HANDLER = new AbstractRemoveStepHandler() {
+    private static final AbstractRemoveStepHandler NOOP_REMOVE_HANDLER = new AbstractRemoveStepHandler() {
         @Override
         protected void performRuntime(OperationContext context, ModelNode operation, ModelNode model) throws OperationFailedException {
             super.performRuntime(context, operation, model);
@@ -193,9 +179,9 @@ public abstract class VersionedExtensionCommon implements Extension {
         }
     }
 
-    static ResourceDescriptionResolver TEST_RESOURCE_DESCRIPTION_RESOLVER = new NonResolvingResourceDescriptionResolver();
+    static final ResourceDescriptionResolver TEST_RESOURCE_DESCRIPTION_RESOLVER = new NonResolvingResourceDescriptionResolver();
 
-    public static class TestAttachment {
+    public static final class TestAttachment {
         public static final OperationContext.AttachmentKey<TestAttachment> KEY = OperationContext.AttachmentKey.create(TestAttachment.class);
 
         public volatile String s;

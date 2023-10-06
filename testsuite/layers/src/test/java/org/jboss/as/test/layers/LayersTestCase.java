@@ -1,18 +1,6 @@
 /*
- * Copyright 2016-2018 Red Hat, Inc. and/or its affiliates
- * and other contributors as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.test.layers;
 
@@ -36,12 +24,14 @@ public class LayersTestCase {
     // Packages that are provisioned but not used (not injected nor referenced).
     // This is the expected set of not provisioned modules when all layers are provisioned.
     private static final String[] NOT_USED = {
-        // deprecated
-        "org.jboss.as.threads",
-        // Un-used
-        "javax.xml.stream.api",
-        // Un-used
+        // deprecated and unused
+        "ibm.jdk",
+        "javax.api",
         "javax.sql.api",
+        "javax.xml.stream.api",
+        "org.jboss.as.threads",
+        "sun.jdk",
+        "sun.scripting",
         // No patching modules in layers
         "org.jboss.as.patching",
         "org.jboss.as.patching.cli",
@@ -60,8 +50,6 @@ public class LayersTestCase {
     // This is the expected set of un-referenced modules found when scanning
     // the default configuration.
     private static final String[] NOT_REFERENCED = {
-        // injected by root resource
-        "ibm.jdk",
         //  injected by server in UndertowHttpManagementService
         "org.jboss.as.domain-http-error-context",
         // injected by elytron

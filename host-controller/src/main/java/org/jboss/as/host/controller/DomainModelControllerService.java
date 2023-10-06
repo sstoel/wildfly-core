@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.host.controller;
@@ -76,27 +59,24 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.CallbackHandler;
-import javax.security.auth.callback.UnsupportedCallbackException;
-
 import org.jboss.as.controller.AbstractControllerService;
 import org.jboss.as.controller.BlockingTimeout;
 import org.jboss.as.controller.BootContext;
 import org.jboss.as.controller.Cancellable;
 import org.jboss.as.controller.CapabilityRegistry;
 import org.jboss.as.controller.ControlledProcessState;
-import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.ControlledProcessStateService;
 import org.jboss.as.controller.ExpressionResolver;
 import org.jboss.as.controller.ManagementModel;
 import org.jboss.as.controller.ModelController;
+import org.jboss.as.controller.ModelController.OperationTransactionControl;
 import org.jboss.as.controller.ModelControllerServiceInitialization;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
+import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.ProcessType;
 import org.jboss.as.controller.ProxyController;
 import org.jboss.as.controller.ProxyOperationAddressTranslator;
@@ -104,7 +84,6 @@ import org.jboss.as.controller.ResourceDefinition;
 import org.jboss.as.controller.RunningMode;
 import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.TransformingProxyController;
-import org.jboss.as.controller.ModelController.OperationTransactionControl;
 import org.jboss.as.controller.access.InVmAccess;
 import org.jboss.as.controller.access.management.DelegatingConfigurableAuthorizer;
 import org.jboss.as.controller.access.management.ManagementSecurityIdentitySupplier;
@@ -152,7 +131,6 @@ import org.jboss.as.domain.controller.operations.coordination.PrepareStepHandler
 import org.jboss.as.domain.controller.resources.DomainRootDefinition;
 import org.jboss.as.domain.http.server.ConsoleAvailability;
 import org.jboss.as.domain.management.CoreManagementResourceDefinition;
-import org.jboss.as.domain.management.security.DomainManagedServerCallbackHandler;
 import org.jboss.as.host.controller.RemoteDomainConnectionService.RemoteFileRepository;
 import org.jboss.as.host.controller.discovery.DiscoveryOption;
 import org.jboss.as.host.controller.discovery.DomainControllerManagementInterface;
@@ -168,6 +146,7 @@ import org.jboss.as.host.controller.model.host.AdminOnlyDomainConfigPolicy;
 import org.jboss.as.host.controller.operations.LocalHostControllerInfoImpl;
 import org.jboss.as.host.controller.operations.StartServersHandler;
 import org.jboss.as.host.controller.resources.ServerConfigResourceDefinition;
+import org.jboss.as.host.controller.security.ServerVerificationService;
 import org.jboss.as.process.CommandLineConstants;
 import org.jboss.as.process.ExitCodes;
 import org.jboss.as.process.ProcessControllerClient;
@@ -281,8 +260,20 @@ public class DomainModelControllerService extends AbstractControllerService impl
         final ManagementSecurityIdentitySupplier securityIdentitySupplier = new ManagementSecurityIdentitySupplier();
         final RuntimeHostControllerInfoAccessor hostControllerInfoAccessor = new DomainHostControllerInfoAccessor(hostControllerInfo);
         final ProcessType processType = environment.getProcessType();
-        final ExtensionRegistry hostExtensionRegistry = new ExtensionRegistry(processType, runningModeControl, auditLogger, authorizer, securityIdentitySupplier, hostControllerInfoAccessor);
-        final ExtensionRegistry extensionRegistry = new ExtensionRegistry(processType, runningModeControl, auditLogger, authorizer, securityIdentitySupplier, hostControllerInfoAccessor);
+        final ExtensionRegistry hostExtensionRegistry = ExtensionRegistry.builder(processType)
+                .withRunningModeControl(runningModeControl)
+                .withAuditLogger(auditLogger)
+                .withAuthorizer(authorizer)
+                .withSecurityIdentitySupplier(securityIdentitySupplier)
+                .withHostControllerInfoAccessor(hostControllerInfoAccessor)
+                .build();
+        final ExtensionRegistry extensionRegistry = ExtensionRegistry.builder(processType)
+                .withRunningModeControl(runningModeControl)
+                .withAuditLogger(auditLogger)
+                .withAuthorizer(authorizer)
+                .withSecurityIdentitySupplier(securityIdentitySupplier)
+                .withHostControllerInfoAccessor(hostControllerInfoAccessor)
+                .build();
         final PrepareStepHandler prepareStepHandler = new PrepareStepHandler(hostControllerInfo,
                 hostProxies, serverProxies, ignoredRegistry, extensionRegistry);
         final RuntimeExpressionResolver expressionResolver = new RuntimeExpressionResolver();
@@ -303,7 +294,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
         sb.install();
 
         ExternalManagementRequestExecutor.install(serviceTarget, threadGroup,
-                EXECUTOR_CAPABILITY.getCapabilityServiceName(), service.getStabilityMonitor());
+                EXECUTOR_CAPABILITY.getCapabilityServiceName());
     }
 
     private DomainModelControllerService(final Supplier<ExecutorService> executorService,
@@ -532,7 +523,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
         prepareStepHandler.setExecutorService(executorService);
         ThreadFactory pingerThreadFactory = doPrivileged(new PrivilegedAction<JBossThreadFactory>() {
             public JBossThreadFactory run() {
-                return new JBossThreadFactory(new ThreadGroup("proxy-pinger-threads"), Boolean.TRUE, null, "%G - %t", null, null);
+                return new JBossThreadFactory(ThreadGroupHolder.THREAD_GROUP, Boolean.TRUE, null, "%G - %t", null, null);
             }
         });
         pingScheduler = Executors.newScheduledThreadPool(PINGER_POOL_SIZE, pingerThreadFactory);
@@ -651,13 +642,12 @@ public class DomainModelControllerService extends AbstractControllerService impl
         final ServiceTarget serviceTarget = context.getServiceTarget();
         boolean ok = false;
         boolean reachedServers = false;
+        Throwable cause = null;
 
         try {
-            // Install server inventory callback
-            ServerInventoryCallbackService.install(serviceTarget);
+            // Install the intermediate service to connect domain server verification through.
+            ServerVerificationService.install(serviceTarget);
 
-            // handler for domain server auth.
-            DomainManagedServerCallbackHandler.install(serviceTarget);
             // Parse the host.xml and invoke all the ops. The ops should rollback on any Stage.RUNTIME failure
             List<ModelNode> hostBootOps = hostControllerConfigurationPersister.load();
             if (hostBootOps.isEmpty()) { // booting with empty config
@@ -877,6 +867,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
 
         } catch (Exception e) {
             ROOT_LOGGER.caughtExceptionDuringBoot(e);
+            cause = e;
             if (!reachedServers) {
                 ok = false;
             }
@@ -908,7 +899,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
                     } else {
                         message = ROOT_LOGGER.configFileInUse(hostConfig);
                     }
-                    bootstrapListener.printBootStatistics(message);
+                    bootstrapListener.generateBootStatistics(message);
                 }
             } else {
                 // Die!
@@ -920,7 +911,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
                 }
                 String failed = ROOT_LOGGER.unsuccessfulBoot(message);
                 ROOT_LOGGER.fatal(failed);
-                bootstrapListener.bootFailure(failed);
+                bootstrapListener.bootFailure(new Exception(failed, cause));
 
                 // don't exit if we're embedded
                 if (processType != ProcessType.EMBEDDED_HOST_CONTROLLER) {
@@ -928,6 +919,12 @@ public class DomainModelControllerService extends AbstractControllerService impl
                 }
             }
         }
+    }
+
+    @Override
+    protected void postBoot() {
+        bootstrapListener.printBootStatisticsMessage();
+        super.postBoot();
     }
 
     private boolean bootEmptyConfig(final BootContext context) throws OperationFailedException, ConfigurationPersistenceException {
@@ -1289,8 +1286,8 @@ public class DomainModelControllerService extends AbstractControllerService impl
         }
 
         @Override
-        public void reconnectServer(String serverName, ModelNode domainModel, String authKey, boolean running, boolean stopping) {
-            getServerInventory().reconnectServer(serverName, domainModel, authKey, running, stopping);
+        public void reconnectServer(String serverName, ModelNode domainModel, boolean running, boolean stopping) {
+            getServerInventory().reconnectServer(serverName, domainModel, running, stopping);
         }
 
         @Override
@@ -1311,11 +1308,6 @@ public class DomainModelControllerService extends AbstractControllerService impl
         @Override
         public ServerStatus stopServer(String serverName, int gracefulTimeout, boolean blocking) {
             return getServerInventory().stopServer(serverName, gracefulTimeout, blocking);
-        }
-
-        @Override
-        public CallbackHandler getServerCallbackHandler() {
-            return getServerInventory().getServerCallbackHandler();
         }
 
         @Override
@@ -1377,6 +1369,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
         public List<ModelNode> suspendServers(Set<String> serverNames, int timeout, BlockingTimeout blockingTimeout) {
             return getServerInventory().suspendServers(serverNames, timeout, blockingTimeout);
         }
+
     }
 
     @Override
@@ -1632,7 +1625,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
             }
 
             @Override
-            public void reconnectServer(String serverName, ModelNode domainModel, String authKey, boolean running, boolean stopping) {
+            public void reconnectServer(String serverName, ModelNode domainModel, boolean running, boolean stopping) {
             }
 
             @Override
@@ -1648,16 +1641,6 @@ public class DomainModelControllerService extends AbstractControllerService impl
             @Override
             public void killServer(String serverName) {
 
-            }
-
-            @Override
-            public CallbackHandler getServerCallbackHandler() {
-                CallbackHandler callback = new CallbackHandler() {
-                    @Override
-                    public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
-                    }
-                };
-                return callback;
             }
 
             @Override
@@ -1741,6 +1724,7 @@ public class DomainModelControllerService extends AbstractControllerService impl
             public List<ModelNode> suspendServers(Set<String> serverNames, int timeout, BlockingTimeout blockingTimeout) {
                 return Collections.emptyList();
             }
+
         };
         future.setInventory(inventory);
         return future;
@@ -1798,4 +1782,10 @@ public class DomainModelControllerService extends AbstractControllerService impl
             }
         }
     }
+
+    // Wrapper class to delay thread group creation until when it's needed.
+    private static class ThreadGroupHolder {
+        private static final ThreadGroup THREAD_GROUP = new ThreadGroup("proxy-pinger-threads");
+    }
+
 }

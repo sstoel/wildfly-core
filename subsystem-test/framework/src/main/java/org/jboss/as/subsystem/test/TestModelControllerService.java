@@ -1,24 +1,7 @@
 /*
-* JBoss, Home of Professional Open Source.
-* Copyright 2011, Red Hat Middleware LLC, and individual contributors
-* as indicated by the @author tags. See the copyright.txt file in the
-* distribution for a full listing of individual contributors.
-*
-* This is free software; you can redistribute it and/or modify it
-* under the terms of the GNU Lesser General Public License as
-* published by the Free Software Foundation; either version 2.1 of
-* the License, or (at your option) any later version.
-*
-* This software is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-* Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public
-* License along with this software; if not, write to the Free
-* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA, or see the FSF site: http://www.fsf.org.
-*/
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package org.jboss.as.subsystem.test;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
@@ -75,21 +58,6 @@ class TestModelControllerService extends ModelTestModelControllerService impleme
     private final boolean registerTransformers;
 
     protected TestModelControllerService(final Extension mainExtension, final ControllerInitializer controllerInitializer,
-                                         final AdditionalInitialization additionalInit, final RunningModeControl runningModeControl,
-                                         final ExtensionRegistry extensionRegistry, final StringConfigurationPersister persister,
-                                         final ModelTestOperationValidatorFilter validateOpsFilter, final boolean registerTransformers) {
-        super(additionalInit.getProcessType(), runningModeControl, extensionRegistry.getTransformerRegistry(), persister, validateOpsFilter,
-                new SimpleResourceDefinition(null, NonResolvingResourceDescriptionResolver.INSTANCE) , new ControlledProcessState(true), Controller90x.INSTANCE);
-        this.mainExtension = mainExtension;
-        this.additionalInit = additionalInit;
-        this.controllerInitializer = controllerInitializer;
-        this.extensionRegistry = extensionRegistry;
-        this.runningModeControl = runningModeControl;
-        this.registerTransformers = registerTransformers;
-
-    }
-
-    protected TestModelControllerService(final Extension mainExtension, final ControllerInitializer controllerInitializer,
                                             final AdditionalInitialization additionalInit, final RunningModeControl runningModeControl,
                                             final ExtensionRegistry extensionRegistry, final StringConfigurationPersister persister,
                                             final ModelTestOperationValidatorFilter validateOpsFilter, final boolean registerTransformers,
@@ -143,13 +111,6 @@ class TestModelControllerService extends ModelTestModelControllerService impleme
         GlobalNotifications.registerGlobalNotifications(managementModel.getRootResourceRegistration(), processType);
     }
 
-    /** @deprecated only for legacy version support */
-    @Override
-    protected void initExtraModel(Resource rootResource, ManagementResourceRegistration rootRegistration) {
-        initExtraModelInternal(rootResource, rootRegistration);
-        additionalInit.initializeExtraSubystemsAndModel(extensionRegistry, rootResource, rootRegistration);
-    }
-
     private void initExtraModelInternal(Resource rootResource, ManagementResourceRegistration rootRegistration) {
         rootResource.getModel().get(SUBSYSTEM);
 
@@ -201,7 +162,7 @@ class TestModelControllerService extends ModelTestModelControllerService impleme
         }
         props.put(ServerEnvironment.JBOSS_SERVER_DEFAULT_CONFIG, "standalone.xml");
 
-        return new ServerEnvironment(null, props, new HashMap<String, String>(), "standalone.xml", null, LaunchType.STANDALONE, runningModeControl.getRunningMode(), null, false);
+        return new ServerEnvironment(null, props, new HashMap<>(), "standalone.xml", null, LaunchType.STANDALONE, runningModeControl.getRunningMode(), null, false);
     }
 
     private static class MockContentRepository implements ContentRepository {

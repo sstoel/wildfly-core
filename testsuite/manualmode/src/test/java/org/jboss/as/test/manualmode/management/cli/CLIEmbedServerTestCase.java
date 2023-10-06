@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2015, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.test.manualmode.management.cli;
@@ -408,8 +391,7 @@ public class CLIEmbedServerTestCase extends AbstractCliTestBase {
         cli.sendLine("/subsystem=jmx/expose-model=resolved:add");
         cli.sendLine("/subsystem=jmx/expose-model=expression:add");
         cli.sendLine("/subsystem=jmx/remoting-connector=jmx:add");
-        cli.sendLine("/subsystem=remoting:add");
-        cli.sendLine("/subsystem=remoting/configuration=endpoint:add(worker=default)");
+        cli.sendLine("/subsystem=remoting:add(worker=default)");
         cli.sendLine("/subsystem=remoting/http-connector=http-remoting-connector:add(connector-ref=default,security-realm=ApplicationRealm)");
         CLIEmbedUtil.configureElytronManagement(cli, null);
         cli.sendLine("/subsystem=elytron/security-domain=ApplicationDomain:add(permission-mapper=default-permission-mapper,default-realm=ApplicationRealm,realms=[{realm=ApplicationRealm,role-decoder=groups-to-roles},{realm=local}])");

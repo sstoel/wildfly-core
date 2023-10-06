@@ -1,30 +1,12 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller;
 
 import static org.jboss.as.controller.logging.ControllerLogger.MGMT_OP_LOGGER;
 
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -48,22 +30,10 @@ public abstract class AbstractRemoveStepHandler implements OperationStepHandler 
 
     private static final OperationContext.AttachmentKey<Set<PathAddress>> RECURSION = OperationContext.AttachmentKey.create(Set.class);
 
-    private final Set<RuntimeCapability> capabilities;
-
     protected AbstractRemoveStepHandler() {
-        this.capabilities = AbstractAddStepHandler.NULL_CAPABILITIES;
     }
 
-    @Deprecated
-    protected AbstractRemoveStepHandler(RuntimeCapability... capabilities) {
-        this(capabilities.length == 0 ? AbstractAddStepHandler.NULL_CAPABILITIES : new HashSet<RuntimeCapability>(Arrays.asList(capabilities)));
-    }
-
-    @Deprecated
-    protected AbstractRemoveStepHandler(Set<RuntimeCapability> capabilities) {
-        this.capabilities = capabilities == null ? AbstractAddStepHandler.NULL_CAPABILITIES : capabilities;
-    }
-
+    @Override
     public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
 
         Resource resource = context.readResource(PathAddress.EMPTY_ADDRESS);
@@ -80,6 +50,7 @@ public abstract class AbstractRemoveStepHandler implements OperationStepHandler 
 
             if (requiresRuntime(context)) {
                 context.addStep(new OperationStepHandler() {
+                    @Override
                     public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
                         performRuntime(context, operation, model);
 
@@ -184,9 +155,8 @@ public abstract class AbstractRemoveStepHandler implements OperationStepHandler 
      *                 is invoked before that method is. Will not be {@code null}
      */
     protected void recordCapabilitiesAndRequirements(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {
-        Set<RuntimeCapability> capabilitySet = capabilities.isEmpty() ? context.getResourceRegistration().getCapabilities() : capabilities;
-
-        for (RuntimeCapability capability : capabilitySet) {
+        ImmutableManagementResourceRegistration registration = context.getResourceRegistration();
+        for (RuntimeCapability<?> capability : registration.getCapabilities()) {
             if (capability.isDynamicallyNamed()) {
                 context.deregisterCapability(capability.getDynamicName(context.getCurrentAddress()));
             } else {
@@ -194,31 +164,20 @@ public abstract class AbstractRemoveStepHandler implements OperationStepHandler 
             }
         }
         ModelNode model = resource.getModel();
-        ImmutableManagementResourceRegistration mrr = context.getResourceRegistration();
-        for (String attr : mrr.getAttributeNames(PathAddress.EMPTY_ADDRESS)) {
-            AttributeAccess aa = mrr.getAttributeAccess(PathAddress.EMPTY_ADDRESS, attr);
-            if (aa != null) {
-                AttributeDefinition ad = aa.getAttributeDefinition();
-                if (ad != null && (model.hasDefined(ad.getName()) || ad.hasCapabilityRequirements())) {
-                    ad.removeCapabilityRequirements(context, resource, model.get(ad.getName()));
-                }
+        for (AttributeAccess attribute : registration.getAttributes(PathAddress.EMPTY_ADDRESS).values()) {
+            // Skip runtime attributes and aliases
+            if (AttributeAccess.Storage.RUNTIME.test(attribute) || AttributeAccess.Flag.ALIAS.test(attribute)) continue;
+
+            AttributeDefinition definition = attribute.getAttributeDefinition();
+            String attributeName = definition.getName();
+            if (model.hasDefined(attributeName) || definition.hasCapabilityRequirements()) {
+                definition.removeCapabilityRequirements(context, resource, model.get(attributeName));
             }
         }
-        assert mrr.getRequirements() != null;
-        for (CapabilityReferenceRecorder recorder : mrr.getRequirements()) {
+        assert registration.getRequirements() != null;
+        for (CapabilityReferenceRecorder recorder : registration.getRequirements()) {
             recorder.removeCapabilityRequirements(context, resource, null);
         }
-    }
-
-    /**
-     * Gets whether the remove operation should fail if there are child resources present.
-     * @return {@code true} if the operation should fail in the presence of child resources
-     *
-     * @deprecated never called; this handler now always removes child resources
-     */
-    @Deprecated
-    protected boolean requireNoChildResources() {
-        return false;
     }
 
     /**
@@ -252,7 +211,7 @@ public abstract class AbstractRemoveStepHandler implements OperationStepHandler 
         return context.isDefaultRequiresRuntime();
     }
 
-    private static boolean hasResource (OperationContext context) {
+    private static boolean hasResource(OperationContext context) {
         try {
             context.readResource(PathAddress.EMPTY_ADDRESS, false);
             return true;

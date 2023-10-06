@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller;
@@ -48,8 +31,8 @@ import org.jboss.dmr.ModelType;
 @SuppressWarnings("unchecked")
 public abstract class AbstractAttributeDefinitionBuilder<BUILDER extends AbstractAttributeDefinitionBuilder, ATTRIBUTE extends AttributeDefinition> {
 
-    private String name;
-    private ModelType type;
+    private final String name;
+    private final ModelType type;
     private String xmlName;
     private boolean allowNull;
     private boolean allowExpression;
@@ -60,7 +43,6 @@ public abstract class AbstractAttributeDefinitionBuilder<BUILDER extends Abstrac
     private ModelNode[] allowedValues;
     private ParameterCorrector corrector;
     private ParameterValidator validator;
-    private boolean validateNull = true;
     private int minSize = 0;
     private boolean minSizeSet;
     private int maxSize = Integer.MAX_VALUE;
@@ -77,7 +59,7 @@ public abstract class AbstractAttributeDefinitionBuilder<BUILDER extends Abstrac
     private Map<String, ModelNode> arbitraryDescriptors = null;
     private ModelNode undefinedMetricValue;
 
-    private static AccessConstraintDefinition[] ZERO_CONSTRAINTS = new AccessConstraintDefinition[0];
+    private static final AccessConstraintDefinition[] ZERO_CONSTRAINTS = new AccessConstraintDefinition[0];
 
     /**
      * Creates a builder for an attribute with the give name and type. Equivalent to
@@ -186,24 +168,6 @@ public abstract class AbstractAttributeDefinitionBuilder<BUILDER extends Abstrac
     }
 
     /**
-     * Inverse of the preferred {@link #setRequired(boolean)}; sets whether the attribute should
-     * {@link AttributeDefinition#isNillable() allow undefined values}
-     * in the absence of {@link #setAlternatives(String...) alternatives}.
-     * If not set the default value is the value provided to the builder constructor, or {@code false}
-     * if no value is provided.
-     *
-     * @param allowNull {@code true} if undefined values should be allowed in the absence of alternatives
-     * @return a builder that can be used to continue building the attribute definition
-     *
-     * @deprecated use {@link #setRequired(boolean)}
-     */
-    @Deprecated
-    public BUILDER setAllowNull(boolean allowNull) {
-        this.allowNull = allowNull;
-        return (BUILDER) this;
-    }
-
-    /**
      * Sets whether the attribute should {@link AttributeDefinition#isAllowExpression() allow expressions}
      * If not set the default value is {@code false}.
      *
@@ -239,7 +203,7 @@ public abstract class AbstractAttributeDefinitionBuilder<BUILDER extends Abstrac
 
     /**
      * Sets a {@link org.jboss.as.controller.ParameterCorrector} to use to adjust any user provided values
-     * before {@link org.jboss.as.controller.AttributeDefinition#validateOperation(org.jboss.dmr.ModelNode, boolean) validation}
+     * before {@link org.jboss.as.controller.AttributeDefinition#validateOperation(ModelNode) validation}
      * occurs.
      * @param corrector the corrector. May be {@code null}
      * @return a builder that can be used to continue building the attribute definition
@@ -713,7 +677,8 @@ public abstract class AbstractAttributeDefinitionBuilder<BUILDER extends Abstrac
         if (dependentCapability.isDynamicallyNamed()) {
             return setCapabilityReference(referencedCapability, dependentCapability.getName());
         } else {
-            return setCapabilityReference(referencedCapability, dependentCapability.getName(), false);
+            referenceRecorder = new CapabilityReferenceRecorder.DefaultCapabilityReferenceRecorder(referencedCapability, dependentCapability.getName());
+            return (BUILDER) this;
         }
     }
 
@@ -803,31 +768,6 @@ public abstract class AbstractAttributeDefinitionBuilder<BUILDER extends Abstrac
      * @param referencedCapability the name of the dynamic capability the dynamic portion of whose name is
      *                             represented by the attribute's value
      * @param dependentCapability  the name of the capability that depends on {@code referencedCapability}
-     * @param dynamicDependent     {@code true} if {@code dependentCapability} is a dynamic capability, the dynamic
-     *                             portion of which comes from the name of the resource with which
-     *                             the attribute is associated
-     * @return the builder
-     * @deprecated Use {@link #setCapabilityReference(String, RuntimeCapability)} instead.
-     */
-    @Deprecated
-    public BUILDER setCapabilityReference(String referencedCapability, String dependentCapability, boolean dynamicDependent) {
-        //noinspection deprecation
-        referenceRecorder = new CapabilityReferenceRecorder.DefaultCapabilityReferenceRecorder(referencedCapability, dependentCapability, dynamicDependent);
-        return (BUILDER) this;
-    }
-
-    /**
-     * Records that this attribute's value represents a reference to an instance of a
-     * {@link org.jboss.as.controller.capability.RuntimeCapability#isDynamicallyNamed() dynamic capability}.
-     * <p>
-     * This method is a convenience method equivalent to calling
-     * {@link #setCapabilityReference(CapabilityReferenceRecorder)}
-     * passing in a {@link org.jboss.as.controller.CapabilityReferenceRecorder.DefaultCapabilityReferenceRecorder}
-     * constructed using the parameters passed to this method.
-     *
-     * @param referencedCapability the name of the dynamic capability the dynamic portion of whose name is
-     *                             represented by the attribute's value
-     * @param dependentCapability  the name of the capability that depends on {@code referencedCapability}
      * @return the builder
      * @see AttributeDefinition#addCapabilityRequirements(OperationContext, org.jboss.as.controller.registry.Resource, ModelNode)
      * @see AttributeDefinition#removeCapabilityRequirements(OperationContext, org.jboss.as.controller.registry.Resource, ModelNode)
@@ -879,11 +819,6 @@ public abstract class AbstractAttributeDefinitionBuilder<BUILDER extends Abstrac
     }
 
     public boolean isNillable() {
-        return allowNull;
-    }
-
-    @Deprecated
-    public boolean isAllowNull() {
         return allowNull;
     }
 

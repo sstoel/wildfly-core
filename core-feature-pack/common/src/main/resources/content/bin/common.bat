@@ -15,6 +15,10 @@ if exist "%COMMON_CONF%" (
 )
 goto :eof
 
+:setPackageAvailable
+    "%JAVA%" --add-opens=%~1=ALL-UNNAMED -version >nul 2>&1 && (set PACKAGE_AVAILABLE=true) || (set PACKAGE_AVAILABLE=false)
+goto :eof
+
 :setEnhancedSecurityManager
     "%JAVA%" -Djava.security.manager=allow -version >nul 2>&1 && (set ENHANCED_SM=true) || (set ENHANCED_SM=false)
 goto :eof
@@ -46,14 +50,22 @@ goto :eof
       set "DEFAULT_MODULAR_JVM_OPTIONS=!DEFAULT_MODULAR_JVM_OPTIONS! --add-exports=java.naming/com.sun.jndi.url.ldaps=ALL-UNNAMED"
       rem Needed by Netty
       set "DEFAULT_MODULAR_JVM_OPTIONS=!DEFAULT_MODULAR_JVM_OPTIONS! --add-exports=jdk.naming.dns/com.sun.jndi.dns=ALL-UNNAMED"
+      rem Needed by WildFly Elytron Extension
+      set PACKAGE_NAME="java.base/com.sun.net.ssl.internal.ssl"
+      call :setPackageAvailable !PACKAGE_NAME!
+      if "!PACKAGE_AVAILABLE!" == "true" (
+        set "DEFAULT_MODULAR_JVM_OPTIONS=!DEFAULT_MODULAR_JVM_OPTIONS! --add-opens=!PACKAGE_NAME!=ALL-UNNAMED"
+      )
       rem Needed if Hibernate applications use Javassist
       set "DEFAULT_MODULAR_JVM_OPTIONS=!DEFAULT_MODULAR_JVM_OPTIONS! --add-opens=java.base/java.lang=ALL-UNNAMED"
       rem Needed by the MicroProfile REST Client subsystem
       set "DEFAULT_MODULAR_JVM_OPTIONS=!DEFAULT_MODULAR_JVM_OPTIONS! --add-opens=java.base/java.lang.invoke=ALL-UNNAMED"
-      rem Needed by JBoss Marshalling
-      set "DEFAULT_MODULAR_JVM_OPTIONS=!DEFAULT_MODULAR_JVM_OPTIONS! --add-opens=java.base/java.io=ALL-UNNAMED"
       rem Needed for marshalling of proxies
       set "DEFAULT_MODULAR_JVM_OPTIONS=!DEFAULT_MODULAR_JVM_OPTIONS! --add-opens=java.base/java.lang.reflect=ALL-UNNAMED"
+      rem Needed by JBoss Marshalling
+      set "DEFAULT_MODULAR_JVM_OPTIONS=!DEFAULT_MODULAR_JVM_OPTIONS! --add-opens=java.base/java.io=ALL-UNNAMED"
+      rem Needed by WildFly Http Client
+      set "DEFAULT_MODULAR_JVM_OPTIONS=!DEFAULT_MODULAR_JVM_OPTIONS! --add-opens=java.base/java.net=ALL-UNNAMED"
       rem Needed by WildFly Security Manager
       set "DEFAULT_MODULAR_JVM_OPTIONS=!DEFAULT_MODULAR_JVM_OPTIONS! --add-opens=java.base/java.security=ALL-UNNAMED"
       rem Needed for marshalling of collections

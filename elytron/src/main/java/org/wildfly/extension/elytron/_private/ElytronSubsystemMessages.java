@@ -1,19 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2014 Red Hat, Inc., and individual contributors
- * as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.wildfly.extension.elytron._private;
@@ -644,7 +631,7 @@ public interface ElytronSubsystemMessages extends BasicLogger {
     @Message(id = 1083, value = "No '%s' found in injected value.")
     RuntimeException noTypeFoundForLazyInitKeyManager(final String type);
 
-    @Message(id = 1084, value = "KeyStore %s not found, it will be auto generated on first use with a self-signed certificate for host %s")
+    @Message(id = 1084, value = "KeyStore %s not found, it will be auto-generated on first use with a self-signed certificate for host %s")
     @LogMessage(level = WARN)
     void selfSignedCertificateWillBeCreated(String file, String host);
 
@@ -660,6 +647,9 @@ public interface ElytronSubsystemMessages extends BasicLogger {
 
     @Message(id = 1088, value = "Missing certificate authority challenge")
     AcmeException missingCertificateAuthorityChallenge();
+
+    @Message(id = 1089, value = "Invalid file encoding '%s'.")
+    OperationFailedException invalidEncodingName(String encoding);
 
     /*
      * Expression Resolver Section
@@ -721,6 +711,14 @@ public interface ElytronSubsystemMessages extends BasicLogger {
 
     @Message(id = 1218, value = "Keystore used by filesystem realm does not contain the alias: %s")
     KeyStoreException keyStoreMissingAlias(String alias);
+
+    @Message(id = 1219, value = "Integrity keypair cannot be added to non-empty filesystem realm after initialization. To upgrade a filesystem realm, " +
+            "use Elytron Tool command `filesystem-realm-integrity`")
+    OperationFailedException addKeypairToInitializedFilesystemRealm();
+
+    @Message(id = 1220, value = "Encryption secret key cannot be added to non-empty filesystem realm after initialization. To upgrade a filesystem realm, " +
+            "use Elytron Tool command `filesystem-realm-encrypt`")
+    OperationFailedException addSecretKeyToInitializedFilesystemRealm();
 
     /*
      * Don't just add new errors to the end of the file, there may be an appropriate section above for the resource.

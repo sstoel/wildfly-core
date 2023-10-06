@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright ${year}, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.wildfly.client.old.server.util;
 
@@ -76,9 +59,7 @@ public class OldVersionTestRunner extends Suite {
     //  /Library/Java/JavaVirtualMachines/jdk1.7.0_71.jdk/Contents/Home
     //The latter variety causes problems like:
     //  "Cannot run program "/Library/Java/JavaVirtualMachines/jdk1.7.0_71.jdk/Contents/Home/bin/java": error=2, No such file or directory"
-    static final String JDK7_LOCATION = "jboss.test.client.old.server.jdk7";
-
-    static final String JDK6_LOCATION = "jboss.test.client.old.server.jdk6";
+    static final String JDK8_LOCATION = "jboss.test.client.old.server.jdk8";
 
     /**
      * Annotation for a method which provides parameters to be injected into the
@@ -236,14 +217,11 @@ public class OldVersionTestRunner extends Suite {
             System.setProperty("jboss.home", file.getAbsolutePath());
             System.setProperty("management.protocol", version.getManagementProtocol());
             System.setProperty("management.port", version.getManagementPort());
-            if (version.getJdk() != Version.JDK.JDK8) {
+            if (version.getJdk() != Version.JDK.JDK11) {
                 final String prop;
                 switch (version.getJdk()){
-                    case JDK6:
-                        prop = JDK6_LOCATION;
-                        break;
-                    case JDK7:
-                        prop = JDK7_LOCATION;
+                    case JDK8:
+                        prop = JDK8_LOCATION;
                         break;
                     default:
                         throw new IllegalStateException("Unknown jdk");
@@ -255,10 +233,7 @@ public class OldVersionTestRunner extends Suite {
                 }
                 System.setProperty(LEGACY_JAVA_HOME, jdkHome);
 
-                //Server has this
-                //    private final String jvmArgs = System.getProperty("jvm.args", "-Xmx512m -XX:MaxMetaspaceSize=256m");
-                //-XX:MaxMetaspaceSize is not available < JDK 8, so remove it:
-                System.setProperty("jvm.args", "-Xmx512m");
+                System.setProperty("jvm.args", "-Xmx512m -XX:MaxMetaspaceSize=256m");
             } else {
                 System.clearProperty(LEGACY_JAVA_HOME);
             }

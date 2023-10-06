@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2010, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller.client.helpers.standalone.impl;
@@ -60,7 +43,7 @@ class DeploymentPlanBuilderImpl
     private final boolean globalRollback;
     private volatile boolean cleanupInFinalize = true;
 
-    private final List<DeploymentActionImpl> deploymentActions = new ArrayList<DeploymentActionImpl>();
+    private final List<DeploymentActionImpl> deploymentActions = new ArrayList<>();
 
     DeploymentPlanBuilderImpl() {
         this.shutdown = false;
@@ -104,7 +87,7 @@ class DeploymentPlanBuilderImpl
 
     @Override
     public List<DeploymentAction> getDeploymentActions() {
-        return new ArrayList<DeploymentAction>(deploymentActions);
+        return new ArrayList<>(deploymentActions);
     }
 
     @Override
@@ -295,21 +278,6 @@ class DeploymentPlanBuilderImpl
     }
 
     @Override
-    @Deprecated
-    public DeploymentPlanBuilder withRollback() {
-        if (!deploymentActions.isEmpty()) {
-            // Someone has cast to this impl class
-            cleanup();
-            throw ControllerClientLogger.ROOT_LOGGER.operationsNotAllowed(InitialDeploymentPlanBuilder.class.getSimpleName());
-        }
-        if (shutdown) {
-            cleanup();
-            throw ControllerClientLogger.ROOT_LOGGER.globalRollbackNotCompatible();
-        }
-        return new DeploymentPlanBuilderImpl(this, true);
-    }
-
-    @Override
     public DeploymentPlanBuilder withoutRollback() {
         if (!deploymentActions.isEmpty()) {
             // Someone has cast to this impl class
@@ -441,7 +409,7 @@ class DeploymentPlanBuilderImpl
     }
 
     @Override
-    public DeploymentPlanBuilder removeContenFromDeployment(String deploymentName, List<String> paths) throws IOException {
+    public DeploymentPlanBuilder removeContentFromDeployment(String deploymentName, List<String> paths) throws IOException {
          DeploymentActionImpl mod = DeploymentActionImpl.getRemoveContentAction(deploymentName, paths);
         return new DeploymentPlanBuilderImpl(this, mod);
     }

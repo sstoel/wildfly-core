@@ -1,20 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source
- * Copyright 2011 Red Hat Inc. and/or its affiliates and other contributors
- * as indicated by the @authors tag. All rights reserved.
- * See the copyright.txt in the distribution for a
- * full listing of individual contributors.
- *
- * This copyrighted material is made available to anyone wishing to use,
- * modify, copy, or redistribute it subject to the terms and conditions
- * of the GNU Lesser General Public License, v. 2.1.
- * This program is distributed in the hope that it will be useful, but WITHOUT A
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public License,
- * v.2.1 along with this distribution; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA  02110-1301, USA.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.repository;
 
@@ -27,9 +13,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Vector;
-import java.util.stream.Collectors;
+import java.util.Collections;
+import java.util.List;
 import java.util.stream.Stream;
 import org.jboss.as.repository.logging.DeploymentRepositoryLogger;
 
@@ -85,8 +72,9 @@ class HashUtil {
         // WFLY-6018, check each char is in table, otherwise, there will be StringIndexOutOfBoundsException due to illegal char
         char[] array = s.toCharArray();
         for (char c : array) {
-            if (Arrays.binarySearch(table, c) < 0)
+            if (Arrays.binarySearch(table, c) < 0) {
                 return false;
+            }
         }
         return true;
     }
@@ -123,29 +111,16 @@ class HashUtil {
             }
         } else if (Files.isDirectory(path)) {
             try {
-                Vector<InputStream> v = new Vector<>();
+                final List<InputStream> v = new ArrayList<>();
                 v.add(new ByteArrayInputStream(path.getFileName().toString().getBytes(StandardCharsets.UTF_8)));
                 try(Stream<Path> paths = Files.list(path)) {
-                    v.addAll(paths.sorted((Path path1, Path path2) -> path1.compareTo(path2)).map(p -> getRecursiveContentStream(p)).collect(Collectors.toList()));
+                   paths.sorted((Path path1, Path path2) -> path1.compareTo(path2)).map(p -> getRecursiveContentStream(p)).forEach(p -> v.add(p));
                 }
-                return new SequenceInputStream(v.elements());
+                return new SequenceInputStream(Collections.enumeration(v));
             } catch (IOException ex) {
                 throw DeploymentRepositoryLogger.ROOT_LOGGER.hashingError(ex, path);
             }
         }
-        return emptyStream();
-    }
-
-    /**
-     * Create an empty non-null) stream.
-     * @return an empty non-null stream.
-     */
-    public static InputStream emptyStream() {
-        return new InputStream() {
-            @Override
-            public int read() throws IOException {
-                return -1;
-            }
-        };
+        return InputStream.nullInputStream();
     }
 }

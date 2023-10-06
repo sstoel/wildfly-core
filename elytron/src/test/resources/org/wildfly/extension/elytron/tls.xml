@@ -1,4 +1,9 @@
-<subsystem xmlns="urn:wildfly:elytron:16.0" default-ssl-context="client">
+<!--
+  ~ Copyright The WildFly Authors
+  ~ SPDX-License-Identifier: Apache-2.0
+  -->
+
+<subsystem xmlns="urn:wildfly:elytron:18.0" default-ssl-context="client">
     <providers>
         <provider-loader name="custom-loader" />
     </providers>

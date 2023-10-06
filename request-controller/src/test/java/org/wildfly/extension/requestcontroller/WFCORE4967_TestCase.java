@@ -1,3 +1,8 @@
+/*
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.wildfly.extension.requestcontroller;
 
 import static org.junit.Assert.assertEquals;
@@ -43,7 +48,7 @@ public class WFCORE4967_TestCase {
     }
 
     private RequestController suspendedRCWithQueuedTasks(int i, Runnable whenExecuted) {
-        RequestController requestController = new RequestController(false);
+        RequestController requestController = new RequestController(false, () -> null);
         requestController.suspended(() -> {
         });
 

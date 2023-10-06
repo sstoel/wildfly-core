@@ -1,19 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source
- * Copyright 2021, JBoss Inc., and individual contributors as indicated
- * by the @authors tag.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller;
@@ -30,8 +17,6 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SER
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-
-import java.util.Arrays;
 
 import org.jboss.as.controller.descriptions.NonResolvingResourceDescriptionResolver;
 import org.jboss.as.controller.operations.global.GlobalNotifications;
@@ -74,10 +59,10 @@ public abstract class EnvVarAttributeOverrideModel extends AbstractControllerTes
     private static ResourceDefinition createDummyProfileResourceDefinition() {
         return ResourceBuilder.Factory.create(CUSTOM_RESOURCE_ADDR.getElement(0),
                 NonResolvingResourceDescriptionResolver.INSTANCE)
-                .setAddOperation(new AbstractAddStepHandler(Arrays.asList(MY_ATTR, MY_LIST_ATTR)))
+                .setAddOperation(new ModelOnlyAddStepHandler())
                 .setRemoveOperation(ReloadRequiredRemoveStepHandler.INSTANCE)
-                .addReadWriteAttribute(MY_ATTR, null, new ReloadRequiredWriteAttributeHandler(MY_ATTR))
-                .addReadWriteAttribute(MY_LIST_ATTR, null, new ReloadRequiredWriteAttributeHandler(MY_LIST_ATTR))
+                .addReadWriteAttribute(MY_ATTR, null, ReloadRequiredWriteAttributeHandler.INSTANCE)
+                .addReadWriteAttribute(MY_LIST_ATTR, null, ReloadRequiredWriteAttributeHandler.INSTANCE)
                 .build();
     }
 

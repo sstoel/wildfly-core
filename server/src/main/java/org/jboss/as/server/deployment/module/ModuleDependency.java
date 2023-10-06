@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2010, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server.deployment.module;
@@ -25,6 +8,8 @@ package org.jboss.as.server.deployment.module;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoader;
@@ -45,7 +30,11 @@ public final class ModuleDependency implements Serializable {
         if (moduleLoader != null)
             builder.append("moduleLoader=").append(moduleLoader).append(", ");
         builder.append("export=").append(export).append(", optional=").append(optional).append(", importServices=").append(
-                importServices).append("]");
+                importServices);
+        if (reason != null) {
+            builder.append(", ").append("reason=").append(reason);
+        }
+        builder.append("]");
         return builder.toString();
     }
 
@@ -59,6 +48,7 @@ public final class ModuleDependency implements Serializable {
     private final List<FilterSpecification> exportFilters = new ArrayList<FilterSpecification>();
     private final boolean importServices;
     private final boolean userSpecified;
+    private final String reason;
 
     /**
      * Construct a new instance.
@@ -71,7 +61,22 @@ public final class ModuleDependency implements Serializable {
      * @param userSpecified {@code true} if this dependency was specified by the user, {@code false} if it was automatically added
      */
     public ModuleDependency(final ModuleLoader moduleLoader, final String identifier, final boolean optional, final boolean export, final boolean importServices, final boolean userSpecified) {
-        this(moduleLoader, ModuleIdentifier.create(identifier), optional, export, importServices, userSpecified);
+        this(moduleLoader, ModuleIdentifier.create(identifier), optional, export, importServices, userSpecified, null);
+    }
+
+    /**
+     * Construct a new instance.
+     *
+     * @param moduleLoader the module loader of the dependency (if {@code null}, then use the default server module loader)
+     * @param identifier the module identifier
+     * @param optional {@code true} if this is an optional dependency
+     * @param export {@code true} if resources should be exported by default
+     * @param importServices
+     * @param userSpecified {@code true} if this dependency was specified by the user, {@code false} if it was automatically added
+     * @param reason reason for adding implicit module dependency
+     */
+    public ModuleDependency(final ModuleLoader moduleLoader, final String identifier, final boolean optional, final boolean export, final boolean importServices, final boolean userSpecified, String reason) {
+        this(moduleLoader, ModuleIdentifier.create(identifier), optional, export, importServices, userSpecified, reason);
     }
 
     /**
@@ -85,12 +90,28 @@ public final class ModuleDependency implements Serializable {
      * @param userSpecified {@code true} if this dependency was specified by the user, {@code false} if it was automatically added
      */
     public ModuleDependency(final ModuleLoader moduleLoader, final ModuleIdentifier identifier, final boolean optional, final boolean export, final boolean importServices, final boolean userSpecified) {
+        this(moduleLoader, identifier, optional, export, importServices, userSpecified, null);
+    }
+
+    /**
+     * Construct a new instance.
+     *
+     * @param moduleLoader the module loader of the dependency (if {@code null}, then use the default server module loader)
+     * @param identifier the module identifier
+     * @param optional {@code true} if this is an optional dependency
+     * @param export {@code true} if resources should be exported by default
+     * @param importServices
+     * @param userSpecified {@code true} if this dependency was specified by the user, {@code false} if it was automatically added
+     * @param reason reason for adding implicit module dependency
+     */
+    public ModuleDependency(final ModuleLoader moduleLoader, final ModuleIdentifier identifier, final boolean optional, final boolean export, final boolean importServices, final boolean userSpecified, String reason) {
         this.identifier = identifier;
         this.optional = optional;
         this.export = export;
         this.moduleLoader = moduleLoader;
         this.importServices = importServices;
         this.userSpecified = userSpecified;
+        this.reason = reason;
     }
 
     public ModuleLoader getModuleLoader() {
@@ -99,6 +120,14 @@ public final class ModuleDependency implements Serializable {
 
     public ModuleIdentifier getIdentifier() {
         return identifier;
+    }
+
+    public Optional<String> getReason() {
+        if (reason != null) {
+            return Optional.of(reason);
+        } else {
+            return Optional.empty();
+        }
     }
 
     public boolean isOptional() {
@@ -131,5 +160,27 @@ public final class ModuleDependency implements Serializable {
 
     public boolean isImportServices() {
         return importServices;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ModuleDependency that = (ModuleDependency) o;
+
+        // Note we don't include 'reason' in equals or hashcode as it does not drive distinct behavior
+        return export == that.export
+                && optional == that.optional
+                && importServices == that.importServices
+                && userSpecified == that.userSpecified
+                && Objects.equals(moduleLoader, that.moduleLoader)
+                && identifier.equals(that.identifier) && importFilters.equals(that.importFilters)
+                && exportFilters.equals(that.exportFilters);
+    }
+
+    @Override
+    public int hashCode() {
+        // Note we don't include 'reason' in equals or hashcode as it does not drive distinct behavior
+        return Objects.hash(moduleLoader, identifier, export, optional, importFilters, exportFilters, importServices, userSpecified);
     }
 }

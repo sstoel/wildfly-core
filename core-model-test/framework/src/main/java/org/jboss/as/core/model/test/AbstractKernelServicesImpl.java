@@ -1,24 +1,7 @@
 /*
-* JBoss, Home of Professional Open Source.
-* Copyright 2011, Red Hat Middleware LLC, and individual contributors
-* as indicated by the @author tags. See the copyright.txt file in the
-* distribution for a full listing of individual contributors.
-*
-* This is free software; you can redistribute it and/or modify it
-* under the terms of the GNU Lesser General Public License as
-* published by the Free Software Foundation; either version 2.1 of
-* the License, or (at your option) any later version.
-*
-* This software is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-* Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public
-* License along with this software; if not, write to the Free
-* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA, or see the FSF site: http://www.fsf.org.
-*/
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package org.jboss.as.core.model.test;
 
 import java.io.File;
@@ -27,6 +10,7 @@ import java.util.ServiceLoader;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import org.jboss.as.controller.AbstractControllerService;
 import org.jboss.as.controller.CapabilityRegistry;
@@ -47,12 +31,11 @@ import org.jboss.as.model.test.StringConfigurationPersister;
 import org.jboss.as.repository.ContentRepository;
 import org.jboss.as.server.Services;
 import org.jboss.dmr.ModelNode;
-import org.jboss.msc.service.Service;
+import org.jboss.msc.Service;
 import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceContainer;
+import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceTarget;
-import org.jboss.msc.service.ValueService;
-import org.jboss.msc.value.ImmediateValue;
 import org.jboss.msc.value.InjectedValue;
 import org.jboss.threads.EnhancedQueueExecutor;
 import org.wildfly.legacy.test.spi.core.TestModelControllerFactory;
@@ -120,8 +103,11 @@ public abstract class AbstractKernelServicesImpl extends ModelTestKernelServices
                 .setMaximumPoolSize(256)
                 .setKeepAliveTime(20L, TimeUnit.SECONDS)
                 .build();
-            Service<ExecutorService> mgmtExecSvc = new ValueService<>(new ImmediateValue<>(mgmtExecutor));
-            target.addService(AbstractControllerService.EXECUTOR_CAPABILITY.getCapabilityServiceName(), mgmtExecSvc).install();
+            ServiceName sn = AbstractControllerService.EXECUTOR_CAPABILITY.getCapabilityServiceName();
+            ServiceBuilder sb = target.addService(sn);
+            Consumer<ExecutorService> c = sb.provides(sn);
+            sb.setInstance(Service.newInstance(c, mgmtExecutor));
+            sb.install();
         }
 
         //sharedState = svc.state;

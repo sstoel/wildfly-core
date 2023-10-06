@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2012, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.jmx.rbac;
 
@@ -57,8 +40,6 @@ import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.ProcessType;
 import org.jboss.as.controller.ResourceDefinition;
-import org.jboss.as.controller.RunningMode;
-import org.jboss.as.controller.RunningModeControl;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleOperationDefinitionBuilder;
@@ -70,12 +51,10 @@ import org.jboss.as.controller.access.management.DelegatingConfigurableAuthorize
 import org.jboss.as.controller.access.management.ManagementSecurityIdentitySupplier;
 import org.jboss.as.controller.access.management.SensitiveTargetAccessConstraintDefinition;
 import org.jboss.as.controller.access.rbac.StandardRole;
-import org.jboss.as.controller.audit.AuditLogger;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.descriptions.NonResolvingResourceDescriptionResolver;
 import org.jboss.as.controller.extension.ExtensionRegistry;
 import org.jboss.as.controller.extension.ExtensionRegistryType;
-import org.jboss.as.controller.extension.RuntimeHostControllerInfoAccessor;
 import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.controller.operations.global.GlobalNotifications;
 import org.jboss.as.controller.operations.global.GlobalOperationHandlers;
@@ -732,7 +711,7 @@ public class JmxFacadeRbacEnabledTestCase extends AbstractControllerTestBase {
 
     private MBeanServer getMBeanServer() throws Exception {
         ServiceController<?> controller = getContainer().getRequiredService(MBeanServerService.SERVICE_NAME);
-        return (PluggableMBeanServer)controller.getValue();
+        return (PluggableMBeanServer) controller.awaitValue(5, TimeUnit.MINUTES);
     }
 
     @Override
@@ -848,8 +827,7 @@ public class JmxFacadeRbacEnabledTestCase extends AbstractControllerTestBase {
         pathManagerService.addPathManagerResources(rootResource);
 
 
-        ExtensionRegistry extensionRegistry = new ExtensionRegistry(ProcessType.STANDALONE_SERVER, new RunningModeControl(RunningMode.NORMAL), AuditLogger.NO_OP_LOGGER,
-                getAuthorizer(), getSecurityIdentitySupplier(), RuntimeHostControllerInfoAccessor.SERVER);
+        ExtensionRegistry extensionRegistry = ExtensionRegistry.builder(ProcessType.STANDALONE_SERVER).withAuthorizer(this.getAuthorizer()).withSecurityIdentitySupplier(this.getSecurityIdentitySupplier()).build();
         extensionRegistry.setPathManager(pathManagerService);
         extensionRegistry.setWriterRegistry(new NullConfigurationPersister());
         JMXExtension extension = new JMXExtension();

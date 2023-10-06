@@ -1,19 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source
- *
- * Copyright 2016 Red Hat, Inc. and/or its affiliates.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.wildfly.extension.elytron;
 
@@ -74,6 +61,7 @@ import org.wildfly.security.auth.realm.JaasSecurityRealm;
 import org.wildfly.security.auth.server.ModifiableRealmIdentity;
 import org.wildfly.security.auth.server.ModifiableSecurityRealm;
 import org.wildfly.security.auth.server.RealmIdentity;
+import org.wildfly.security.auth.server.RealmUnavailableException;
 import org.wildfly.security.auth.server.SecurityDomain;
 import org.wildfly.security.auth.server.SecurityRealm;
 import org.wildfly.security.auth.server.ServerAuthenticationContext;
@@ -425,6 +413,12 @@ public class RealmsTestCase extends AbstractElytronSubsystemBaseTest {
 
         // Verify a new identity generates a signature and is correct
         ModifiableRealmIdentity identity3 = securityRealm.getRealmIdentityForUpdate(new NamePrincipal("user3"));
+        // This identity may exist from a previous test execution if no maven clean was performed.
+        // If so, remove it, otherwise the create() call will fail.
+        if (identity3.exists()) {
+            identity3.delete();
+            Assert.assertFalse(identity3.exists());
+        }
         identity3.create();
         identity3.setAttributes(newAttributes);
         PasswordFactory factory = PasswordFactory.getInstance(ClearPassword.ALGORITHM_CLEAR, WildFlyElytronPasswordProvider.getInstance());
@@ -439,6 +433,12 @@ public class RealmsTestCase extends AbstractElytronSubsystemBaseTest {
 
         // Verify that this works for a realm with encryption and integrity enabled
         identity = securityRealmBoth.getRealmIdentityForUpdate(new NamePrincipal("user1"));
+        // This identity may exist from a previous test execution if no maven clean was performed.
+        // If so, remove it, otherwise the create() call will fail.
+        if (identity.exists()) {
+            identity.delete();
+            Assert.assertFalse(identity.exists());
+        }
         identity.create();
         identity.setAttributes(newAttributes);
         identity.setCredentials(Collections.singleton(new PasswordCredential(clearPassword)));
@@ -713,6 +713,65 @@ public class RealmsTestCase extends AbstractElytronSubsystemBaseTest {
             Assert.fail(response.toJSONString(false));
         }
         Assert.assertTrue(response.asString().contains("JAAS configuration file does not exist."));
+    }
+
+    @Test
+    public void testDistributedRealm() throws Exception {
+        KernelServices services = super.createKernelServicesBuilder(new TestEnvironment()).setSubsystemXmlResource("realms-test.xml").build();
+        if (!services.isSuccessfulBoot()) {
+            Assert.fail(services.getBootError().toString());
+        }
+
+        ServiceName serviceName = Capabilities.SECURITY_REALM_RUNTIME_CAPABILITY.getCapabilityServiceName("DistributedRealmNoUnavailable");
+        SecurityRealm distributedRealm = (SecurityRealm) services.getContainer().getService(serviceName).getValue();
+        testDistributedRealmSuccessful(distributedRealm);
+
+        ServiceName serviceName2 = Capabilities.SECURITY_REALM_RUNTIME_CAPABILITY.getCapabilityServiceName("DistributedRealmFirstUnavailable");
+        SecurityRealm distributedRealm2 = (SecurityRealm) services.getContainer().getService(serviceName2).getValue();
+        testDistributedRealmFailure(distributedRealm2);
+
+        ServiceName serviceName3 = Capabilities.SECURITY_REALM_RUNTIME_CAPABILITY.getCapabilityServiceName("DistributedRealmFirstUnavailableIgnored");
+        SecurityRealm distributedRealm3 = (SecurityRealm) services.getContainer().getService(serviceName3).getValue();
+        testDistributedRealmSuccessful(distributedRealm3);
+
+        TestEnvironment.activateService(services, Capabilities.SECURITY_DOMAIN_RUNTIME_CAPABILITY, "DistributedRealmDomain");
+        ServiceName serviceName4 = Capabilities.SECURITY_DOMAIN_RUNTIME_CAPABILITY.getCapabilityServiceName("DistributedRealmDomain");
+        SecurityDomain domain = (SecurityDomain) services.getContainer().getService(serviceName4).getValue();
+        Assert.assertNotNull(domain);
+        if (SecurityDomain.getCurrent() == null) {
+            domain.registerWithClassLoader(Thread.currentThread().getContextClassLoader());
+        }
+        ServerAuthenticationContext context = domain.createNewAuthenticationContext();
+        context.setAuthenticationName("firstUser");
+        Assert.assertTrue(context.exists());
+
+        Assert.assertTrue(isSecurityRealmUnavailableEventLogged("LdapRealm"));
+    }
+
+    private boolean isSecurityRealmUnavailableEventLogged(String realmName) throws Exception {
+        List<String> lines = Files.readAllLines(Paths.get("target/audit.log"), StandardCharsets.UTF_8);
+        for (String line : lines) {
+            if (line.contains("SecurityRealmUnavailableEvent") && line.contains(realmName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void testDistributedRealmSuccessful(SecurityRealm distributedRealm) throws RealmUnavailableException {
+        Assert.assertNotNull(distributedRealm);
+
+        RealmIdentity identity = distributedRealm.getRealmIdentity(fromName("firstUser"));
+        Assert.assertTrue(identity.exists());
+        identity.dispose();
+    }
+
+    private void testDistributedRealmFailure(SecurityRealm distributedRealm) throws RealmUnavailableException {
+        Assert.assertNotNull(distributedRealm);
+
+        Assert.assertThrows(RealmUnavailableException.class, () -> {
+            distributedRealm.getRealmIdentity(fromName("firstUser"));
+        });
     }
 
     static void testModifiability(ModifiableSecurityRealm securityRealm) throws Exception {

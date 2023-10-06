@@ -1,29 +1,13 @@
 /*
- * JBoss, Home of Professional Open Source
- * Copyright 2011 Red Hat Inc. and/or its affiliates and other contributors
- * as indicated by the @authors tag. All rights reserved.
- * See the copyright.txt in the distribution for a
- * full listing of individual contributors.
- *
- * This copyrighted material is made available to anyone wishing to use,
- * modify, copy, or redistribute it subject to the terms and conditions
- * of the GNU Lesser General Public License, v. 2.1.
- * This program is distributed in the hope that it will be useful, but WITHOUT A
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public License,
- * v.2.1 along with this distribution; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA  02110-1301, USA.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.server.deployment.client;
 
 import java.io.IOException;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import org.jboss.as.controller.LocalModelControllerClient;
-import org.jboss.as.controller.ModelController;
 import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.client.Operation;
 import org.jboss.as.controller.client.helpers.standalone.impl.AbstractServerDeploymentManager;
@@ -34,16 +18,12 @@ import org.jboss.dmr.ModelNode;
  *
  * @author Brian Stansberry (c) 2011 Red Hat Inc.
  *
+ * @deprecated Use {@link org.jboss.as.controller.client.helpers.standalone.ServerDeploymentManager.Factory}
  */
+@Deprecated
 public class ModelControllerServerDeploymentManager extends AbstractServerDeploymentManager {
 
     private final ModelControllerClient client;
-
-    /** @deprecated Use {@link #ModelControllerServerDeploymentManager(LocalModelControllerClient)}. Will be removed in the next major or minor release. */
-    @Deprecated
-    public ModelControllerServerDeploymentManager(final ModelController controller) {
-        this.client = controller.createClient(Executors.newCachedThreadPool());
-    }
 
     public ModelControllerServerDeploymentManager(final LocalModelControllerClient client) {
         this.client = client;

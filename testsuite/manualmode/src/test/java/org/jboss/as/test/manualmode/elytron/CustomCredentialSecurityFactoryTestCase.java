@@ -1,17 +1,6 @@
 /*
- * Copyright 2017 JBoss by Red Hat.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.test.manualmode.elytron;
 
@@ -36,6 +25,7 @@ import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.exporter.ZipExporter;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -80,7 +70,7 @@ public class CustomCredentialSecurityFactoryTestCase {
             Path moduleJar = createJar("testJar", CustomCredentialSecurityFactoryImpl.class);
             try {
                 cli.sendLine("module add --name=" + CUSTOM_CREDENTIAL_SECURITY_FACTORY_MODULE_NAME
-                    + " --slot=main --dependencies=org.wildfly.security.elytron,org.wildfly.extension.elytron --resources="
+                    + " --slot=main --dependencies=org.wildfly.security.elytron --resources="
                     + moduleJar.toAbsolutePath());
             } finally {
                 Files.deleteIfExists(moduleJar);
@@ -133,6 +123,7 @@ public class CustomCredentialSecurityFactoryTestCase {
                 CUSTOM_CRED_SEC_FACTORY_NAME), true);
             cli.sendLine("module remove --name=" + CUSTOM_CREDENTIAL_SECURITY_FACTORY_MODULE_NAME, true);
         } finally {
+            Assert.assertNotNull(tempFolder);
             FileUtils.deleteDirectory(tempFolder.toFile());
         }
     }

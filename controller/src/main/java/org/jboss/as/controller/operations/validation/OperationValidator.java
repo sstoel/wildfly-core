@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.controller.operations.validation;
 
@@ -68,16 +51,6 @@ public class OperationValidator {
 
     public OperationValidator(final ImmutableManagementResourceRegistration root) {
         this(ExpressionResolver.SIMPLE, root, true, true, true);
-    }
-
-    @Deprecated
-    public OperationValidator(final ImmutableManagementResourceRegistration root, boolean validateDescriptions, boolean includeOperationInError) {
-        this(ExpressionResolver.SIMPLE, root, true, true, true);
-    }
-
-    @Deprecated
-    public OperationValidator(final ImmutableManagementResourceRegistration root, boolean validateDescriptions, boolean includeOperationInError, boolean exitOnError) {
-        this(ExpressionResolver.SIMPLE, root, validateDescriptions, includeOperationInError, exitOnError);
     }
 
     public OperationValidator(final ExpressionResolver expressionResolver, final ImmutableManagementResourceRegistration root, boolean validateDescriptions, boolean includeOperationInError, boolean exitOnError) {
@@ -152,7 +125,7 @@ public class OperationValidator {
     }
 
     private Map<String, ModelNode> getDescribedRequestProperties(final ModelNode operation, final ModelNode description){
-        final Map<String, ModelNode> requestProperties = new HashMap<String, ModelNode>();
+        final Map<String, ModelNode> requestProperties = new HashMap<>();
         if (description.hasDefined(REQUEST_PROPERTIES)) {
             for (String key : description.get(REQUEST_PROPERTIES).keys()) {
                 ModelNode desc = description.get(REQUEST_PROPERTIES, key);
@@ -166,7 +139,7 @@ public class OperationValidator {
     }
 
     private Map<String, ModelNode> getActualRequestProperties(final ModelNode operation) {
-        final Map<String, ModelNode> requestProperties = new HashMap<String, ModelNode>();
+        final Map<String, ModelNode> requestProperties = new HashMap<>();
         for (String key : operation.keys()) {
             if (key.equals(OP) || key.equals(OP_ADDR) || key.equals(OPERATION_HEADERS)) {
                 continue;
@@ -383,7 +356,7 @@ public class OperationValidator {
                 }
                 break;
                 case LONG: {
-                    final Long max;
+                    final long max;
                     try {
                         max = describedProperty.get(MAX).asLong();
                     } catch (IllegalArgumentException e) {
@@ -497,6 +470,7 @@ public class OperationValidator {
                 value.asProperty();
                 break;
             case STRING:
+                //noinspection DuplicateBranchesInSwitch
                 value.asString();
                 break;
             case TYPE:
@@ -575,36 +549,4 @@ public class OperationValidator {
         }
         return "";
     }
-
-//  // TODO enable once AS7-2421 is complete
-//  void validateRemoveOperations() {
-//      final ModelNode missing = new ModelNode().setEmptyList();
-//      validateRemoveOperations(PathAddress.EMPTY_ADDRESS, root, missing);
-//      if(missing.asInt() > 0) {
-//          Assert.fail("following resources are missing a remove operation " + missing);
-//      }
-//  }
-//  /**
-//   * Check that all resources registering an add operation also provide a remove operation.
-//   *
-//   * @param current the current path address
-//   * @param registration the MNR
-//   * @param missing the missing remove operations info
-//   */
-//  private void validateRemoveOperations(final PathAddress current, final ImmutableManagementResourceRegistration registration, final ModelNode missing) {
-//      final OperationStepHandler addHandler = registration.getOperationHandler(PathAddress.EMPTY_ADDRESS, ModelDescriptionConstants.ADD);
-//      if(addHandler != null) {
-//          final OperationStepHandler remove = registration.getOperationHandler(PathAddress.EMPTY_ADDRESS, ModelDescriptionConstants.REMOVE);
-//          if(remove == null) {
-//              missing.add(current.toModelNode());
-//          }
-//      }
-//      final Set<PathElement> children = registration.getChildAddresses(PathAddress.EMPTY_ADDRESS);
-//      for(final PathElement child : children) {
-//          final ImmutableManagementResourceRegistration childReg = registration.getSubModel(PathAddress.EMPTY_ADDRESS.append(child));
-//          if(childReg != null) {
-//              validateRemoveOperations(current.append(child), childReg, missing);
-//          }
-//      }
-//  }
 }

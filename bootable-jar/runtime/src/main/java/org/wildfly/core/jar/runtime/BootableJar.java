@@ -1,20 +1,10 @@
 /*
- * Copyright 2020 Red Hat, Inc. and/or its affiliates
- * and other contributors as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.wildfly.core.jar.runtime;
+
+import static java.security.AccessController.doPrivileged;
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
@@ -27,10 +17,18 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.security.AccessControlContext;
+import java.security.PrivilegedAction;
+import java.security.ProtectionDomain;
+import java.security.Provider;
+import java.security.Security;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
+import java.util.ServiceConfigurationError;
+import java.util.ServiceLoader;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -331,6 +329,24 @@ public final class BootableJar implements ShutdownHandler {
         // At this point we can configure JMX
         configureJMX(moduleClassLoader, bootableJar.log);
 
+        // Automatic loading of Security providers.
+        // Needed for logic that requires access to providers prior elytron subsystem is configured.
+        final ServiceLoader<Provider> providerServiceLoader = ServiceLoader.load(Provider.class, moduleClassLoader);
+        SecurityManager sm = System.getSecurityManager();
+        Iterator<Provider> iterator = providerServiceLoader.iterator();
+        for (;;) try {
+            if (! (iterator.hasNext())) break;
+            final Provider provider = iterator.next();
+            if (sm == null) {
+                new AddProviderAction(provider).run();
+            } else {
+                final Class<? extends Provider> providerClass = provider.getClass();
+                // each provider needs permission to install itself
+                doPrivileged(new AddProviderAction(provider), getProviderContext(providerClass));
+            }
+        } catch (ServiceConfigurationError | RuntimeException e) {
+            bootableJar.log.securityProviderFailed(e);
+        }
         bootableJar.run();
     }
 
@@ -439,4 +455,22 @@ public final class BootableJar implements ShutdownHandler {
             }
         }
     }
+
+    static final class AddProviderAction implements PrivilegedAction<Void> {
+        private final Provider provider;
+
+        AddProviderAction(final Provider provider) {
+            this.provider = provider;
+        }
+
+        public Void run() {
+            Security.addProvider(provider);
+            return null;
+        }
+    }
+
+    private static AccessControlContext getProviderContext(final Class<? extends Provider> providerClass) {
+        return new AccessControlContext(new ProtectionDomain[]{providerClass.getProtectionDomain()});
+    }
+
 }

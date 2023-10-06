@@ -1,23 +1,11 @@
 /*
- * JBoss, Home of Professional Open Source
- * Copyright 2015, Red Hat, Inc., and individual contributors as indicated
- * by the @authors tag.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.remoting;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.jboss.as.controller.AttributeDefinition;
@@ -49,8 +37,8 @@ abstract class ConnectorChildResource extends SimpleResourceDefinition {
     public ConnectorChildResource(Parameters parameters) {
         super(parameters);
     }
-    static void recreateParentService(OperationContext context, PathAddress parentAddress, ModelNode parentModel) throws OperationFailedException {
-        ConnectorAdd.INSTANCE.launchServices(context, parentAddress.getLastElement().getValue(), parentModel);
+    static void recreateParentService(OperationContext context, ModelNode parentModel) throws OperationFailedException {
+        ConnectorAdd.launchServices(context, parentModel);
     }
 
     static ServiceName getParentServiceName(PathAddress parentAddress) {
@@ -59,11 +47,9 @@ abstract class ConnectorChildResource extends SimpleResourceDefinition {
 
 
     static class AddResourceConnectorRestartHandler extends RestartParentResourceAddHandler {
-        private final AttributeDefinition[] attributes;
 
-        AddResourceConnectorRestartHandler(String parent, AttributeDefinition... attributes) {
-            super(parent);
-            this.attributes = attributes;
+        AddResourceConnectorRestartHandler(String parent, Collection<AttributeDefinition> attributes) {
+            super(parent, attributes);
         }
 
         protected void populateModel(ModelNode operation, ModelNode model) throws OperationFailedException {
@@ -91,8 +77,8 @@ abstract class ConnectorChildResource extends SimpleResourceDefinition {
         }
 
         @Override
-        protected void recreateParentService(OperationContext context, PathAddress parentAddress, ModelNode parentModel) throws OperationFailedException {
-            ConnectorChildResource.recreateParentService(context, parentAddress, parentModel);
+        protected void recreateParentService(OperationContext context, ModelNode parentModel) throws OperationFailedException {
+            ConnectorChildResource.recreateParentService(context, parentModel);
         }
 
         @Override
@@ -107,8 +93,8 @@ abstract class ConnectorChildResource extends SimpleResourceDefinition {
         }
 
         @Override
-        protected void recreateParentService(OperationContext context, PathAddress parentAddress, ModelNode parentModel) throws OperationFailedException {
-            ConnectorChildResource.recreateParentService(context, parentAddress, parentModel);
+        protected void recreateParentService(OperationContext context, ModelNode parentModel) throws OperationFailedException {
+            ConnectorChildResource.recreateParentService(context, parentModel);
         }
 
         @Override
@@ -119,13 +105,13 @@ abstract class ConnectorChildResource extends SimpleResourceDefinition {
 
     static class RestartConnectorWriteAttributeHandler extends RestartParentWriteAttributeHandler {
 
-        RestartConnectorWriteAttributeHandler(String parent, AttributeDefinition... attributes) {
+        RestartConnectorWriteAttributeHandler(String parent, Collection<AttributeDefinition> attributes) {
             super(parent, attributes);
         }
 
         @Override
-        protected void recreateParentService(OperationContext context, PathAddress parentAddress, ModelNode parentModel) throws OperationFailedException {
-            ConnectorChildResource.recreateParentService(context, parentAddress, parentModel);
+        protected void recreateParentService(OperationContext context, ModelNode parentModel) throws OperationFailedException {
+            ConnectorChildResource.recreateParentService(context, parentModel);
         }
 
         @Override

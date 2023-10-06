@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2012, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.host.controller.mgmt;
@@ -337,10 +320,13 @@ public class HostControllerRegistrationHandler implements ManagementRequestHandl
                 final int major = hostInfo.getManagementMajorVersion();
                 final int minor = hostInfo.getManagementMinorVersion();
                 final int micro = hostInfo.getManagementMicroVersion();
-                boolean as711 = (major == 1 && minor == 1);
-                if (as711) {
-                    final OperationFailedException failure = HostControllerLogger.ROOT_LOGGER.unsupportedManagementVersionForHost(major, minor, 1, 2);
-                    registrationContext.failed(SlaveRegistrationException.ErrorCode.INCOMPATIBLE_VERSION, failure.getMessage());
+
+                // We reject any remote host running behind WildFly 23 => KernelAPIVersion.VERSION_16_0(16, 0, 0)
+                // We no longer support domains for legacy remote hosts below WildFly 23, so we reject the registration here.
+                boolean rejected = major < 16;
+                if (rejected) {
+                    final OperationFailedException failure = HostControllerLogger.ROOT_LOGGER.unsupportedManagementVersionForHost(major, minor, 16, 0);
+                    registrationContext.failed(failure, SlaveRegistrationException.ErrorCode.INCOMPATIBLE_VERSION, failure.getMessage());
                     throw failure;
                 }
                 // Initialize the transformers
@@ -427,7 +413,7 @@ public class HostControllerRegistrationHandler implements ManagementRequestHandl
 
         @Override
         public void failed(Exception e) {
-            failed(SlaveRegistrationException.ErrorCode.UNKNOWN, e.getClass().getName() + ":" + e.getMessage());
+            failed(e, SlaveRegistrationException.ErrorCode.UNKNOWN, e.getClass().getName() + ":" + e.getMessage());
         }
 
         @Override
@@ -443,9 +429,9 @@ public class HostControllerRegistrationHandler implements ManagementRequestHandl
                 try {
                     registerHost(transaction, result);
                 } catch (SlaveRegistrationException e) {
-                    failed(e.getErrorCode(), e.getErrorMessage());
+                    failed(e, e.getErrorCode(), e.getErrorMessage());
                 } catch (Exception e) {
-                    failed(SlaveRegistrationException.ErrorCode.UNKNOWN, e.getClass().getName() + ":" + e.getMessage());
+                    failed(e, SlaveRegistrationException.ErrorCode.UNKNOWN, e.getClass().getName() + ":" + e.getMessage());
                 }
                 if(failed) {
                     transaction.rollback();
@@ -587,13 +573,18 @@ public class HostControllerRegistrationHandler implements ManagementRequestHandl
             completeTask(!failed);
         }
 
-        void failed(SlaveRegistrationException.ErrorCode error, String message) {
+        /**
+         * @param t  - the cause of failure, must not be null
+         * @param error code representing the failure cause {@link SlaveRegistrationException.ErrorCode}
+         * @param message - text explaining the failure
+         */
+        void failed(final Throwable t, SlaveRegistrationException.ErrorCode error, String message) {
             byte errorCode = error.getCode();
             if(completed.compareAndSet(false, true)) {
                 failed = true;
                 final IOTask<?> task = this.task;
                 if(task != null) {
-                    task.setFailed();
+                    task.failed(t);
                 }
                 try {
                     sendFailedResponse(responseChannel, errorCode, message);
@@ -603,6 +594,11 @@ public class HostControllerRegistrationHandler implements ManagementRequestHandl
                 activeOperation.getResultHandler().done(null);
                 addFailureEvent(error);
             }
+        }
+
+        void failed(final SlaveRegistrationException.ErrorCode error, final String message) {
+            Exception ex = new Exception(message);
+            failed(ex, error, message);
         }
 
         void addFailureEvent(SlaveRegistrationException.ErrorCode error) {
@@ -663,23 +659,23 @@ public class HostControllerRegistrationHandler implements ManagementRequestHandl
                     try {
                         task.sendMessage(output);
                     } catch (IOException e) {
-                        failed(SlaveRegistrationException.ErrorCode.UNKNOWN, DomainControllerLogger.ROOT_LOGGER.failedToSendMessage(e.getMessage()));
+                        failed(e, SlaveRegistrationException.ErrorCode.UNKNOWN, DomainControllerLogger.ROOT_LOGGER.failedToSendMessage(e.getMessage()));
                         throw new IllegalStateException(e);
                     } finally {
                         StreamUtils.safeClose(output);
                     }
                 } catch (IOException e) {
-                    failed(SlaveRegistrationException.ErrorCode.UNKNOWN, DomainControllerLogger.ROOT_LOGGER.failedToSendResponseHeader(e.getMessage()));
+                    failed(e, SlaveRegistrationException.ErrorCode.UNKNOWN, DomainControllerLogger.ROOT_LOGGER.failedToSendResponseHeader(e.getMessage()));
                     throw new IllegalStateException(e);
                 }
             }
             try {
                 return task.get();
             } catch (InterruptedException e) {
-                failed(SlaveRegistrationException.ErrorCode.UNKNOWN, DomainControllerLogger.ROOT_LOGGER.registrationTaskGotInterrupted());
+                failed(e, SlaveRegistrationException.ErrorCode.UNKNOWN, DomainControllerLogger.ROOT_LOGGER.registrationTaskGotInterrupted());
                 throw new IllegalStateException(e);
             } catch (ExecutionException e) {
-                failed(SlaveRegistrationException.ErrorCode.UNKNOWN, DomainControllerLogger.ROOT_LOGGER.registrationTaskFailed(e.getMessage()));
+                failed(e, SlaveRegistrationException.ErrorCode.UNKNOWN, DomainControllerLogger.ROOT_LOGGER.registrationTaskFailed(e.getMessage()));
                 throw new IllegalStateException(e);
             }
         }
@@ -699,8 +695,13 @@ public class HostControllerRegistrationHandler implements ManagementRequestHandl
             return setResult((T) result);
         }
 
-        boolean setFailed() {
-            return setFailed(null);
+        /**
+         * @param t – the cause of failure, must not be null.
+         * @return true if the result was successfully set, or false if a result was already set
+         */
+        boolean failed(Throwable t) {
+            Assert.checkNotNullParam("Throwable", t);
+            return super.setFailed(t);
         }
     }
 

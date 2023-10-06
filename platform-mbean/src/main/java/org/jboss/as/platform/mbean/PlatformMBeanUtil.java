@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.platform.mbean;
@@ -27,8 +10,6 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryUsage;
 import java.lang.management.MonitorInfo;
 import java.lang.management.ThreadInfo;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.management.JMException;
 import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
@@ -37,7 +18,6 @@ import javax.management.ReflectionException;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.descriptions.StandardResourceDescriptionResolver;
 import org.jboss.dmr.ModelNode;
-import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**
  * Utilities for working with platform mbeans.
@@ -46,23 +26,7 @@ import org.wildfly.security.manager.WildFlySecurityManager;
  */
 public class PlatformMBeanUtil {
 
-    public static final int JVM_MAJOR_VERSION;
-
-    static {
-        int vmVersion;
-        try {
-            String vmVersionStr = WildFlySecurityManager.getPropertyPrivileged("java.specification.version", null);
-            Matcher matcher = Pattern.compile("^(?:1\\.)?(\\d+)$").matcher(vmVersionStr); //match 1.<number> or <number>
-            if (matcher.find()) {
-                vmVersion = Integer.valueOf(matcher.group(1));
-            } else {
-                throw new RuntimeException("Unknown version of jvm " + vmVersionStr);
-            }
-        } catch (Exception e) {
-            vmVersion = 8;
-        }
-        JVM_MAJOR_VERSION = vmVersion;
-    }
+    public static final int JVM_MAJOR_VERSION = Runtime.version().feature();
 
     public static String escapeMBeanName(final String toEscape) {
         return toEscape.replace(' ', '_');

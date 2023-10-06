@@ -1,29 +1,13 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2014, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller.capability;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -40,7 +24,7 @@ import org.wildfly.common.Assert;
  *
  * @author Brian Stansberry (c) 2014 Red Hat Inc.
  */
-public class RuntimeCapability<T> extends AbstractCapability  {
+public class RuntimeCapability<T> implements Capability {
 
     //todo remove, here only for binary compatibility of elytron subsystem, drop once it is in.
     public static String buildDynamicCapabilityName(String baseName, String dynamicNameElement) {
@@ -74,22 +58,36 @@ public class RuntimeCapability<T> extends AbstractCapability  {
     // Default value for allowMultipleRegistrations.
     private static final boolean ALLOW_MULTIPLE = false;
 
+
+    private final String name;
+    private final boolean dynamic;
+    private final Set<String> requirements;
+    private final Function<PathAddress,String[]> dynamicNameMapper;
     private final Class<?> serviceValueType;
     private volatile ServiceName serviceName;
     private final T runtimeAPI;
     private final boolean allowMultipleRegistrations;
-    private final Set<String> additionalPackages;
 
     /**
      * Constructor for use by the builder.
      */
     private RuntimeCapability(Builder<T> builder) {
-        super(builder.baseName, builder.dynamic, builder.requirements, builder.dynamicNameMapper);
+        assert builder.baseName != null;
+        this.name = builder.baseName;
+        this.dynamic = builder.dynamic;
+        this.requirements = establishRequirements(builder.requirements);
+        this.dynamicNameMapper = Objects.requireNonNullElse(builder.dynamicNameMapper, DynamicNameMappers.SIMPLE);
         this.runtimeAPI = builder.runtimeAPI;
         this.serviceValueType = builder.serviceValueType;
         this.allowMultipleRegistrations = builder.allowMultipleRegistrations;
-        this.additionalPackages = builder.additionalPackages == null
-                ? Collections.emptySet() : Collections.unmodifiableSet(builder.additionalPackages);
+    }
+
+    private static Set<String> establishRequirements(Set<String> input) {
+        if (input != null && !input.isEmpty()) {
+            return Set.copyOf(input);
+        } else {
+            return Collections.emptySet();
+        }
     }
 
     /**
@@ -99,10 +97,12 @@ public class RuntimeCapability<T> extends AbstractCapability  {
                               Set<String> requirements,
                               boolean allowMultipleRegistrations,
                               Function<PathAddress, String[]> dynamicNameMapper,
-                              Set<String> additionalPackages,
                               String... dynamicElement
     ) {
-        super(buildDynamicCapabilityName(baseName, dynamicElement), false, requirements, dynamicNameMapper);
+        this.name = buildDynamicCapabilityName(baseName, dynamicElement);
+        this.dynamic = false;
+        this.requirements = establishRequirements(requirements);
+        this.dynamicNameMapper = Objects.requireNonNullElse(dynamicNameMapper, DynamicNameMappers.SIMPLE);
         this.runtimeAPI = runtimeAPI;
         this.serviceValueType = serviceValueType;
         if (serviceValueType != null) {
@@ -112,7 +112,6 @@ public class RuntimeCapability<T> extends AbstractCapability  {
             assert baseServiceName == null;
         }
         this.allowMultipleRegistrations = allowMultipleRegistrations;
-        this.additionalPackages = additionalPackages;
     }
 
     /**
@@ -261,9 +260,8 @@ public class RuntimeCapability<T> extends AbstractCapability  {
         assert isDynamicallyNamed();
         assert dynamicElement != null;
         assert dynamicElement.length > 0;
-        return new RuntimeCapability<T>(getName(), serviceValueType, getServiceName(), runtimeAPI,
-                getRequirements(), allowMultipleRegistrations,dynamicNameMapper, additionalPackages,
-                dynamicElement);
+        return new RuntimeCapability<>(getName(), serviceValueType, getServiceName(), runtimeAPI,
+                getRequirements(), allowMultipleRegistrations,dynamicNameMapper, dynamicElement);
 
     }
 
@@ -291,53 +289,59 @@ public class RuntimeCapability<T> extends AbstractCapability  {
         String[] dynamicElement = dynamicNameMapper.apply(path);
         assert dynamicElement.length > 0;
         return new RuntimeCapability<>(getName(), serviceValueType, getServiceName(), runtimeAPI,
-                getRequirements(), allowMultipleRegistrations, dynamicNameMapper, additionalPackages,
-                dynamicElement);
-    }
-
-    @Override
-    public Set<String> getAdditionalRequiredPackages() {
-        return additionalPackages;
+                getRequirements(), allowMultipleRegistrations, dynamicNameMapper, dynamicElement);
     }
 
     @Override
     public String getName() {
-        return super.getName();
+        return name;
     }
 
     @Override
     public Set<String> getRequirements() {
-        return super.getRequirements();
+        return requirements;
     }
 
     @Override
     public boolean isDynamicallyNamed() {
-        return super.isDynamicallyNamed();
+        return dynamic;
     }
 
     @Override
     public String getDynamicName(String dynamicNameElement) {
-        return super.getDynamicName(dynamicNameElement);
+        if (!dynamic) {
+            throw new IllegalStateException();
+        }
+        return name + "." + dynamicNameElement;
     }
 
     @Override
     public String getDynamicName(PathAddress address) {
-        return super.getDynamicName(address);
+        if (!dynamic) {
+            throw new IllegalStateException();
+        }
+        String[] dynamicElements = dynamicNameMapper.apply(address);
+        return RuntimeCapability.buildDynamicCapabilityName(name, dynamicElements);
     }
 
     @Override
     public boolean equals(Object o) {
-        return super.equals(o);
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        RuntimeCapability<?> that = (RuntimeCapability<?>) o;
+
+        return name.equals(that.name);
     }
 
     @Override
     public int hashCode() {
-        return super.hashCode();
+        return name.hashCode();
     }
 
     @Override
     public String toString() {
-        return super.toString();
+        return name;
     }
 
     /**
@@ -353,7 +357,6 @@ public class RuntimeCapability<T> extends AbstractCapability  {
         private Set<String> requirements;
         private boolean allowMultipleRegistrations = ALLOW_MULTIPLE;
         private Function<PathAddress, String[]> dynamicNameMapper = DynamicNameMappers.SIMPLE;
-        private Set<String> additionalPackages;
 
         /**
          * Create a builder for a non-dynamic capability with no custom runtime API.
@@ -361,7 +364,7 @@ public class RuntimeCapability<T> extends AbstractCapability  {
          * @return the builder
          */
         public static Builder<Void> of(String name) {
-            return new Builder<Void>(name, false, null);
+            return new Builder<>(name, false, null);
         }
 
         /**
@@ -371,7 +374,7 @@ public class RuntimeCapability<T> extends AbstractCapability  {
          * @return the builder
          */
         public static Builder<Void> of(String name, boolean dynamic) {
-            return new Builder<Void>(name, dynamic, null);
+            return new Builder<>(name, dynamic, null);
         }
 
         /**
@@ -405,7 +408,7 @@ public class RuntimeCapability<T> extends AbstractCapability  {
          * @return the builder
          */
         public static <T> Builder<T> of(String name, T runtimeAPI) {
-            return new Builder<T>(name, false, runtimeAPI);
+            return new Builder<>(name, false, runtimeAPI);
         }
 
         /**
@@ -417,7 +420,7 @@ public class RuntimeCapability<T> extends AbstractCapability  {
          * @return the builder
          */
         public static <T> Builder<T> of(String name, boolean dynamic, T runtimeAPI) {
-            return new Builder<T>(name, dynamic, runtimeAPI);
+            return new Builder<>(name, dynamic, runtimeAPI);
         }
 
         private Builder(String baseName, boolean dynamic, T runtimeAPI) {
@@ -476,31 +479,6 @@ public class RuntimeCapability<T> extends AbstractCapability  {
         public Builder<T> setDynamicNameMapper(Function<PathAddress,String[]> mapper) {
             assert mapper != null;
             this.dynamicNameMapper = mapper;
-            return this;
-        }
-
-        /**
-         * Adds the names of any "additional" Galleon packages that must be installed in order
-         * for this capability to function. The purpose of providing this information is to
-         * make it available to the Galleon tooling that produces Galleon feature-specs,
-         * in order to allow the tooling to include the package information in the relevant
-         * spec. It is not necessary to provide the names of "standard" packages here and
-         * because of this, this method is not expected to be frequently used.
-         * See {@link Capability#getAdditionalRequiredPackages()} for more information
-         * on what makes a package "standard" versus "additional".
-         *
-         * @param packages the package names
-         * @return the builder
-         *
-         * @deprecated Use {@link org.jboss.as.controller.ResourceDefinition#registerAdditionalRuntimePackages(
-         * org.jboss.as.controller.registry.ManagementResourceRegistration)}
-         */
-        public Builder<T> addAdditionalRequiredPackages(String... packages) {
-            assert packages != null;
-            if (this.additionalPackages == null) {
-                this.additionalPackages = new HashSet<>(packages.length);
-            }
-            Collections.addAll(this.additionalPackages, packages);
             return this;
         }
 

@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2015, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.test.integration.logging.syslog;
 
@@ -31,7 +14,9 @@ import static org.productivity.java.syslog4j.SyslogConstants.UDP;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -116,7 +101,7 @@ public class SyslogHandlerTestCase extends AbstractLoggingTestCase {
         for (Level level : LoggingServiceActivator.LOG_LEVELS) {
             testLog(queue, level);
         }
-        Assert.assertTrue("No other message was expected in syslog.", queue.isEmpty());
+        validateEmpty(queue);
     }
 
     /**
@@ -130,7 +115,7 @@ public class SyslogHandlerTestCase extends AbstractLoggingTestCase {
         makeLogs();
         testLog(queue, Level.FATAL);
         testLog(queue, Level.ERROR);
-        Assert.assertTrue("No other message was expected in syslog.", queue.isEmpty());
+        validateEmpty(queue);
     }
 
     @Test
@@ -142,7 +127,7 @@ public class SyslogHandlerTestCase extends AbstractLoggingTestCase {
         for (Level level : LoggingServiceActivator.LOG_LEVELS) {
             testJsonLog(queue, level);
         }
-        Assert.assertTrue("No other message was expected in syslog.", queue.isEmpty());
+        validateEmpty(queue);
 
         // Reset the named-formatter which should reset the format
         executeOperation(Operations.createUndefineAttributeOperation(SYSLOG_HANDLER_ADDR, "named-formatter"));
@@ -150,7 +135,7 @@ public class SyslogHandlerTestCase extends AbstractLoggingTestCase {
         for (Level level : LoggingServiceActivator.LOG_LEVELS) {
             testLog(queue, level);
         }
-        Assert.assertTrue("No other message was expected in syslog.", queue.isEmpty());
+        validateEmpty(queue);
     }
 
     /**
@@ -187,6 +172,12 @@ public class SyslogHandlerTestCase extends AbstractLoggingTestCase {
             final String expectedMsg = LoggingServiceActivator.formatMessage(MSG, expectedLevel);
             assertEquals("Message with unexpected Syslog event text received.", expectedMsg, json.getString("message"));
         }
+    }
+
+    private void validateEmpty(final BlockingQueue<SyslogServerEventIF> queue) {
+        // Copy our queue
+        final Collection<SyslogServerEventIF> copied = List.copyOf(queue);
+        Assert.assertTrue("No other message was expected in syslog. Found: " + copied, copied.isEmpty());
     }
 
     /**

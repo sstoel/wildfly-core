@@ -1,31 +1,9 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.controller;
 
-
-
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.registry.AttributeAccess;
 import org.jboss.as.controller.registry.ImmutableManagementResourceRegistration;
@@ -40,15 +18,13 @@ import org.jboss.dmr.ModelNode;
  */
 public abstract class RestartParentResourceRemoveHandler extends RestartParentResourceHandlerBase {
 
-    private final Set<RuntimeCapability> capabilities;
-
     protected RestartParentResourceRemoveHandler(String parentKeyName) {
-        this(parentKeyName, null);
+        super(parentKeyName);
     }
 
+    @Deprecated(forRemoval = true)
     protected RestartParentResourceRemoveHandler(String parentKeyName, RuntimeCapability ... capabilities) {
         super(parentKeyName);
-        this.capabilities = capabilities == null || capabilities.length == 0 ? RestartParentResourceAddHandler.NULL_CAPABILITIES : Arrays.stream(capabilities).collect(Collectors.toSet());
     }
 
     /**
@@ -59,6 +35,7 @@ public abstract class RestartParentResourceRemoveHandler extends RestartParentRe
      * @param operation  the operation
      * @throws OperationFailedException if there is a problem updating the model
      */
+    @Override
     protected void updateModel(final OperationContext context, final ModelNode operation) throws OperationFailedException {
         // verify that the resource exist before removing it
         context.readResource(PathAddress.EMPTY_ADDRESS, false);
@@ -67,9 +44,7 @@ public abstract class RestartParentResourceRemoveHandler extends RestartParentRe
     }
 
     protected void recordCapabilitiesAndRequirements(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {
-        Set<RuntimeCapability> capabilitySet = capabilities.isEmpty() ? context.getResourceRegistration().getCapabilities() : capabilities;
-
-        for (RuntimeCapability capability : capabilitySet) {
+        for (RuntimeCapability<?> capability : context.getResourceRegistration().getCapabilities()) {
             if (capability.isDynamicallyNamed()) {
                 context.deregisterCapability(capability.getDynamicName(context.getCurrentAddress()));
             } else {

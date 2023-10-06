@@ -1,24 +1,7 @@
 /*
-* JBoss, Home of Professional Open Source.
-* Copyright 2011, Red Hat Middleware LLC, and individual contributors
-* as indicated by the @author tags. See the copyright.txt file in the
-* distribution for a full listing of individual contributors.
-*
-* This is free software; you can redistribute it and/or modify it
-* under the terms of the GNU Lesser General Public License as
-* published by the Free Software Foundation; either version 2.1 of
-* the License, or (at your option) any later version.
-*
-* This software is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-* Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public
-* License along with this software; if not, write to the Free
-* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA, or see the FSF site: http://www.fsf.org.
-*/
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package org.jboss.as.controller.test;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ADD;
@@ -34,9 +17,9 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REA
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RECURSIVE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REQUEST_PROPERTIES;
 
-import org.jboss.as.controller.AbstractAddStepHandler;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.ManagementModel;
+import org.jboss.as.controller.ModelOnlyAddStepHandler;
 import org.jboss.as.controller.ModelOnlyRemoveStepHandler;
 import org.jboss.as.controller.ModelOnlyWriteAttributeHandler;
 import org.jboss.as.controller.PathAddress;
@@ -158,8 +141,8 @@ public class OrderedChildResourceTestCase extends AbstractControllerTestBase {
         public ParentResourceDefinition() {
             super(PARENT_MAIN,
                     NonResolvingResourceDescriptionResolver.INSTANCE,
-                    new AbstractAddStepHandler(REQUEST_ATTRIBUTES),
-                    new ModelOnlyRemoveStepHandler());
+                    ModelOnlyAddStepHandler.INSTANCE,
+                    ModelOnlyRemoveStepHandler.INSTANCE);
         }
 
         @Override
@@ -177,8 +160,8 @@ public class OrderedChildResourceTestCase extends AbstractControllerTestBase {
 
         public OrderedChildResourceDefinition() {
             super(new Parameters(CHILD, NonResolvingResourceDescriptionResolver.INSTANCE)
-                    .setAddHandler(new AbstractAddStepHandler(REQUEST_ATTRIBUTES))
-                    .setRemoveHandler(new ModelOnlyRemoveStepHandler())
+                    .setAddHandler(ModelOnlyAddStepHandler.INSTANCE)
+                    .setRemoveHandler(ModelOnlyRemoveStepHandler.INSTANCE)
                     .setOrderedChild());
         }
 

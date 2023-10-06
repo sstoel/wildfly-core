@@ -1,24 +1,7 @@
 /*
-* JBoss, Home of Professional Open Source.
-* Copyright 2006, Red Hat Middleware LLC, and individual contributors
-* as indicated by the @author tags. See the copyright.txt file in the
-* distribution for a full listing of individual contributors.
-*
-* This is free software; you can redistribute it and/or modify it
-* under the terms of the GNU Lesser General Public License as
-* published by the Free Software Foundation; either version 2.1 of
-* the License, or (at your option) any later version.
-*
-* This software is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-* Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public
-* License along with this software; if not, write to the Free
-* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA, or see the FSF site: http://www.fsf.org.
-*/
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package org.jboss.as.controller.remote;
 
 import static java.security.AccessController.doPrivileged;
@@ -83,12 +66,12 @@ public abstract class AbstractModelControllerOperationHandlerFactoryService impl
     /** {@inheritDoc} */
     @Override
     public synchronized void start(StartContext context) throws StartException {
-        MGMT_OP_LOGGER.debugf("Starting operation handler service %s", context.getController().getName());
+        MGMT_OP_LOGGER.debugf("Starting operation handler service %s", context.getController().provides());
         responseAttachmentSupport = new ResponseAttachmentInputStreamSupport(scheduledExecutorSupplier.get());
 
         final ThreadFactory threadFactory = doPrivileged(new PrivilegedAction<JBossThreadFactory>() {
             public JBossThreadFactory run() {
-                return new JBossThreadFactory(new ThreadGroup("management-handler-thread"), Boolean.FALSE, null, "%G - %t", null, null);
+                return new JBossThreadFactory(ThreadGroupHolder.THREAD_GROUP, Boolean.FALSE, null, "%G - %t", null, null);
             }
         });
         if (EnhancedQueueExecutor.DISABLE_HINT) {
@@ -159,6 +142,11 @@ public abstract class AbstractModelControllerOperationHandlerFactoryService impl
 
     protected final ExecutorService getClientRequestExecutor() {
         return clientRequestExecutor;
+    }
+
+    // Wrapper class to delay thread group creation until when it's needed.
+    private static class ThreadGroupHolder {
+        private static final ThreadGroup THREAD_GROUP = new ThreadGroup("management-handler-thread");
     }
 
 }

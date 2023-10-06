@@ -1,22 +1,6 @@
 /*
- * Copyright (C) 2015 Red Hat, inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA 02110-1301  USA
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.wildfly.extension.core.management;
 
@@ -60,7 +44,6 @@ import org.jboss.as.controller.registry.OperationEntry;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
-import org.jboss.msc.service.AbstractService;
 
 /**
  * Resource to list all configuration changes.
@@ -115,7 +98,7 @@ public class ConfigurationChangeResourceDefinition extends PersistentResourceDef
         @Override
         protected void performRuntime(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {
             super.performRuntime(context, operation, resource);
-            context.getServiceTarget().addService(CONFIGURATION_CHANGES_CAPABILITY.getCapabilityServiceName(), new AbstractService<Void>() {}).install();
+            context.getServiceTarget().addService(CONFIGURATION_CHANGES_CAPABILITY.getCapabilityServiceName()).install();
             ModelNode maxHistory = MAX_HISTORY.resolveModelAttribute(context, operation);
             ConfigurationChangesCollector.INSTANCE.setMaxHistory(maxHistory.asInt());
         }

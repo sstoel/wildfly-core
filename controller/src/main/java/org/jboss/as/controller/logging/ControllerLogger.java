@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller.logging;
@@ -285,6 +268,19 @@ public interface ControllerLogger extends BasicLogger {
     @LogMessage(level = ERROR)
     @Message(id = Message.INHERIT, value = "Operation (%s) failed - address: (%s) - failure description: %s")
     void operationFailed(ModelNode op, ModelNode opAddress, ModelNode failureDescription);
+
+    /**
+     * Logs a debug message indicating operation failed.
+     *
+     * @param op                 the operation that failed.
+     * @param opAddress          the address the operation failed on.
+     * @param failureDescription the failure description.
+     * @param emptyString        meaningless param just so we can have a different method signature
+     *                           from the variant used by legacy controllers
+     */
+    @LogMessage(level = DEBUG)
+    @Message(id = Message.INHERIT, value = "Operation (%s) failed - address: (%s) - failure description: %s%s")
+    void operationFailed(ModelNode op, ModelNode opAddress, ModelNode failureDescription, String emptyString);
 
     // WFCORE-792 -- no longer used
 //    /**
@@ -3288,8 +3284,8 @@ public interface ControllerLogger extends BasicLogger {
     @Message(id = 383, value = "No operation is defined %s")
     String noOperationDefined(final ModelNode operation);
 
-    @Message(id = 384, value = "The call to registerHostCapable() should happen before registering models or transformers for the '%s' subsystem.")
-    IllegalStateException registerHostCapableMustHappenFirst(String name);
+//    @Message(id = 384, value = "The call to registerHostCapable() should happen before registering models or transformers for the '%s' subsystem.")
+//    IllegalStateException registerHostCapableMustHappenFirst(String name);
 
     @Message(id = 385, value = "An attempt was made to register the non-host capable subsystem '%s' from extension module '%s' in the host model.")
     IllegalStateException nonHostCapableSubsystemInHostModel(String subsystemName, String extensionModuleName);
@@ -3675,8 +3671,8 @@ public interface ControllerLogger extends BasicLogger {
     IllegalArgumentException missingYamlFile(String path);
 
     @LogMessage(level = DEBUG)
-    @Message(id = 487, value = "It took %s ms to load and parse the yaml files")
-    void loadingYamlFiles(long duration);
+    @Message(id = 487, value = "It took %s ms to load and parse the following yaml files [%s]")
+    void loadingYamlFiles(long duration, String files);
 
     @LogMessage(level = WARN)
     @Message(id = 488, value = "No registration found for address %s - Ignoring the subtree")
@@ -3736,4 +3732,24 @@ public interface ControllerLogger extends BasicLogger {
      */
     @Message(id = Message.NONE, value = "The yaml configuration files for customizing the configuration. Paths can be absolute, relative to the current execution directory or relative to the standalone configuration directory.")
     String argYaml();
+
+    @Message(id = 499, value = "There is no satisfactory capability '%s' available to resources with capability scope '%s'. This capability is registered at address(es) '%s', and are not accessible to resources with scope '%s'.")
+    IllegalStateException noSatisfactoryCapability(String capability, String scopeName, Set<RegistrationPoint> addresses, String scopeNameAgain);
+
+    @LogMessage(level = WARN)
+    @Message(id = 500, value = "There is no UUID string at '%s'. A new value will be generated.")
+    void uuidIsEmpty(String path);
+
+    @LogMessage(level = WARN)
+    @Message(id = 501, value = "An invalid UUID string '%s' was found at '%s'. A new value will be generated.")
+    void uuidNotValid(String corruptedUuid, String path);
+
+    @Message(id = 502, value = "No child resource called %s could be found at address %s'.")
+    IllegalArgumentException noChildResource(String name, String address);
+
+    @Message(id = 503, value = "Failed to publish configuration, because the remote name %s is not valid.")
+    ConfigurationPersistenceException failedToPublishConfigurationInvalidRemote(String name);
+
+    @Message(id = 504, value = "The operation %s is not defined for resource %s.")
+    UnsupportedOperationException missingOperationForResource(String op, String address);
 }

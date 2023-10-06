@@ -1,18 +1,6 @@
 /*
- * Copyright 2016-2019 Red Hat, Inc. and/or its affiliates
- * and other contributors as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.test.layers;
 
@@ -71,31 +59,46 @@ public class LayersTest {
      * @param unused The set of modules that are OK to not be provisioned when all layers are provisioned.
      * If more modules than this set are not provisioned, it means that we are missing some modules and
      * an error occurs.
-     * @throws Exception
+     * @throws Exception on failure
      */
+    @Deprecated
     public static void test(String root, Set<String> unreferenced, Set<String> unused) throws Exception {
+        testExecution(root);
+        testDeployedModules(root, unreferenced, unused);
+    }
+
+    /**
+     * Checks only allowed modules were loaded with the installation
+     * @param root Path to installation
+     * @param unreferenced The set of modules that are present in a default installation (with all modules
+     * installed) but are not referenced from the module graph. They are not referenced because they are not used,
+     * or they are only injected at runtime into deployment unit or are part of extension not present in the
+     * default configuration (eg: deployment-scanner in core standalone.xml configuration). We are checking that
+     * the default configuration (that contains all modules) doesn't have more unreferenced modules than this set. If
+     * there are more it means that some new modules have been introduced and we must understand why (eg: a subsystem inject
+     * a new module into a Deployment Unit, the subsystem must advertise it and the test must be updated with this new unreferenced module).
+     * @param unused The set of modules that are OK to not be provisioned when all layers are provisioned.
+     * If more modules than this set are not provisioned, it means that we are missing some modules and
+     * an error occurs.
+     * @throws Exception on failure
+     */
+    public static void testDeployedModules(String root, Set<String> unreferenced, Set<String> unused) throws Exception {
         File[] installations = new File(root).listFiles(File::isDirectory);
         Result reference = null;
         Result allLayers = null;
         Map<String, Result> layers = new TreeMap<>();
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        try {
-            for (File f : installations) {
-                Path installation = f.toPath();
-                Result res = Scanner.scan(installation, getConf(installation));
-                if (f.getName().equals(REFERENCE)) {
-                    reference = res;
-                } else if (f.getName().equals(ALL_LAYERS)) {
-                    checkExecution(executor, installation);
-                    allLayers = res;
-                } else {
-                    checkExecution(executor, installation);
-                    layers.put(f.getName(), res);
-                }
+        for (File f : installations) {
+            Path installation = f.toPath();
+            Result res = Scanner.scan(installation, getConf(installation));
+            if (f.getName().equals(REFERENCE)) {
+                reference = res;
+            } else if (f.getName().equals(ALL_LAYERS)) {
+                allLayers = res;
+            } else {
+                layers.put(f.getName(), res);
             }
-        } finally {
-            executor.shutdownNow();
         }
+
         // Check that the reference has no more un-referenced modules than the expected ones.
         Set<String> invalidUnref = new HashSet<>();
         Set<String> allUnReferenced = new HashSet<>();
@@ -140,7 +143,7 @@ public class LayersTest {
     }
 
     /**
-     * Start and check execution of all installations present in root.
+     * Checks the expected modules were provisioned with the @{code test-standalone-reference} and @{test-all-layers} installations in the root.
      * @param root Installations root directory
      * @throws Exception
      */

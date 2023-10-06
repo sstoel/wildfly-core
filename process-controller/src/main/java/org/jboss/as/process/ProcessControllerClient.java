@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2010, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.process;
@@ -190,24 +173,19 @@ public final class ProcessControllerClient implements Closeable {
         }
     }
 
-    public void addProcess(String processName, int processId, String authKey, String[] cmd, String workingDir, Map<String, String> env) throws IOException {
+    public void addProcess(String processName, int processId, String[] cmd, String workingDir, Map<String, String> env) throws IOException {
         Assert.checkNotNullParam("processName", processName);
-        Assert.checkNotNullParam("authKey", authKey);
         Assert.checkNotNullParam("cmd", cmd);
         Assert.checkNotNullParam("workingDir", workingDir);
         Assert.checkNotNullParam("env", env);
         // fixme
         Assert.checkNotEmptyParam("cmd", Arrays.asList(cmd));
-        // this is Base64 encoded, and padded up to 24 bytes
-        if (authKey.length() != ProcessController.AUTH_BYTES_ENCODED_LENGTH) {
-            throw ProcessLogger.ROOT_LOGGER.invalidAuthKeyLen();
-        }
+
         final OutputStream os = connection.writeMessage();
         try {
             os.write(Protocol.ADD_PROCESS);
             writeUTFZBytes(os, processName);
             writeInt(os, processId);
-            os.write(authKey.getBytes(StandardCharsets.US_ASCII));
             writeInt(os, cmd.length);
             for (String c : cmd) {
                 writeUTFZBytes(os, c);
@@ -275,7 +253,8 @@ public final class ProcessControllerClient implements Closeable {
         }
     }
 
-    public void reconnectProcess(final String processName, final URI managementURI, final boolean managementSubsystemEndpoint, final String authKey) throws IOException {
+    public void reconnectServerProcess(final String processName, final URI managementURI, final boolean managementSubsystemEndpoint, final String serverAuthToken) throws IOException {
+        // This call is specifically about asking a domain server to reconnect to the host controller.
         Assert.checkNotNullParam("processName", processName);
         final OutputStream os = connection.writeMessage();
         try{
@@ -285,7 +264,7 @@ public final class ProcessControllerClient implements Closeable {
             writeUTFZBytes(os, managementURI.getHost());
             writeInt(os, managementURI.getPort());
             writeBoolean(os, managementSubsystemEndpoint);
-            os.write(authKey.getBytes(StandardCharsets.US_ASCII));
+            writeUTFZBytes(os, serverAuthToken);
             os.close();
         } finally {
             safeClose(os);

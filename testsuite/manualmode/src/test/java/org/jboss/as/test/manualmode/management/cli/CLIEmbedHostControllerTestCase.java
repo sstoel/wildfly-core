@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2015, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.test.manualmode.management.cli;
@@ -775,8 +758,27 @@ public class CLIEmbedHostControllerTestCase extends AbstractCliTestBase {
     }
 
     private void checkLogging(String line) throws IOException {
-        String logOutput = readLogOut();
-        assertTrue(logOutput, checkLogging(logOutput, line));
+        long delay = System.currentTimeMillis() + TimeoutUtil.adjust(10000);
+        boolean traceSeen = false;
+        StringBuilder allOutput = new StringBuilder();
+        do {
+            String logOutput = readLogOut();
+            if (logOutput != null) {
+                allOutput.append(logOutput);
+            }
+            if (checkLogging(allOutput.toString(), line)) {
+                traceSeen = true;
+                break;
+            } else {
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Interrupted");
+                }
+            }
+        } while (System.currentTimeMillis() < delay);
+        assertTrue("Trace " + line + " not seen in log: " + allOutput, traceSeen);
     }
 
     private boolean checkLogging(String logOutput, String line) throws IOException {

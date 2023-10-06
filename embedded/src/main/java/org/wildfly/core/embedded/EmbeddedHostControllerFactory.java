@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2010, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.wildfly.core.embedded;
@@ -52,7 +35,6 @@ import org.jboss.as.controller.client.helpers.DelegatingModelControllerClient;
 import org.jboss.as.host.controller.DomainModelControllerService;
 import org.jboss.as.host.controller.HostControllerEnvironment;
 import org.jboss.as.host.controller.Main;
-import org.jboss.as.process.ProcessController;
 import org.jboss.as.server.FutureServiceContainer;
 import org.jboss.as.server.SystemExiter;
 import org.jboss.as.server.logging.ServerLogger;
@@ -63,9 +45,9 @@ import org.jboss.msc.value.Value;
 import org.wildfly.core.embedded.logging.EmbeddedLogger;
 
 /**
- * This is the host controller counterpart to EmbeddedServerFactory which lives behind a module class loader.
+ * This is the host controller counterpart to EmbeddedProcessFactory which lives behind a module class loader.
  * <p>
- * HostContollerFactory that sets up an embedded server using modular classloading.
+ * Factory that sets up an embedded {@link HostController} using modular classloading.
  * </p>
  * <p>
  * To use this class the <code>jboss.home.dir</code> system property must be set to the
@@ -267,14 +249,14 @@ public class EmbeddedHostControllerFactory {
                         }
                     });
 
-                    // Determine the ServerEnvironment
+                    // Determine the HostControllerEnvironment
                     HostControllerEnvironment environment = createHostControllerEnvironment(jbossHomeDir, cmdargs, startTime);
 
                     FutureServiceContainer futureContainer = new FutureServiceContainer();
-                    final byte[] authBytes = new byte[ProcessController.AUTH_BYTES_LENGTH];
+                    final byte[] authBytes = new byte[16];
                     new Random(new SecureRandom().nextLong()).nextBytes(authBytes);
-                    final String authCode = Base64.getEncoder().encodeToString(authBytes);
-                    hostControllerBootstrap = new EmbeddedHostControllerBootstrap(futureContainer, environment, authCode);
+                    final String pcAuthCode = Base64.getEncoder().encodeToString(authBytes);
+                    hostControllerBootstrap = new EmbeddedHostControllerBootstrap(futureContainer, environment, pcAuthCode);
                     hostControllerBootstrap.bootstrap(processStateListener);
                     serviceContainer = futureContainer.get();
                     executorService = Executors.newCachedThreadPool();

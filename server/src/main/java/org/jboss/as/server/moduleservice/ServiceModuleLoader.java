@@ -1,25 +1,10 @@
 /*
- * JBoss, Home of Professional Open Source
- * Copyright 2010, Red Hat Inc., and individual contributors as indicated
- * by the @authors tag. See the copyright.txt in the distribution for a
- * full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.server.moduleservice;
+
+import java.util.function.Consumer;
 
 import org.jboss.as.controller.UninterruptibleCountDownLatch;
 import org.jboss.as.server.Bootstrap;
@@ -42,8 +27,6 @@ import org.jboss.msc.service.ServiceTarget;
 import org.jboss.msc.service.StartContext;
 import org.jboss.msc.service.StartException;
 import org.jboss.msc.service.StopContext;
-import org.jboss.msc.service.ValueService;
-import org.jboss.msc.value.ImmediateValue;
 
 /**
  * {@link ModuleLoader} that loads module definitions from msc services. Module specs are looked up in msc services that
@@ -137,13 +120,11 @@ public class ServiceModuleLoader extends ModuleLoader implements Service<Service
     }
 
     @Override
-    protected Module preloadModule(final ModuleIdentifier identifier) throws ModuleLoadException {
-        if (identifier.getName().startsWith(MODULE_PREFIX)) {
-            synchronized (ServiceModuleLoader.class) { // WFCORE-2235
-                return super.preloadModule(identifier);
-            }
+    protected Module preloadModule(final String name) throws ModuleLoadException {
+        if (name.startsWith(MODULE_PREFIX)) {
+            return super.preloadModule(name);
         } else {
-            return preloadModule(identifier, mainModuleLoader);
+            return preloadModule(name, mainModuleLoader);
         }
     }
 
@@ -177,7 +158,7 @@ public class ServiceModuleLoader extends ModuleLoader implements Service<Service
     }
 
     @Override
-    public synchronized void start(StartContext context) throws StartException {
+    public void start(StartContext context) throws StartException {
         if (serviceContainer != null) {
             throw ServerLogger.ROOT_LOGGER.serviceModuleLoaderAlreadyStarted();
         }
@@ -185,7 +166,7 @@ public class ServiceModuleLoader extends ModuleLoader implements Service<Service
     }
 
     @Override
-    public synchronized void stop(StopContext context) {
+    public void stop(StopContext context) {
         if (serviceContainer == null) {
             throw ServerLogger.ROOT_LOGGER.serviceModuleLoaderAlreadyStopped();
         }
@@ -221,9 +202,12 @@ public class ServiceModuleLoader extends ModuleLoader implements Service<Service
     }
 
     public static void installModuleResolvedService(ServiceTarget serviceTarget, ModuleIdentifier identifier) {
-        final ValueService<ModuleIdentifier> resolvedService = new ValueService<ModuleIdentifier>(new ImmediateValue<ModuleIdentifier>(identifier));
-        final ServiceBuilder sb = serviceTarget.addService(ServiceModuleLoader.moduleResolvedServiceName(identifier), resolvedService);
+        final ServiceName sn = ServiceModuleLoader.moduleResolvedServiceName(identifier);
+        final ServiceBuilder<?> sb = serviceTarget.addService(sn);
+        final Consumer<ModuleIdentifier> moduleIdConsumer = sb.provides(sn);
         sb.requires(moduleSpecServiceName(identifier));
+        final org.jboss.msc.Service resolvedService = org.jboss.msc.Service.newInstance(moduleIdConsumer, identifier);
+        sb.setInstance(resolvedService);
         sb.install();
     }
 

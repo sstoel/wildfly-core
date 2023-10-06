@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller;
@@ -25,6 +8,7 @@ package org.jboss.as.controller;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.CALLER_TYPE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FAILURE_DESCRIPTION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OPERATION_HEADERS;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ROLLED_BACK;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.USER;
 
 import java.util.LinkedHashMap;
@@ -102,28 +86,33 @@ public class CompositeOperationHandler implements OperationStepHandler {
         MultistepUtil.recordOperationSteps(context, operationMap, addedResponses,
                 getOperationHandlerResolver(), adjustStepAddresses, rejectPrivateSteps);
 
-        context.completeStep(new OperationContext.RollbackHandler() {
+        context.completeStep(new OperationContext.ResultHandler() {
             @Override
-            public void handleRollback(OperationContext context, ModelNode operation) {
+            public void handleResult(OperationContext.ResultAction resultAction, OperationContext context, ModelNode operation) {
 
                 // don't override useful failure information in the domain
                 // or any existing failure message
-                if (context.getAttachment(DOMAIN_EXECUTION_KEY) != null || context.hasFailureDescription()) {
-                    return;
-                }
+                boolean needFailureMessage = resultAction == OperationContext.ResultAction.ROLLBACK
+                        && context.getAttachment(DOMAIN_EXECUTION_KEY) == null && !context.hasFailureDescription();
 
-                final ModelNode failureMsg = new ModelNode();
+                final ModelNode failureMsg = needFailureMessage ? new ModelNode() : null;
                 for (int i = 0; i < size; i++) {
                     String stepName = "step-" + (i+1);
                     ModelNode stepResponse = responseMap.get(stepName);
-                    if (stepResponse.hasDefined(FAILURE_DESCRIPTION)) {
+                    if (needFailureMessage && stepResponse.hasDefined(FAILURE_DESCRIPTION)) {
                         failureMsg.get(ControllerLogger.ROOT_LOGGER.compositeOperationFailed(), ControllerLogger.ROOT_LOGGER.operation(stepName)).set(stepResponse.get(FAILURE_DESCRIPTION));
                     }
+                    // Clean out any cruft rolled-back nodes
+                    if (stepResponse.has(ROLLED_BACK) && !stepResponse.hasDefined(ROLLED_BACK)) {
+                        stepResponse.remove(ROLLED_BACK);
+                    }
                 }
-                if (!failureMsg.isDefined()) {
-                    failureMsg.set(getUnexplainedFailureMessage());
+                if (needFailureMessage) {
+                    if (!failureMsg.isDefined()) {
+                        failureMsg.set(getUnexplainedFailureMessage());
+                    }
+                    context.getFailureDescription().set(failureMsg);
                 }
-                context.getFailureDescription().set(failureMsg);
             }
         });
     }

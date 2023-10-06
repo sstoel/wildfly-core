@@ -1,19 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source
- * Copyright 2018 Red Hat Inc. and/or its affiliates and other contributors
- * as indicated by the @authors tag. All rights reserved.
- * See the copyright.txt in the distribution for a
- * full listing of individual contributors.
- * This copyrighted material is made available to anyone wishing to use,
- * modify, copy, or redistribute it subject to the terms and conditions
- * of the GNU Lesser General Public License, v. 2.1.
- * This program is distributed in the hope that it will be useful, but WITHOUT A
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public License,
- * v.2.1 along with this distribution; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA  02110-1301, USA.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.test.integration.security.ssl.sni;
@@ -31,6 +18,9 @@ import java.io.FilePermission;
 import java.io.IOException;
 import java.lang.reflect.ReflectPermission;
 import java.math.BigInteger;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.net.URI;
 import java.security.KeyManagementException;
 import java.security.KeyPair;
@@ -49,6 +39,7 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Date;
+import java.util.List;
 import java.util.TimeZone;
 import java.util.concurrent.CompletableFuture;
 
@@ -74,12 +65,15 @@ import org.jboss.shrinkwrap.api.exporter.ZipExporter;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.Assert;
 import org.junit.Assume;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ManagementClient;
 import org.wildfly.core.testrunner.ServerSetup;
 import org.wildfly.core.testrunner.ServerSetupTask;
 import org.wildfly.core.testrunner.WildFlyRunner;
+import org.wildfly.security.x500.GeneralName;
+import org.wildfly.security.x500.cert.SubjectAlternativeNamesExtension;
 import org.wildfly.security.x500.cert.X509CertificateBuilder;
 import org.wildfly.test.undertow.UndertowSSLService;
 import org.wildfly.test.undertow.UndertowSSLServiceActivator;
@@ -121,15 +115,27 @@ public class SNICombinedWithALPNTestCase {
     private static File hostNameKeystore;
     private static File ipKeystore;
 
+    private static boolean assumptionsSatisfied = true;
+
     static class Setup implements ServerSetupTask {
 
         @Override
         public void setup(ManagementClient managementClient) throws Exception {
+            if (!canHostAddressBeTranslated()) {
+                // This is checked by Assumption in the beforeClass() method, but needs to be handled also here because
+                // the setup runs before the beforeClass() method.
+                assumptionsSatisfied = false;
+                return;
+            }
+
+            InetAddress[] addresses = InetAddress.getAllByName(TestSuiteEnvironment.getHttpAddress());
+            String hostname = addresses[0].getHostName();
 
             hostNameKeystore = File.createTempFile("test", ".keystore");
             ipKeystore = File.createTempFile("test", ".keystore");
-            generateFileKeyStore(hostNameKeystore, "localhost");
-            generateFileKeyStore(ipKeystore, "127.0.0.1");
+
+            generateFileKeyStore(hostNameKeystore, hostname, null);
+            generateFileKeyStore(ipKeystore, hostname, addresses);
 
             ModelNode credential = new ModelNode();
             credential.get("clear-text").set("password");
@@ -169,9 +175,9 @@ public class SNICombinedWithALPNTestCase {
             managementClient.executeForResult(modelNode);
 
             modelNode = createAddOperation(createAddress(SNI_SSL_CONTEXT));
-            modelNode.get("default-ssl-context").set("host");
+            modelNode.get("default-ssl-context").set("ip");
             ModelNode hostContextMap = new ModelNode();
-            hostContextMap.get("127.0.0.1").set("ip");
+            hostContextMap.get(hostname).set("host");
             modelNode.get("host-context-map").set(hostContextMap);
             managementClient.executeForResult(modelNode);
 
@@ -192,6 +198,11 @@ public class SNICombinedWithALPNTestCase {
 
         @Override
         public void tearDown(ManagementClient managementClient) throws Exception {
+            if (!assumptionsSatisfied) {
+                // No setup has been done if assumptions failed.
+                return;
+            }
+
             hostNameKeystore.delete();
             ipKeystore.delete();
 
@@ -208,36 +219,45 @@ public class SNICombinedWithALPNTestCase {
         }
     }
 
+    @BeforeClass
+    public static void beforeClass() throws UnknownHostException {
+        Assume.assumeTrue("Assuming the test if no resolution for the http address",
+                canHostAddressBeTranslated());
+    }
+
+    private static boolean canHostAddressBeTranslated() throws UnknownHostException {
+        InetAddress address = InetAddress.getByName(TestSuiteEnvironment.getHttpAddress());
+        return !address.getHostName().equals(address.getHostAddress());
+    }
+
     @Test
     public void testSimpleViaHostname() throws Exception {
-        Assume.assumeFalse("There is no ALPN implementation in IBM JDK 8 and less; also ALPN-hack that serves" +
-                        " as a workaround for other JDKs does not work with IBM JDK.", isIbmJdk() && jdkLessThan9());
-
+        InetAddress address = InetAddress.getByName(TestSuiteEnvironment.getHttpAddress());
+        String hostname = address.getHostName();
         XnioSsl ssl = createClientSSL(hostNameKeystore);
         UndertowClient client = UndertowClient.getInstance();
         DefaultByteBufferPool pool = new DefaultByteBufferPool(false, 1024);
-        ClientConnection connection = client.connect(new URI("https", null, "localhost", TestSuiteEnvironment.getHttpPort(), "", null, null), XnioWorker.getContextManager().get(), ssl, pool, OptionMap.create(UndertowOptions.ENABLE_HTTP2, true)).get();
-        performSimpleTest(pool, connection);
+        ClientConnection connection = client.connect(new URI("https", null, hostname, TestSuiteEnvironment.getHttpPort(), "", null, null), XnioWorker.getContextManager().get(), ssl, pool, OptionMap.create(UndertowOptions.ENABLE_HTTP2, true)).get();
+        performSimpleTest(pool, connection, hostname);
     }
 
     @Test
     public void testHttpsViaIp() throws Exception {
-        Assume.assumeFalse("There is no ALPN implementation in IBM JDK 8 and less; also ALPN-hack that serves" +
-                " as a workaround for other JDKs does not work with IBM JDK.", isIbmJdk() && jdkLessThan9());
-
+        InetAddress address = InetAddress.getByName(TestSuiteEnvironment.getHttpAddress());
+        String hostname = address instanceof Inet6Address? "[" + address.getHostAddress() + "]" : address.getHostAddress();
         XnioSsl ssl = createClientSSL(ipKeystore);
         UndertowClient client = UndertowClient.getInstance();
         DefaultByteBufferPool pool = new DefaultByteBufferPool(false, 1024);
-        ClientConnection connection = client.connect(new URI("https", null, "127.0.0.1", TestSuiteEnvironment.getHttpPort(), "", null, null), XnioWorker.getContextManager().get(), ssl, pool, OptionMap.create(UndertowOptions.ENABLE_HTTP2, true)).get();
-        performSimpleTest(pool, connection);
+        ClientConnection connection = client.connect(new URI("https", null, hostname, TestSuiteEnvironment.getHttpPort(), "", null, null), XnioWorker.getContextManager().get(), ssl, pool, OptionMap.create(UndertowOptions.ENABLE_HTTP2, true)).get();
+        performSimpleTest(pool, connection, hostname);
     }
 
-    private void performSimpleTest(DefaultByteBufferPool pool, ClientConnection connection) throws InterruptedException, java.util.concurrent.ExecutionException {
+    private void performSimpleTest(DefaultByteBufferPool pool, ClientConnection connection, String hostname) throws InterruptedException, java.util.concurrent.ExecutionException {
         ClientRequest cr = new ClientRequest()
                 .setPath("/")
                 .setProtocol(Protocols.HTTP_1_1)
                 .setMethod(Methods.GET);
-        cr.getRequestHeaders().add(Headers.HOST, "localhost");
+        cr.getRequestHeaders().add(Headers.HOST, hostname);
         CompletableFuture<String> future = new CompletableFuture<>();
         connection.sendRequest(cr, new ClientCallback<ClientExchange>() {
             @Override
@@ -289,17 +309,17 @@ public class SNICombinedWithALPNTestCase {
     }
 
 
-    static void generateFileKeyStore(File path, String hostName) {
+    static void generateFileKeyStore(File path, String hostName, InetAddress[] addresses) {
         try {
             KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA");
             keyGen.initialize(2048, new SecureRandom());
             KeyPair pair = keyGen.generateKeyPair();
-            X509Certificate cert = generateCertificate(pair, hostName);
+            X509Certificate cert = generateCertificate(pair, hostName, addresses);
 
             KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
             keyStore.load(null, PASSWORD.toCharArray());
 
-            //Generate self signed certificate
+            //Generate self-signed certificate
             X509Certificate[] chain = new X509Certificate[1];
             chain[0] = cert;
             keyStore.setKeyEntry(ALIAS, pair.getPrivate(), PASSWORD.toCharArray(), chain);
@@ -318,7 +338,7 @@ public class SNICombinedWithALPNTestCase {
         }
     }
 
-    static X509Certificate generateCertificate(KeyPair pair, String hostName) throws Exception {
+    static X509Certificate generateCertificate(KeyPair pair, String hostName, InetAddress[] addresses) throws Exception {
         PrivateKey privkey = pair.getPrivate();
         X509CertificateBuilder builder = new X509CertificateBuilder();
         Date from = new Date();
@@ -335,6 +355,14 @@ public class SNICombinedWithALPNTestCase {
         builder.setVersion(3);
         builder.setSignatureAlgorithmName(SHA_256_WITH_RSA);
         builder.setSigningKey(privkey);
+        List<GeneralName> subjectAlternativeNames = new ArrayList<>();
+        subjectAlternativeNames.add(new GeneralName.DNSName(hostName));
+        if (addresses != null) {
+            for (int i = 0; i < addresses.length; i++) {
+                subjectAlternativeNames.add(new GeneralName.IPAddress(addresses[i].getHostAddress()));
+            }
+        }
+        builder.addExtension(new SubjectAlternativeNamesExtension(false, subjectAlternativeNames));
         return builder.build();
     }
 
@@ -367,25 +395,7 @@ public class SNICombinedWithALPNTestCase {
      * @return IbmX509 in case of IBM JDK, SunX509 otherwise
      */
     private static String keyAlgorithm() {
-        if (isIbmJdk()) {
-            return "IbmX509";
-        } else {
-            return "SunX509";
-        }
-    }
-
-    /**
-     * @return true if JVM running is IBM JDK
-     */
-    private static boolean isIbmJdk() {
-        return System.getProperty("java.vendor").startsWith("IBM");
-    }
-
-    /**
-     * @return true if JVM running is version less than 9
-     */
-    private static boolean jdkLessThan9() {
-        return System.getProperty("java.version").startsWith("1.");
+        return "SunX509";
     }
 
     /**

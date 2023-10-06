@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2013, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller.transform.description;
@@ -106,7 +89,7 @@ public interface TransformationDescription {
      */
     boolean isPlaceHolder();
 
-    public static final class Tools {
+    final class Tools {
 
         private Tools() {
             //
@@ -150,37 +133,8 @@ public interface TransformationDescription {
          * @param versions the model versions the transformation description applies to
          * @return the created sub registration
          */
-        @Deprecated
-        public static TransformersSubRegistration register(TransformationDescription description, SubsystemRegistration registration, ModelVersion... versions) {
-            return register(description, registration, ModelVersionRange.Versions.range(versions));
-        }
-
-        /**
-         * Register a transformation description as a sub-resource at a given {@linkplain SubsystemRegistration}.
-         *
-         * @param description the subsystem transformation description
-         * @param registration the subsystem registrations
-         * @param versions the model versions the transformation description applies to
-         * @return the created sub registration
-         */
         public static TransformersSubRegistration register(TransformationDescription description, SubsystemTransformerRegistration registration, ModelVersion... versions) {
             return register(description, registration, ModelVersionRange.Versions.range(versions));
-        }
-
-        /**
-         * Register a transformation description as a sub-resource at a given {@linkplain SubsystemRegistration}.
-         *
-         * @param description the subsystem transformation description
-         * @param registration the subsystem registrations
-         * @param range the model version range the transformation applies to
-         * @return the create sub registration
-         */
-        @Deprecated
-        public static TransformersSubRegistration register(TransformationDescription description, SubsystemRegistration registration, ModelVersionRange range) {
-            final TransformersSubRegistration subRegistration = registration.registerModelTransformers(range, description.getResourceTransformer(),
-                    description.getOperationTransformer(), description.isPlaceHolder());
-
-            return getTransformersSubRegistration(description, subRegistration);
         }
 
         private static TransformersSubRegistration getTransformersSubRegistration(TransformationDescription description, TransformersSubRegistration subRegistration) {

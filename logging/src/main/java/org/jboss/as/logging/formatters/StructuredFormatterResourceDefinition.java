@@ -1,20 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- *
- * Copyright 2017 Red Hat, Inc., and individual contributors
- * as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.logging.formatters;
@@ -34,6 +20,7 @@ import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleMapAttributeDefinition;
+import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.operations.validation.StringAllowedValuesValidator;
 import org.jboss.as.controller.registry.AttributeAccess;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
@@ -53,6 +40,7 @@ import org.jboss.dmr.ModelType;
 import org.jboss.dmr.Property;
 import org.jboss.logmanager.PropertyValues;
 import org.jboss.logmanager.config.FormatterConfiguration;
+import org.jboss.logmanager.config.HandlerConfiguration;
 import org.jboss.logmanager.config.LogContextConfiguration;
 import org.jboss.logmanager.formatters.StructuredFormatter;
 
@@ -62,7 +50,7 @@ import org.jboss.logmanager.formatters.StructuredFormatter;
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
 @SuppressWarnings("Convert2Lambda")
-public abstract class StructuredFormatterResourceDefinition extends TransformerResourceDefinition {
+public abstract class StructuredFormatterResourceDefinition extends SimpleResourceDefinition {
 
     public static final PropertyAttributeDefinition DATE_FORMAT = PropertyAttributeDefinition.Builder.of("date-format", ModelType.STRING, true)
             .setAllowExpression(true)
@@ -320,13 +308,20 @@ public abstract class StructuredFormatterResourceDefinition extends TransformerR
         super.registerChildren(resourceRegistration);
     }
 
-    @Override
-    public void registerTransformers(final KnownModelVersion modelVersion, final ResourceTransformationDescriptionBuilder rootResourceBuilder, final ResourceTransformationDescriptionBuilder loggingProfileBuilder) {
-        switch (modelVersion) {
-            case VERSION_5_0_0:
-                rootResourceBuilder.rejectChildResource(getPathElement());
-                loggingProfileBuilder.rejectChildResource(getPathElement());
-                break;
+    static class StructuredFormatterTransformerDefinition extends TransformerResourceDefinition {
+
+        public StructuredFormatterTransformerDefinition(PathElement pathElement) {
+            super(pathElement);
+        }
+
+        @Override
+        public void registerTransformers(final KnownModelVersion modelVersion, final ResourceTransformationDescriptionBuilder rootResourceBuilder, final ResourceTransformationDescriptionBuilder loggingProfileBuilder) {
+            switch (modelVersion) {
+                case VERSION_5_0_0:
+                    rootResourceBuilder.rejectChildResource(getPathElement());
+                    loggingProfileBuilder.rejectChildResource(getPathElement());
+                    break;
+            }
         }
     }
 
@@ -363,7 +358,7 @@ public abstract class StructuredFormatterResourceDefinition extends TransformerR
         @SuppressWarnings({"OverlyStrongTypeCast", "StatementWithEmptyBody"})
         @Override
         public void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
-            String keyOverrides = null;
+            String keyOverrides = "";
             if (model.hasDefined(KEY_OVERRIDES.getName())) {
                 keyOverrides = modelValueToMetaData(KEY_OVERRIDES.resolveModelAttribute(context, model));
             }
@@ -383,11 +378,16 @@ public abstract class StructuredFormatterResourceDefinition extends TransformerR
                     configuration = logContextConfiguration.addFormatterConfiguration(null, className, name, "keyOverrides");
                     configuration.setPropertyValueString("keyOverrides", keyOverrides);
                 }
-            } else if (isSamePropertyValue(configuration, "keyOverrides", keyOverrides)) {
+            } else if (!isSamePropertyValue(configuration, "keyOverrides", keyOverrides)) {
                 LoggingLogger.ROOT_LOGGER.tracef("Removing then adding formatter '%s' at '%s'", name, context.getCurrentAddress());
                 logContextConfiguration.removeFormatterConfiguration(name);
                 configuration = logContextConfiguration.addFormatterConfiguration(null, className, name, "keyOverrides");
                 configuration.setPropertyValueString("keyOverrides", keyOverrides);
+                // We need to trigger a re-add of the formatter to the handlers
+                logContextConfiguration.getHandlerNames().forEach(handlerName -> {
+                    final HandlerConfiguration handlerConfiguration = logContextConfiguration.getHandlerConfiguration(handlerName);
+                    handlerConfiguration.setFormatterName(name);
+                });
             }
 
             // Process the attributes
@@ -395,7 +395,7 @@ public abstract class StructuredFormatterResourceDefinition extends TransformerR
                 if (attribute == META_DATA) {
                     final String metaData = modelValueToMetaData(META_DATA.resolveModelAttribute(context, model));
                     if (metaData != null) {
-                        if (isSamePropertyValue(configuration, "metaData", metaData)) {
+                        if (!isSamePropertyValue(configuration, "metaData", metaData)) {
                             configuration.setPropertyValueString("metaData", metaData);
                         }
                     } else {
@@ -409,7 +409,7 @@ public abstract class StructuredFormatterResourceDefinition extends TransformerR
                     } else {
                         final ModelNode value = attribute.resolveModelAttribute(context, model);
                         if (value.isDefined()) {
-                            if (isSamePropertyValue(configuration, attribute.getName(), value.asString())) {
+                            if (!isSamePropertyValue(configuration, attribute.getName(), value.asString())) {
                                 configuration.setPropertyValueString(attribute.getName(), value.asString());
                             }
                         } else {
@@ -423,7 +423,7 @@ public abstract class StructuredFormatterResourceDefinition extends TransformerR
         private static boolean isSamePropertyValue(final FormatterConfiguration configuration, final String name, final String value) {
             final String currentValue = configuration.getPropertyValueString(name);
             if (currentValue == null) {
-                return value != null;
+                return value == null;
             }
             return currentValue.equals(value);
         }

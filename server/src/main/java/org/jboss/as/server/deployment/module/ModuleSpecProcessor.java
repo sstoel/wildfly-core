@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2010, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server.deployment.module;
@@ -31,6 +14,7 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.PropertyPermission;
+import java.util.function.Consumer;
 
 import org.jboss.as.server.deployment.Attachments;
 import org.jboss.as.server.deployment.DeploymentPhaseContext;
@@ -54,11 +38,13 @@ import org.jboss.modules.filter.PathFilters;
 import org.jboss.modules.security.FactoryPermissionCollection;
 import org.jboss.modules.security.ImmediatePermissionFactory;
 import org.jboss.modules.security.PermissionFactory;
+import org.jboss.msc.service.Service;
 import org.jboss.msc.service.ServiceBuilder;
-import org.jboss.msc.service.ServiceController.Mode;
 import org.jboss.msc.service.ServiceName;
-import org.jboss.msc.service.ValueService;
-import org.jboss.msc.value.ImmediateValue;
+import org.jboss.msc.service.ServiceController.Mode;
+import org.jboss.msc.service.StartContext;
+import org.jboss.msc.service.StopContext;
+
 import org.jboss.vfs.VirtualFile;
 import org.jboss.vfs.VirtualFilePermission;
 
@@ -70,6 +56,7 @@ import org.jboss.vfs.VirtualFilePermission;
  * @author Stuart Douglas
  * @author Marius Bogoevici
  * @author Thomas.Diesler@jboss.com
+ * @author <a href="mailto:ropalka@redhat.com">Richard Opalka</a>
  */
 public class ModuleSpecProcessor implements DeploymentUnitProcessor {
 
@@ -275,11 +262,12 @@ public class ModuleSpecProcessor implements DeploymentUnitProcessor {
 
         ModuleDefinition moduleDefinition = new ModuleDefinition(moduleIdentifier, new HashSet<>(moduleSpecification.getAllDependencies()), moduleSpec);
 
-        final ValueService<ModuleDefinition> moduleSpecService = new ValueService<>(new ImmediateValue<>(moduleDefinition));
-        final ServiceBuilder sb = phaseContext.getServiceTarget().addService(moduleSpecServiceName, moduleSpecService);
+        final ServiceBuilder sb = phaseContext.getServiceTarget().addService(moduleSpecServiceName);
+        final Consumer<ModuleDefinition> moduleDefinitionConsumer = sb.provides(moduleSpecServiceName);
         sb.requires(deploymentUnit.getServiceName());
         sb.requires(phaseContext.getPhaseServiceName());
         sb.setInitialMode(Mode.ON_DEMAND);
+        sb.setInstance(new ModuleDefinitionService(moduleDefinitionConsumer, moduleDefinition));
         sb.install();
 
         ModuleResolvePhaseService.installService(phaseContext.getServiceTarget(), moduleDefinition);
@@ -299,11 +287,12 @@ public class ModuleSpecProcessor implements DeploymentUnitProcessor {
             dependencies.add(new ModuleDependency(moduleLoader, moduleIdentifier, false, false, false, false));
             ModuleDefinition moduleDefinition = new ModuleDefinition(alias, dependencies, spec);
 
-            final ValueService<ModuleDefinition> moduleSpecService = new ValueService<>(new ImmediateValue<>(moduleDefinition));
-            final ServiceBuilder sb = phaseContext.getServiceTarget().addService(moduleSpecServiceName, moduleSpecService);
+            final ServiceBuilder sb = phaseContext.getServiceTarget().addService(moduleSpecServiceName);
+            final Consumer<ModuleDefinition> moduleDefinitionConsumer = sb.provides(moduleSpecServiceName);
             sb.requires(deploymentUnit.getServiceName());
             sb.requires(phaseContext.getPhaseServiceName());
             sb.setInitialMode(Mode.ON_DEMAND);
+            sb.setInstance(new ModuleDefinitionService(moduleDefinitionConsumer, moduleDefinition));
             sb.install();
 
             ModuleLoadService.installAliases(phaseContext.getServiceTarget(), alias, Collections.singletonList(moduleIdentifier));
@@ -375,6 +364,30 @@ public class ModuleSpecProcessor implements DeploymentUnitProcessor {
                     new VirtualFilePermission(root.getChild("-").getPathName(), VirtualFilePermission.FLAG_READ)));
         } catch (IOException e) {
             throw ServerLogger.ROOT_LOGGER.failedToCreateVFSResourceLoader(resource.getRootName(), e);
+        }
+    }
+
+    private static final class ModuleDefinitionService implements Service {
+        private final Consumer<ModuleDefinition> moduleDefinitionConsumer;
+        private final ModuleDefinition moduleDefinition;
+
+        private ModuleDefinitionService(final Consumer<ModuleDefinition> moduleDefinitionConsumer, final ModuleDefinition moduleDefinition) {
+            this.moduleDefinitionConsumer = moduleDefinitionConsumer;
+            this.moduleDefinition = moduleDefinition;
+        }
+        @Override
+        public void start(final StartContext startContext) {
+            moduleDefinitionConsumer.accept(moduleDefinition);
+        }
+
+        @Override
+        public void stop(final StopContext stopContext) {
+            moduleDefinitionConsumer.accept(null);
+        }
+
+        @Override
+        public Object getValue() {
+            return moduleDefinition;
         }
     }
 

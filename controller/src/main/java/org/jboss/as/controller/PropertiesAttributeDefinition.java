@@ -1,44 +1,22 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2012, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller;
-
-import static org.jboss.as.controller.parsing.ParseUtils.requireAttributes;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.ResourceBundle;
-import javax.xml.stream.XMLStreamException;
 
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.descriptions.ResourceDescriptionResolver;
 import org.jboss.as.controller.operations.validation.ModelTypeValidator;
-import org.jboss.as.controller.parsing.ParseUtils;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.dmr.Property;
-import org.jboss.staxmapper.XMLExtendedStreamReader;
 
 /**
  * Represents simple key=value map equivalent of java.util.Map<String,String>()
@@ -50,13 +28,8 @@ import org.jboss.staxmapper.XMLExtendedStreamReader;
 //todo maybe replace with SimpleMapAttributeDefinition?
 public final class PropertiesAttributeDefinition extends MapAttributeDefinition {
 
-    private final boolean wrapXmlElement;
-    private final String wrapperElement;
-
     private PropertiesAttributeDefinition(final Builder builder) {
         super(builder);
-        this.wrapXmlElement = builder.wrapXmlElement;
-        this.wrapperElement = builder.wrapperElement;
     }
 
     @Override
@@ -100,25 +73,8 @@ public final class PropertiesAttributeDefinition extends MapAttributeDefinition 
         }
         return props;
     }
-    @Deprecated
-    public void parse(final XMLExtendedStreamReader reader, final ModelNode operation) throws XMLStreamException {
-        final String[] array = requireAttributes(reader, org.jboss.as.controller.parsing.Attribute.NAME.getLocalName(), org.jboss.as.controller.parsing.Attribute.VALUE.getLocalName());
-        parseAndAddParameterElement(array[0], array[1], operation, reader);
-        ParseUtils.requireNoContent(reader);
-    }
-
-    public boolean isWrapped() {
-        return wrapXmlElement;
-    }
-
-    @SuppressWarnings("unused")
-    public String getWrapperElement() {
-        return wrapperElement;
-    }
 
     public static class Builder extends MapAttributeDefinition.Builder<Builder, PropertiesAttributeDefinition> {
-        private boolean wrapXmlElement = true;
-        private String wrapperElement = null;
         //for backward compatibility, until we get new core out and used by wildfly full.
         private boolean xmlNameExplicitlySet = false;
 
@@ -132,25 +88,6 @@ public final class PropertiesAttributeDefinition extends MapAttributeDefinition 
 
         public Builder(final MapAttributeDefinition basis) {
             super(basis);
-        }
-
-        /**
-         *
-         * @deprecated use setParser(new AttributeParser.PropertiesParsers(wrapper)
-         */
-        @Deprecated
-        public Builder setWrapXmlElement(boolean wrap) {
-            this.wrapXmlElement = wrap;
-            return this;
-        }
-
-        /**
-         * @deprecated use setParser(new AttributeParser.PropertiesParsers(wrapper)
-         */
-        @Deprecated
-        public Builder setWrapperElement(String name) {
-            this.wrapperElement = name;
-            return this;
         }
 
         /**
@@ -170,10 +107,10 @@ public final class PropertiesAttributeDefinition extends MapAttributeDefinition 
             String xmlName = getXmlName();
             String elementName = getName().equals(xmlName) ? null : xmlName;
             if (getAttributeMarshaller() == null) {
-                setAttributeMarshaller(new AttributeMarshallers.PropertiesAttributeMarshaller(wrapperElement, xmlNameExplicitlySet ? xmlName : elementName, wrapXmlElement));
+                setAttributeMarshaller(new AttributeMarshallers.PropertiesAttributeMarshaller(null, xmlNameExplicitlySet ? xmlName : elementName, true));
             }
             if (getParser() == null) {
-                setAttributeParser(new AttributeParsers.PropertiesParser(wrapperElement, elementName, wrapXmlElement));
+                setAttributeParser(new AttributeParsers.PropertiesParser(null, xmlNameExplicitlySet ? xmlName : elementName, true));
             }
 
             return new PropertiesAttributeDefinition(this);

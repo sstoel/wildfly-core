@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.controller.registry;
 
@@ -27,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationStepHandler;
@@ -37,7 +21,7 @@ import org.wildfly.common.Assert;
  *
  * @author Brian Stansberry
  */
-public final class AttributeAccess {
+public class AttributeAccess {
 
     /**
      * Indicates how an attributed is accessed.
@@ -90,7 +74,7 @@ public final class AttributeAccess {
     /**
      * Indicates whether an attribute is derived from the persistent configuration or is a purely runtime attribute.
      */
-    public enum Storage {
+    public enum Storage implements Predicate<AttributeAccess> {
         /**
          * An attribute whose value is stored in the persistent configuration.
          * The value may also be stored in runtime services.
@@ -113,10 +97,14 @@ public final class AttributeAccess {
             return label;
         }
 
+        @Override
+        public boolean test(AttributeAccess attribute) {
+            return attribute.getStorageType() == this;
+        }
     }
 
     /** Flags to indicate special characteristics of an attribute */
-    public enum Flag {
+    public enum Flag implements Predicate<AttributeAccess> {
         /** A modification to the attribute can be applied to the runtime without requiring a restart */
         RESTART_NONE,
         /** A modification to the attribute can only be applied to the runtime via a full jvm restart */
@@ -188,6 +176,11 @@ public final class AttributeAccess {
             }
 
             return result;
+        }
+
+        @Override
+        public boolean test(AttributeAccess attribute) {
+            return attribute.getFlags().contains(this);
         }
     }
 

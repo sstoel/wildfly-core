@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2013, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller.notification;
@@ -74,7 +57,7 @@ public class OperationWithNotificationTestCase extends AbstractControllerTestBas
     @Test
     public void testSendNotification() throws Exception {
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
-        getController().getNotificationRegistry().registerNotificationHandler(ANY_ADDRESS, handler, new NotificationFilter() {
+        getNotificationHandlerRegistry().registerNotificationHandler(ANY_ADDRESS, handler, new NotificationFilter() {
 
                     @Override
                     public boolean isNotificationEnabled(Notification notification) {
@@ -86,13 +69,13 @@ public class OperationWithNotificationTestCase extends AbstractControllerTestBas
         executeForResult(createOperation(MY_OPERATION));
         assertEquals("the notification handler did not receive the notification", 1, handler.getNotifications().size());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(ANY_ADDRESS, handler, ALL);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(ANY_ADDRESS, handler, ALL);
     }
 
     @Test
     public void testSendNotificationWithFilter() throws Exception {
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
-        getController().getNotificationRegistry().registerNotificationHandler(ANY_ADDRESS, handler, new NotificationFilter() {
+        getNotificationHandlerRegistry().registerNotificationHandler(ANY_ADDRESS, handler, new NotificationFilter() {
 
             @Override
             public boolean isNotificationEnabled(Notification notification) {
@@ -103,7 +86,7 @@ public class OperationWithNotificationTestCase extends AbstractControllerTestBas
         executeForResult(createOperation(MY_OPERATION));
         assertTrue("the notification handler must not receive the filtered out notification", handler.getNotifications().isEmpty());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(ANY_ADDRESS, handler, ALL);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(ANY_ADDRESS, handler, ALL);
     }
 
     @Test
@@ -119,19 +102,19 @@ public class OperationWithNotificationTestCase extends AbstractControllerTestBas
             }
         };
 
-        getController().getNotificationRegistry().registerNotificationHandler(ANY_ADDRESS, handler, ALL);
+        getNotificationHandlerRegistry().registerNotificationHandler(ANY_ADDRESS, handler, ALL);
 
         // having a failing notification handler has no incidence on the operation that triggered the notification emission
         executeForResult(createOperation(MY_OPERATION));
         assertTrue("the notification handler did receive the notification", gotNotification.get());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(ANY_ADDRESS, handler, ALL);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(ANY_ADDRESS, handler, ALL);
     }
 
     @Test
     public void testSendNotificationWithFailingFilter() throws Exception {
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
-        getController().getNotificationRegistry().registerNotificationHandler(ANY_ADDRESS, handler, new NotificationFilter() {
+        getNotificationHandlerRegistry().registerNotificationHandler(ANY_ADDRESS, handler, new NotificationFilter() {
             @Override
             public boolean isNotificationEnabled(Notification notification) {
                 throw new IllegalStateException("somehow, the filter throws an exception");
@@ -142,16 +125,16 @@ public class OperationWithNotificationTestCase extends AbstractControllerTestBas
         // but the handler will not be notified
         assertTrue("the notification handler did receive the notification", handler.getNotifications().isEmpty());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(ANY_ADDRESS, handler, ALL);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(ANY_ADDRESS, handler, ALL);
     }
 
     @Test
     public void testSendNotificationAfterUnregisteringHandler() throws Exception {
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
         // register the handler...
-        getController().getNotificationRegistry().registerNotificationHandler(ANY_ADDRESS, handler, ALL);
+        getNotificationHandlerRegistry().registerNotificationHandler(ANY_ADDRESS, handler, ALL);
         // ... and unregister it
-        getController().getNotificationRegistry().unregisterNotificationHandler(ANY_ADDRESS, handler, ALL);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(ANY_ADDRESS, handler, ALL);
         executeForResult(createOperation(MY_OPERATION));
         assertTrue("the unregistered notification handler did not receive the notification", handler.getNotifications().isEmpty());
     }

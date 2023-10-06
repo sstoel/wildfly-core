@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server;
@@ -28,7 +11,6 @@ import static org.jboss.as.server.controller.descriptions.ServerDescriptionConst
 import java.io.File;
 
 import org.jboss.as.controller.AttributeDefinition;
-import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
@@ -66,13 +48,9 @@ public class ServerEnvironmentResourceDescription extends SimpleResourceDefiniti
     public static final AttributeDefinition HOME_DIR = SimpleAttributeDefinitionBuilder.create("home-dir", ModelType.STRING).setFlags(AttributeAccess.Flag.STORAGE_RUNTIME).build();
     public static final AttributeDefinition HOST_NAME = SimpleAttributeDefinitionBuilder.create("host-name", ModelType.STRING).setFlags(AttributeAccess.Flag.STORAGE_RUNTIME).build();
     static final AttributeDefinition INITIAL_RUNNING_MODE = SimpleAttributeDefinitionBuilder.create("initial-running-mode", ModelType.STRING)
-            .setValidator(new EnumValidator<RunningMode>(RunningMode.class)).setFlags(AttributeAccess.Flag.STORAGE_RUNTIME).build();
+            .setValidator(new EnumValidator<>(RunningMode.class)).setFlags(AttributeAccess.Flag.STORAGE_RUNTIME).build();
     public static final AttributeDefinition LAUNCH_TYPE = SimpleAttributeDefinitionBuilder.create("launch-type", ModelType.STRING).setFlags(AttributeAccess.Flag.STORAGE_RUNTIME).build();
     static final AttributeDefinition LOG_DIR = SimpleAttributeDefinitionBuilder.create("log-dir", ModelType.STRING).setFlags(AttributeAccess.Flag.STORAGE_RUNTIME).build();
-    static final AttributeDefinition MODULES_DIR = SimpleAttributeDefinitionBuilder.create("modules-dir", ModelType.STRING)
-            .setFlags(AttributeAccess.Flag.STORAGE_RUNTIME)
-            .setDeprecated(ModelVersion.create(2, 1))
-            .build();
     static final AttributeDefinition NODE_NAME = SimpleAttributeDefinitionBuilder.create("node-name", ModelType.STRING).setFlags(AttributeAccess.Flag.STORAGE_RUNTIME).build();
     static final AttributeDefinition QUALIFIED_HOST_NAME = SimpleAttributeDefinitionBuilder.create("qualified-host-name", ModelType.STRING).setFlags(AttributeAccess.Flag.STORAGE_RUNTIME).build();
     public static final AttributeDefinition SERVER_NAME = SimpleAttributeDefinitionBuilder.create("server-name", ModelType.STRING).setFlags(AttributeAccess.Flag.STORAGE_RUNTIME).build();
@@ -81,7 +59,7 @@ public class ServerEnvironmentResourceDescription extends SimpleResourceDefiniti
     public static final AttributeDefinition GRACEFUL_STARTUP = SimpleAttributeDefinitionBuilder.create("start-gracefully", ModelType.BOOLEAN).setFlags(AttributeAccess.Flag.STORAGE_RUNTIME).build();
 
     private static final AttributeDefinition[] SERVER_ENV_ATTRIBUTES = {BASE_DIR, CONFIG_DIR, CONFIG_FILE, CONTENT_DIR, DATA_DIR,
-            DEPLOY_DIR, EXT_DIRS, HOME_DIR, HOST_NAME, INITIAL_RUNNING_MODE, LAUNCH_TYPE, LOG_DIR, MODULES_DIR, NODE_NAME,
+            DEPLOY_DIR, EXT_DIRS, HOME_DIR, HOST_NAME, INITIAL_RUNNING_MODE, LAUNCH_TYPE, LOG_DIR, NODE_NAME,
             QUALIFIED_HOST_NAME, SERVER_NAME, TEMP_DIR, START_SUSPENDED, GRACEFUL_STARTUP};
 
     private final ServerEnvironmentReadHandler osh;
@@ -179,11 +157,6 @@ public class ServerEnvironmentResourceDescription extends SimpleResourceDefiniti
             }
             if (equals(name, LOG_DIR)) {
                 set(result, environment.getServerLogDir());
-            }
-            if (equals(name, MODULES_DIR)) {
-                @SuppressWarnings("deprecation")
-                File modules = environment.getModulesDir();
-                set(result, modules);
             }
             if (equals(name, NODE_NAME)) {
                 set(result, environment.getNodeName());

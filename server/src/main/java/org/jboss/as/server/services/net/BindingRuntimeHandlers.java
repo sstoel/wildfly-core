@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server.services.net;
@@ -25,6 +8,7 @@ package org.jboss.as.server.services.net;
 import static org.jboss.as.server.services.net.SocketBindingResourceDefinition.SOCKET_BINDING_CAPABILITY;
 
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
@@ -119,8 +103,11 @@ public final class BindingRuntimeHandlers {
         void execute(final ModelNode operation, final SocketBinding binding, final ModelNode result) {
             ManagedBinding managedBinding = binding.getManagedBinding();
             if (managedBinding != null) {
-                InetAddress addr = managedBinding.getBindAddress().getAddress();
-                result.set(NetworkUtils.canonize(addr.getHostAddress()));
+                InetSocketAddress bindAddress = managedBinding.getBindAddress();
+                if (bindAddress != null) {
+                    InetAddress addr = bindAddress.getAddress();
+                    result.set(NetworkUtils.canonize(addr.getHostAddress()));
+                }
             }
         }
 
@@ -149,8 +136,11 @@ public final class BindingRuntimeHandlers {
         void execute(final ModelNode operation, final SocketBinding binding, final ModelNode result) {
             ManagedBinding managedBinding = binding.getManagedBinding();
             if (managedBinding != null) {
-                int port = managedBinding.getBindAddress().getPort();
-                result.set(port);
+                InetSocketAddress bindAddress = managedBinding.getBindAddress();
+                if (bindAddress != null) {
+                    int port = bindAddress.getPort();
+                    result.set(port);
+                }
             }
         }
 

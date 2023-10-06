@@ -1,20 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source
- * Copyright 2011 Red Hat Inc. and/or its affiliates and other contributors
- * as indicated by the @authors tag. All rights reserved.
- * See the copyright.txt in the distribution for a
- * full listing of individual contributors.
- *
- * This copyrighted material is made available to anyone wishing to use,
- * modify, copy, or redistribute it subject to the terms and conditions
- * of the GNU Lesser General Public License, v. 2.1.
- * This program is distributed in the hope that it will be useful, but WITHOUT A
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more details.
- * You should have received a copy of the GNU Lesser General Public License,
- * v.2.1 along with this distribution; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA  02110-1301, USA.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.controller.services.path;
 
@@ -59,21 +45,6 @@ public class PathRemoveHandler implements OperationStepHandler { // TODO make th
         this.pathManager = pathManager;
     }
 
-    /**
-     * Create the PathRemoveHandler
-     *
-     * @param pathManager the path manager, or {@code null} if interaction with the path manager is not required
-     *                    for the resource
-     * @param services    {@code true} if interaction with the path manager is required for the resource
-     *
-     * @deprecated not for use outside the kernel; may be removed at any time
-     */
-    @Deprecated
-    protected PathRemoveHandler(final PathManagerService pathManager, final boolean services) {
-        this(services ? null : pathManager);
-        assert !services || pathManager != null;
-    }
-
     static PathRemoveHandler createNamedInstance() {
         return new PathRemoveHandler(null);
     }
@@ -100,7 +71,7 @@ public class PathRemoveHandler implements OperationStepHandler { // TODO make th
         context.removeResource(PathAddress.EMPTY_ADDRESS);
 
         context.deregisterCapability(PATH_CAPABILITY.getDynamicName(context.getCurrentAddressValue()));
-        RELATIVE_TO_LOCAL.removeCapabilityRequirements(context, model.get(RELATIVE_TO.getName()));
+        RELATIVE_TO_LOCAL.removeCapabilityRequirements(context, null, model.get(RELATIVE_TO.getName()));
 
         if (pathManager != null) {
             final PathEventContextImpl pathEventContext = pathManager.checkRestartRequired(context, name, Event.REMOVED);

@@ -1,17 +1,6 @@
 /*
- * Copyright 2017 JBoss by Red Hat.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.host.controller;
 
@@ -118,6 +107,10 @@ public class ManagedServerBootCmdFactoryTestCase {
         Assert.assertNotNull(result);
     }
 
+    private static int getJavaVersion() {
+        return Runtime.version().feature();
+    }
+
     /**
      * Test of getServerLaunchCommand method, of class
      * ManagedServerBootCmdFactory.
@@ -129,7 +122,7 @@ public class ManagedServerBootCmdFactoryTestCase {
         List<String> result = instance.getServerLaunchCommand();
         MatcherAssert.assertThat(result.size(), is(notNullValue()));
         if (result.size() > 18) {
-            MatcherAssert.assertThat(result.size(), is(32));
+            MatcherAssert.assertThat(result.size(), is(getJavaVersion() <= 12 ? 34 : 33)); // for condition see WFCORE-4296 - java.base/com.sun.net.ssl.internal.ssl isn't available since JDK13
         } else {
             MatcherAssert.assertThat(result.size(), is(18));
         }

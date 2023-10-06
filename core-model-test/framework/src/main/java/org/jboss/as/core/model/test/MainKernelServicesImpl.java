@@ -1,24 +1,7 @@
 /*
-* JBoss, Home of Professional Open Source.
-* Copyright 2012, Red Hat Middleware LLC, and individual contributors
-* as indicated by the @author tags. See the copyright.txt file in the
-* distribution for a full listing of individual contributors.
-*
-* This is free software; you can redistribute it and/or modify it
-* under the terms of the GNU Lesser General Public License as
-* published by the Free Software Foundation; either version 2.1 of
-* the License, or (at your option) any later version.
-*
-* This software is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-* Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public
-* License along with this software; if not, write to the Free
-* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA, or see the FSF site: http://www.fsf.org.
-*/
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package org.jboss.as.core.model.test;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FAILED;
@@ -75,11 +58,25 @@ public class MainKernelServicesImpl extends AbstractKernelServicesImpl {
         this.extensionRegistry = extensionRegistry;
     }
 
+    @Override
     public TransformedOperation transformOperation(ModelVersion modelVersion, ModelNode operation) throws OperationFailedException {
         return transformOperation(modelVersion, operation, null);
     }
 
-    public TransformedOperation transformOperation(ModelVersion modelVersion, ModelNode operation, TransformerOperationAttachment attachment) throws OperationFailedException {
+    /**
+     * Transforms an operation in the main controller to the format expected by the model controller containing
+     * the legacy subsystem
+     *
+     * @param modelVersion the subsystem model version of the legacy subsystem model controller
+     * @param operation the operation to transform
+     * @param attachment attachments propagated from the operation context to the created transformer context.
+     *                   This may be {@code null}. In a non-test scenario, this will be added by operation handlers
+     *                   triggering the transformation, but for tests this needs to be hard-coded. Tests will need to
+     *                   ensure themselves that the relevant attachments get set.
+     * @return the transformed operation
+     * @throws IllegalStateException if this is not the test's main model controller
+     */
+    private TransformedOperation transformOperation(ModelVersion modelVersion, ModelNode operation, TransformerOperationAttachment attachment) throws OperationFailedException {
         checkIsMainController();
         TransformerRegistry transformerRegistry = extensionRegistry.getTransformerRegistry();
 
@@ -98,6 +95,7 @@ public class MainKernelServicesImpl extends AbstractKernelServicesImpl {
         return new OperationTransformer.TransformedOperation(operation, OperationResultTransformer.ORIGINAL_RESULT);
     }
 
+    @Override
     public ModelNode readTransformedModel(ModelVersion modelVersion) {
         checkIsMainController();
 
@@ -114,6 +112,7 @@ public class MainKernelServicesImpl extends AbstractKernelServicesImpl {
         return domainModel;
     }
 
+    @Override
     public ModelNode callReadMasterDomainModelHandler(ModelVersion modelVersion){
         checkIsMainController();
 
@@ -151,6 +150,7 @@ public class MainKernelServicesImpl extends AbstractKernelServicesImpl {
      * @throws IllegalStateException if this is not the test's main model controller
      * @throws IllegalStateException if there is no legacy controller containing the version of the subsystem
      */
+    @Override
     public ModelNode executeOperation(final ModelVersion modelVersion, final TransformedOperation op) {
         KernelServices legacy = getLegacyServices(modelVersion);
         ModelNode result = new ModelNode();

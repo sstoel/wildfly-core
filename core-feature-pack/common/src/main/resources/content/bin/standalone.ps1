@@ -6,6 +6,7 @@
 
 $scripts = (Get-ChildItem $MyInvocation.MyCommand.Path).Directory.FullName;
 . $scripts'\common.ps1'
+Set-Item -Path env:JBOSS_LAUNCH_SCRIPT -Value "powershell"
 $SERVER_OPTS = Process-Script-Parameters -Params $ARGS
 $JAVA_OPTS = Get-Java-Opts
 
@@ -25,10 +26,6 @@ if ($MODULE_OPTS -like "*-javaagent:*") {
 Write-Debug "MODULE_OPTS: $MODULE_OPTS"
 if ($SECMGR) {
     $MODULE_OPTS +="-secmgr";
-}
-
-if($PRESERVE_JAVA_OPTS -ne 'true') {
-    $JAVA_OPTS = Set-Java-Client-Option $JAVA_OPTS
 }
 
 # Set debug settings if not already set

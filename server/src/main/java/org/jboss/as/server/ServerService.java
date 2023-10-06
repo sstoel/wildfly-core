@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server;
@@ -178,6 +161,7 @@ public final class ServerService extends AbstractControllerService {
 
     static final String SUSPEND_CONTROLLER_CAPABILITY_NAME = "org.wildfly.server.suspend-controller";
     static final String EXTERNAL_MODULE_CAPABILITY_NAME = "org.wildfly.management.external-module";
+    public static final String SERVER_ENVIRONMENT_CAPABILITY_NAME = "org.wildfly.server.environment";
 
     static final RuntimeCapability<Void> SUSPEND_CONTROLLER_CAPABILITY =
             RuntimeCapability.Builder.of(SUSPEND_CONTROLLER_CAPABILITY_NAME, SuspendController.class)
@@ -186,6 +170,8 @@ public final class ServerService extends AbstractControllerService {
     static final RuntimeCapability<Void> EXTERNAL_MODULE_CAPABILITY =
             RuntimeCapability.Builder.of(EXTERNAL_MODULE_CAPABILITY_NAME, ExternalModule.class)
                     .build();
+   static final RuntimeCapability<Void> SERVER_ENVIRONMENT_CAPABILITY = RuntimeCapability.Builder.of(SERVER_ENVIRONMENT_CAPABILITY_NAME, ServerEnvironment.class).build();
+
 
     /**
      * Construct a new instance.
@@ -229,11 +215,10 @@ public final class ServerService extends AbstractControllerService {
                                   final SuspendController suspendController) {
 
         // Install Executor services
-        final ThreadGroup threadGroup = new ThreadGroup("ServerService ThreadGroup");
         final String namePattern = "ServerService Thread Pool -- %t";
         final ThreadFactory threadFactory = doPrivileged(new PrivilegedAction<ThreadFactory>() {
             public ThreadFactory run() {
-                return new JBossThreadFactory(threadGroup, Boolean.FALSE, null, namePattern, null, null);
+                return new JBossThreadFactory(ThreadGroupHolder.THREAD_GROUP, Boolean.FALSE, null, namePattern, null, null);
             }
         });
 
@@ -273,8 +258,7 @@ public final class ServerService extends AbstractControllerService {
 
         serviceBuilder.install();
 
-        ExternalManagementRequestExecutor.install(serviceTarget, threadGroup, EXECUTOR_CAPABILITY.getCapabilityServiceName(), service.getStabilityMonitor());
-
+        ExternalManagementRequestExecutor.install(serviceTarget, ThreadGroupHolder.THREAD_GROUP, EXECUTOR_CAPABILITY.getCapabilityServiceName());
     }
 
     public synchronized void start(final StartContext context) throws StartException {
@@ -305,6 +289,7 @@ public final class ServerService extends AbstractControllerService {
 
     protected void boot(final BootContext context) throws ConfigurationPersistenceException {
         boolean ok;
+        Throwable cause = null;
         try {
             final ServerEnvironment serverEnvironment = configuration.getServerEnvironment();
             final ServiceTarget serviceTarget = context.getServiceTarget();
@@ -325,7 +310,6 @@ public final class ServerService extends AbstractControllerService {
                 }
             }
             context.getServiceTarget().addService(SUSPEND_CONTROLLER_CAPABILITY.getCapabilityServiceName(), suspendController)
-                    .addAliases(SuspendController.SERVICE_NAME)
                     .addDependency(JBOSS_SERVER_NOTIFICATION_REGISTRY, NotificationHandlerRegistry.class, suspendController.getNotificationHandlerRegistry())
                     .install();
 
@@ -417,6 +401,7 @@ public final class ServerService extends AbstractControllerService {
         } catch (Exception e) {
             ServerLogger.ROOT_LOGGER.caughtExceptionDuringBoot(e);
             ok = false;
+            cause = e;
         }
 
         if (ok) {
@@ -429,7 +414,7 @@ public final class ServerService extends AbstractControllerService {
                 String serverConfig = configuration.getServerEnvironment().getServerConfigurationFile().getMainFile().getName();
                 message = ServerLogger.AS_ROOT_LOGGER.serverConfigFileInUse(serverConfig);
             }
-            bootstrapListener.printBootStatistics(message);
+            bootstrapListener.generateBootStatistics(message);
         } else {
             // Die!
             String messageToAppend = "";
@@ -437,7 +422,7 @@ public final class ServerService extends AbstractControllerService {
                 messageToAppend = ServerLogger.ROOT_LOGGER.serverConfigFileInUse(configuration.getServerEnvironment().getServerConfigurationFile().getMainFile().getName());
             }
             String message = ServerLogger.ROOT_LOGGER.unsuccessfulBoot(messageToAppend);
-            bootstrapListener.bootFailure(message);
+            bootstrapListener.bootFailure(new Exception(message, cause));
             SystemExiter.logAndExit(new SystemExiter.ExitLogger() {
                 @Override
                 public void logExit() {
@@ -456,6 +441,7 @@ public final class ServerService extends AbstractControllerService {
 
     @Override
     protected void postBoot() {
+        bootstrapListener.printBootStatisticsMessage();
         executeAdditionalCliBootScript();
     }
 
@@ -503,6 +489,8 @@ public final class ServerService extends AbstractControllerService {
                 new RuntimeCapabilityRegistration(EXTERNAL_MODULE_CAPABILITY, CapabilityScope.GLOBAL,new RegistrationPoint(PathAddress.EMPTY_ADDRESS, null)));
         capabilityRegistry.registerCapability(
                 new RuntimeCapabilityRegistration(CONSOLE_AVAILABILITY_CAPABILITY, CapabilityScope.GLOBAL, new RegistrationPoint(PathAddress.EMPTY_ADDRESS, null)));
+        capabilityRegistry.registerCapability(
+                new RuntimeCapabilityRegistration(SERVER_ENVIRONMENT_CAPABILITY, CapabilityScope.GLOBAL, new RegistrationPoint(PathAddress.EMPTY_ADDRESS, null)));
 
         // Record the core capabilities with the root MRR so reads of it will show it as their provider
         // This also gets them recorded as 'possible capabilities' in the capability registry
@@ -513,6 +501,7 @@ public final class ServerService extends AbstractControllerService {
         rootRegistration.registerCapability(PROCESS_STATE_NOTIFIER_CAPABILITY);
         rootRegistration.registerCapability(EXTERNAL_MODULE_CAPABILITY);
         rootRegistration.registerCapability(CONSOLE_AVAILABILITY_CAPABILITY);
+        rootRegistration.registerCapability(SERVER_ENVIRONMENT_CAPABILITY);
     }
 
     @Override
@@ -686,5 +675,10 @@ public final class ServerService extends AbstractControllerService {
         public synchronized ScheduledExecutorService getValue() throws IllegalStateException {
             return scheduledExecutorService;
         }
+    }
+
+    // Wrapper class to delay thread group creation until when it's needed.
+    private static class ThreadGroupHolder {
+        private static final ThreadGroup THREAD_GROUP = new ThreadGroup("ServerService ThreadGroup");
     }
 }

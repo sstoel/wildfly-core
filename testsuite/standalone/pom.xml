@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <!--
+  ~ Copyright The WildFly Authors
+  ~ SPDX-License-Identifier: Apache-2.0
+  -->
+
+<!--
   Set these VM properties in your IDE debugger (replace ${VERSION} with actual project version)
 
   -Djava.util.logging.manager=org.jboss.logmanager.LogManager
@@ -15,7 +20,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-testsuite</artifactId>
-        <version>20.0.0.Beta3-SNAPSHOT</version>
+        <version>22.0.0.Final-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -56,6 +61,12 @@
             <!-- This is a transitive dep of com.google.guava -->
             <groupId>com.google.guava</groupId>
             <artifactId>failureaccess</artifactId>
+            <scope>test</scope>
+        </dependency>
+        
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
             <scope>test</scope>
         </dependency>
 
@@ -425,20 +436,11 @@
                                     <goal>test</goal>
                                 </goals>
                                 <configuration>
-                                    <systemProperties>
-                                        <property>
-                                            <name>wildfly.bootable.jar</name>
-                                            <value>true</value>
-                                        </property>
-                                        <property>
-                                            <name>wildfly.bootable.jar.jar</name>
-                                            <value>${project.build.directory}/test-wildfly.jar</value>
-                                        </property>
-                                        <property>
-                                            <name>wildfly.bootable.jar.install.dir</name>
-                                            <value>${project.build.directory}/${server.output.dir.prefix}</value>
-                                        </property>
-                                    </systemProperties>
+                                    <systemPropertyVariables>
+                                        <wildfly.bootable.jar>true</wildfly.bootable.jar>
+                                        <wildfly.bootable.jar.jar>${project.build.directory}/test-wildfly.jar</wildfly.bootable.jar.jar>
+                                        <wildfly.bootable.jar.install.dir>${project.build.directory}/${server.output.dir.prefix}</wildfly.bootable.jar.install.dir>
+                                    </systemPropertyVariables>
                                     <excludes>
                                         <!-- Manipulates the discovery subsystem, which isn't installed, and tries
                                             to remove elytron capabilities that the installed config requires -->

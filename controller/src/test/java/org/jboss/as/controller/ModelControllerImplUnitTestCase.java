@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2014, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.controller;
 
@@ -133,7 +116,7 @@ public class ModelControllerImplUnitTestCase {
         ModelNode setup = Util.getEmptyOperation("setup", new ModelNode());
         controller.execute(setup, null, null, null);
         notificationHandler = new ServiceNotificationHandler();
-        controller.getNotificationRegistry().registerNotificationHandler(PathAddress.pathAddress(CORE_SERVICE, MANAGEMENT).append(SERVICE, MANAGEMENT_OPERATIONS), notificationHandler, notificationHandler);
+        svc.getNotificationHandlerRegistry().registerNotificationHandler(PathAddress.pathAddress(CORE_SERVICE, MANAGEMENT).append(SERVICE, MANAGEMENT_OPERATIONS), notificationHandler, notificationHandler);
         assertEquals(ControlledProcessState.State.RUNNING, svc.getCurrentProcessState());
     }
 
@@ -580,7 +563,7 @@ public class ModelControllerImplUnitTestCase {
             if (sc == null) {
                 System.out.println("Null depended service!");
             } else {
-                System.out.println(sc.getName());
+                System.out.println(sc.provides());
                 System.out.println("Mode = " + sc.getMode());
                 System.out.println("State = " + sc.getState());
             }
@@ -589,7 +572,7 @@ public class ModelControllerImplUnitTestCase {
             if (sc == null) {
                 System.out.println("Null dependent service!");
             } else {
-                System.out.println(sc.getName());
+                System.out.println(sc.provides());
                 System.out.println("Mode = " + sc.getMode());
                 System.out.println("State = " + sc.getState());
             }

@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright ${year}, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.domain.controller.operations;
@@ -267,7 +250,7 @@ public class SocketBindingGroupIncludesHandlerTestCase extends AbstractOperation
 
     MockOperationContext getOperationContext(final PathAddress operationAddress) {
         final Resource root = createRootResource();
-        return new MockOperationContext(root, false, operationAddress, false);
+        return new MockOperationContext(root, operationAddress);
     }
 
 
@@ -280,7 +263,7 @@ public class SocketBindingGroupIncludesHandlerTestCase extends AbstractOperation
         socketBindingGroupFour.getModel().get(INCLUDES).add("binding-three");
         root.registerChild(PathElement.pathElement(SOCKET_BINDING_GROUP, "binding-four"), socketBindingGroupFour);
 
-        return new MockOperationContext(root, false, operationAddress, false);
+        return new MockOperationContext(root, operationAddress);
 
     }
 
@@ -296,17 +279,16 @@ public class SocketBindingGroupIncludesHandlerTestCase extends AbstractOperation
         root.registerChild(PathElement.pathElement(SOCKET_BINDING_GROUP, "binding-five"), socketBindingGroupFive);
 
         initializer.addAdditionalResources(root);
-        return new MockOperationContext(root, false, operationAddress, false);
+        return new MockOperationContext(root, operationAddress);
     }
 
     private class MockOperationContext extends AbstractOperationTestCase.MockOperationContext {
         private boolean reloadRequired;
-        private boolean rollback;
+        private boolean rollback = false;
         private OperationStepHandler nextStep;
 
-        protected MockOperationContext(final Resource root, final boolean booting, final PathAddress operationAddress, final boolean rollback) {
-            super(root, booting, operationAddress);
-            this.rollback = rollback;
+        protected MockOperationContext(Resource root, PathAddress operationAddress) {
+            super(root, false, operationAddress, SocketBindingGroupResourceDefinition.INCLUDES);
             Set<RuntimeCapability> capabilities = new HashSet<>();
             capabilities.add(SocketBindingGroupResourceDefinition.SOCKET_BINDING_GROUP_CAPABILITY);
             capabilities.add(ProfileResourceDefinition.PROFILE_CAPABILITY);
@@ -315,13 +297,13 @@ public class SocketBindingGroupIncludesHandlerTestCase extends AbstractOperation
 
         public void completeStep(ResultHandler resultHandler) {
             if (nextStep != null) {
-                stepCompleted();
+                completed();
             } else if (rollback) {
                 resultHandler.handleResult(ResultAction.ROLLBACK, this, null);
             }
         }
 
-        public void stepCompleted() {
+        private void completed() {
             if (nextStep != null) {
                 try {
                     OperationStepHandler step = nextStep;

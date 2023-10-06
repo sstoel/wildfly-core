@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller;
@@ -51,8 +34,8 @@ public interface ExtensionContext {
     }
 
     /**
-     * Convenience variant of {@link #registerSubsystem(String, int, int, int)} that uses {@code 0}
-     * as the {@code microVersion}.
+     * Convenience variant of {@link #registerSubsystem(String, ModelVersion, boolean)} that uses {@code false}
+     * as the {@code deprecated} value.
      *
      * @param name the name of the subsystem
      * @param version the version of the subsystem's management interface.
@@ -76,78 +59,13 @@ public interface ExtensionContext {
      *
      * @param name the name of the subsystem
      * @param version the version of the subsystem's management interface.
-     * @param deprecated mark this extension as deprecated
+     * @param deprecated if {@code true}, mark this extension as deprecated
      *
      * @return the {@link SubsystemRegistration}
      *
      * @throws IllegalStateException if the subsystem name has already been registered
      */
     SubsystemRegistration registerSubsystem(String name, ModelVersion version, boolean deprecated);
-
-    /**
-     * Convenience variant of {@link #registerSubsystem(String, int, int, int)} that uses {@code 0}
-     * as the {@code microVersion}.
-     *
-     * @param name the name of the subsystem
-     * @param majorVersion the major version of the subsystem's management interface
-     * @param minorVersion the minor version of the subsystem's management interface
-     *
-     * @return the {@link SubsystemRegistration}
-     *
-     * @throws IllegalStateException if the subsystem name has already been registered
-     * @deprecated {@see #registerSubsystem(String, ModelVersion)}
-     */
-    @Deprecated
-    SubsystemRegistration registerSubsystem(String name, int majorVersion, int minorVersion);
-
-    /**
-     * Register a new subsystem type.  The returned registration object should be used
-     * to configure XML parsers, operation handlers, and other subsystem-specific constructs
-     * for the new subsystem.  If the subsystem registration is deemed invalid by the time the
-     * extension registration is complete, the subsystem registration will be ignored, and an
-     * error message will be logged.
-     * <p>
-     * The new subsystem registration <em>must</em> register a handler and description for the
-     * {@code add} operation at its root address.  The new subsystem registration <em>must</em> register a
-     * {@code remove} operation at its root address.
-     *
-     * @param name the name of the subsystem
-     * @param majorVersion the major version of the subsystem's management interface
-     * @param minorVersion the minor version of the subsystem's management interface
-     * @param microVersion the micro version of the subsystem's management interface
-     *
-     * @return the {@link SubsystemRegistration}
-     *
-     * @throws IllegalStateException if the subsystem name has already been registered
-     * @deprecated {@see #registerSubsystem(String, ModelVersion)}
-     */
-    @Deprecated
-    SubsystemRegistration registerSubsystem(String name, int majorVersion, int minorVersion, int microVersion);
-
-    /**
-     * Register a new subsystem type.  The returned registration object should be used
-     * to configure XML parsers, operation handlers, and other subsystem-specific constructs
-     * for the new subsystem.  If the subsystem registration is deemed invalid by the time the
-     * extension registration is complete, the subsystem registration will be ignored, and an
-     * error message will be logged.
-     * <p>
-     * The new subsystem registration <em>must</em> register a handler and description for the
-     * {@code add} operation at its root address.  The new subsystem registration <em>must</em> register a
-     * {@code remove} operation at its root address.
-     *
-     * @param name the name of the subsystem
-     * @param majorVersion the major version of the subsystem's management interface
-     * @param minorVersion the minor version of the subsystem's management interface
-     * @param microVersion the micro version of the subsystem's management interface
-     * @param deprecated mark this extension as deprecated
-     *
-     * @return the {@link SubsystemRegistration}
-     *
-     * @throws IllegalStateException if the subsystem name has already been registered
-     * @deprecated {@see #registerSubsystem(String, ModelVersion, boolean)}
-     */
-    @Deprecated
-    SubsystemRegistration registerSubsystem(String name, int majorVersion, int minorVersion, int microVersion, boolean deprecated);
 
     /**
      * Registers that the extension <strong>may</strong> provide an {@link ExpressionResolverExtension} if one of its
@@ -226,8 +144,6 @@ public interface ExtensionContext {
      */
     RunningMode getRunningMode();
 
-
-
     /**
      * Gets whether it is valid for the extension to register resources, attributes or operations that do not
      * involve the persistent configuration, but rather only involve runtime services. Extensions should use this
@@ -248,14 +164,4 @@ public interface ExtensionContext {
      * @throws IllegalStateException if the process is not a {@link ProcessType#isServer() server}
      */
     PathManager getPathManager();
-
-    /**
-     * Returns true if subsystems should register transformers. This is true if {@link #getProcessType().isHostController()} is true and the
-     * process controller is the master domain controller.
-     *
-     * @return {@code true} if transformers should be registered
-     * @deprecated Use {@link org.jboss.as.controller.transform.ExtensionTransformerRegistration}
-     */
-    @Deprecated
-    boolean isRegisterTransformers();
 }

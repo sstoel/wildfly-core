@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.host.controller;
@@ -41,6 +24,7 @@ import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -57,6 +41,7 @@ import org.jboss.as.server.Services;
 import org.jboss.as.server.logging.ServerLogger;
 import org.jboss.as.version.ProductConfig;
 import org.jboss.msc.service.Service;
+import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceContainer;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
@@ -64,10 +49,7 @@ import org.jboss.msc.service.ServiceTarget;
 import org.jboss.msc.service.StartContext;
 import org.jboss.msc.service.StartException;
 import org.jboss.msc.service.StopContext;
-import org.jboss.msc.service.ValueService;
-import org.jboss.msc.value.ImmediateValue;
 import org.jboss.msc.value.InjectedValue;
-import org.jboss.msc.value.Value;
 import org.jboss.threads.AsyncFuture;
 import org.jboss.threads.EnhancedQueueExecutor;
 import org.jboss.threads.JBossThreadFactory;
@@ -85,10 +67,10 @@ public class HostControllerService implements Service<AsyncFuture<ServiceContain
     public static final ServiceName HC_EXECUTOR_SERVICE_NAME = HC_SERVICE_NAME.append("executor");
     public static final ServiceName HC_SCHEDULED_EXECUTOR_SERVICE_NAME = HC_SERVICE_NAME.append("scheduled", "executor");
 
-    private final ThreadGroup threadGroup = new ThreadGroup("Host Controller Service Threads");
+    private static final ThreadGroup THREAD_GROUP = new ThreadGroup("Host Controller Service Threads");
     private final ThreadFactory threadFactory = doPrivileged(new PrivilegedAction<JBossThreadFactory>() {
         public JBossThreadFactory run() {
-            return new JBossThreadFactory(threadGroup, Boolean.FALSE, null, "%G - %t", null, null);
+            return new JBossThreadFactory(THREAD_GROUP, Boolean.FALSE, null, "%G - %t", null, null);
         }
     });
     private final HostControllerEnvironment environment;
@@ -208,15 +190,15 @@ public class HostControllerService implements Service<AsyncFuture<ServiceContain
         HttpListenerRegistryService.install(serviceTarget);
 
         // Add product config service
-        final Value<ProductConfig> productConfigValue = new ImmediateValue<ProductConfig>(config);
-        serviceTarget.addService(Services.JBOSS_PRODUCT_CONFIG_SERVICE, new ValueService<ProductConfig>(productConfigValue))
-                .setInitialMode(ServiceController.Mode.ACTIVE)
-                .install();
+        final ServiceBuilder<?> sb = serviceTarget.addService(Services.JBOSS_PRODUCT_CONFIG_SERVICE);
+        final Consumer<ProductConfig> productConfigConsumer = sb.provides(Services.JBOSS_PRODUCT_CONFIG_SERVICE);
+        sb.setInstance(org.jboss.msc.Service.newInstance(productConfigConsumer, config));
+        sb.install();
 
         ConsoleAvailabilityService.addService(serviceTarget, bootstrapListener::logAdminConsole);
 
         DomainModelControllerService.addService(serviceTarget, environment, runningModeControl, processState,
-                bootstrapListener, hostPathManagerService, capabilityRegistry, threadGroup);
+                bootstrapListener, hostPathManagerService, capabilityRegistry, THREAD_GROUP);
     }
 
     @Override

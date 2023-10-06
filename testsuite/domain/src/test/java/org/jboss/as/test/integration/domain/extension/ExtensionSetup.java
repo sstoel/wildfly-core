@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2012, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.test.integration.domain.extension;
@@ -31,6 +14,7 @@ import org.jboss.as.controller.Extension;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.client.helpers.domain.DomainClient;
 import org.jboss.as.controller.operations.common.Util;
+import org.jboss.as.controller.transform.ExtensionTransformerRegistration;
 import org.jboss.as.test.integration.domain.management.util.DomainTestSupport;
 import org.jboss.as.test.integration.domain.management.util.DomainTestUtils;
 import org.jboss.as.test.integration.management.extension.EmptySubsystemParser;
@@ -106,7 +90,7 @@ public class ExtensionSetup {
 
         // primary - version2
         moduleXml = getModuleXml("transformers-module.xml");
-        final StreamExporter version2 = createResourceRoot(VersionedExtension2.class, ExtensionSetup.class.getPackage());
+        final StreamExporter version2 = createResourceRoot(VersionedExtension2.class, VersionedExtension2.TransformerRegistration.class, ExtensionSetup.class.getPackage());
         Map<String, StreamExporter> v2 = Collections.singletonMap("transformers-extension.jar", version2);
         support.addOverrideModule("primary", VersionedExtensionCommon.EXTENSION_NAME, moduleXml, v2);
 
@@ -159,6 +143,11 @@ public class ExtensionSetup {
     }
 
     static StreamExporter createResourceRoot(Class<? extends Extension> extension, Package... additionalPackages) throws IOException {
+        return createResourceRoot(extension, null, additionalPackages);
+    }
+
+    static StreamExporter createResourceRoot(Class<? extends Extension> extension, Class<? extends ExtensionTransformerRegistration> transformerRegistration,
+                                             Package... additionalPackages) throws IOException {
         final JavaArchive archive = ShrinkWrap.create(JavaArchive.class);
         archive.addPackage(extension.getPackage());
         if (additionalPackages != null) {
@@ -167,6 +156,9 @@ public class ExtensionSetup {
             }
         }
         archive.addAsServiceProvider(Extension.class, extension);
+        if (transformerRegistration != null) {
+            archive.addAsServiceProvider(ExtensionTransformerRegistration.class, transformerRegistration);
+        }
         return archive.as(ZipExporter.class);
     }
 

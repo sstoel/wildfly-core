@@ -1,23 +1,10 @@
 <!--
-  ~ JBoss, Home of Professional Open Source
-  ~ Copyright 2020, Red Hat, Inc., and individual contributors as indicated
-  ~ by the @authors tag.
-  ~
-  ~ Licensed under the Apache License, Version 2.0 (the "License");
-  ~ you may not use this file except in compliance with the License.
-  ~ You may obtain a copy of the License at
-  ~
-  ~ http://www.apache.org/licenses/LICENSE-2.0
-  ~
-  ~ Unless required by applicable law or agreed to in writing, software
-  ~ distributed under the License is distributed on an "AS IS" BASIS,
-  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  ~ See the License for the specific language governing permissions and
-  ~ limitations under the License.
+  ~ Copyright The WildFly Authors
+  ~ SPDX-License-Identifier: Apache-2.0
   -->
 
 <!-- for needs of DomainTestCase -->
-<subsystem xmlns="urn:wildfly:elytron:16.0" register-jaspi-factory="${exp.jaspi:false}" default-ssl-context="client" disallowed-providers="${exp.providers:test}">
+<subsystem xmlns="urn:wildfly:elytron:18.0" register-jaspi-factory="${exp.jaspi:false}" default-ssl-context="client" disallowed-providers="${exp.providers:test}">
     <providers>
         <provider-loader name="openssl" module="org.wildfly.openssl">
             <configuration>
@@ -50,6 +37,11 @@
         <security-domain name="AggregateRealm" default-realm="PropRealm" role-decoder="aggregateRoleDecoder">
             <realm name="PropRealm"/>
         </security-domain>
+        <security-domain name="TestDomain" default-realm="PropRealm" permission-mapper="LoginPermissionMapper" trusted-virtual-security-domains="VirtualDomain">
+            <realm name="PropRealm"/>
+        </security-domain>
+        <virtual-security-domain name="VirtualDomain" outflow-security-domains="MyDomain" outflow-anonymous="${exp.anonymous:true}" />
+        <virtual-security-domain name="AnotherVirtualDomain" outflow-security-domains="MyDomain" outflow-anonymous="${exp.anonymous:true}" auth-method="OIDC"/>
     </security-domains>
     <security-realms>
         <aggregate-realm name="AggregateOne" authentication-realm="PropRealm" authorization-realm="FileRealm" principal-transformer="${exp.transformer:NameRewriterXY}"/>
@@ -114,7 +106,7 @@
         <token-realm name="OAuth2Realm" principal-claim="sub">
             <oauth2-introspection client-id="${exp.id:a}" client-secret="${exp.secret:b}" introspection-url="${exp.url:https://localhost/token/introspect}" host-name-verification-policy="${exp.host:host}"/>
         </token-realm>
-        <distributed-realm name="DistributedRealm" realms="FileRealm PropRealm"/>
+        <distributed-realm name="DistributedRealm" realms="FileRealm PropRealm" ignore-unavailable-realms="${exp.ignore:true}" emit-events="${exp.emit:true}"/>
         <failover-realm name="FailoverRealm" delegate-realm="JdbcRealm" failover-realm="PropRealm" emit-events="${exp.emit:true}"/>
     </security-realms>
     <credential-security-factories>

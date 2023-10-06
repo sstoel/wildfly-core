@@ -1,3 +1,8 @@
+/*
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.wildfly.test.security.common.elytron;
 
 import org.hamcrest.MatcherAssert;
@@ -22,6 +27,8 @@ public class RegexRoleMapperTest {
 
     @After
     public void cleanup() throws Exception {
+        cli.sendLine("/subsystem=elytron/regex-role-mapper=rrm:remove", true);
+        cli.sendLine("/subsystem=elytron/regex-role-mapper=rrm2:remove", true);
         cli.sendLine("reload", true);
         cli.close();
     }

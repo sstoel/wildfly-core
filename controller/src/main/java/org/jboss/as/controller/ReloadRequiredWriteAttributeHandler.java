@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.controller;
 
@@ -35,10 +18,23 @@ import org.jboss.dmr.ModelType;
  */
 public class ReloadRequiredWriteAttributeHandler extends AbstractWriteAttributeHandler<Void> {
 
+    public static final OperationStepHandler INSTANCE = new ReloadRequiredWriteAttributeHandler();
+
+    protected ReloadRequiredWriteAttributeHandler() {
+    }
+
+    /**
+     * @deprecated Use {@link #INSTANCE} instead.
+     */
+    @Deprecated(forRemoval = true)
     public ReloadRequiredWriteAttributeHandler(final AttributeDefinition... definitions) {
         super(definitions);
     }
 
+    /**
+     * @deprecated Use {@link #INSTANCE} instead.
+     */
+    @Deprecated(forRemoval = true)
     public ReloadRequiredWriteAttributeHandler(final Collection<AttributeDefinition> definitions) {
         super(definitions);
     }
@@ -51,12 +47,12 @@ public class ReloadRequiredWriteAttributeHandler extends AbstractWriteAttributeH
 //      In fact we just can't resolve the currentValue without any doubt. When in doubt reload, so we will return true in this case.
 //      For example if the currentValue is ${foo} and that for some reason foo has changed in between, then we should reload even if now ${foo} resolves
 //      as resolvedValue.
-        ModelNode resolvedTypedValue = convertToType(attributeName, resolvedValue);
+        ModelNode resolvedTypedValue = convertToType(context, attributeName, resolvedValue);
         return !resolvedTypedValue.equals(currentValue);
     }
 
-    private ModelNode convertToType(String attributeName, ModelNode resolvedValue) {
-        AttributeDefinition attributeDefinition = getAttributeDefinition(attributeName);
+    private static ModelNode convertToType(OperationContext context, String attributeName, ModelNode resolvedValue) {
+        AttributeDefinition attributeDefinition = context.getResourceRegistration().getAttributeAccess(PathAddress.EMPTY_ADDRESS, attributeName).getAttributeDefinition();
         ModelType type = attributeDefinition.getType();
         ModelNode converted = resolvedValue.clone();
         try {

@@ -1,3 +1,8 @@
+/*
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.jboss.as.controller;
 
 import static javax.xml.stream.XMLStreamConstants.END_ELEMENT;
@@ -16,6 +21,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
+
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 
@@ -25,6 +32,7 @@ import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.controller.parsing.Element;
 import org.jboss.as.controller.parsing.ParseUtils;
 import org.jboss.dmr.ModelNode;
+import org.jboss.staxmapper.Namespace;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
 import org.jboss.staxmapper.XMLExtendedStreamWriter;
 
@@ -36,7 +44,7 @@ import org.jboss.staxmapper.XMLExtendedStreamWriter;
  */
 public final class PersistentResourceXMLDescription implements ResourceParser, ResourceMarshaller {
 
-    protected final PathElement pathElement;
+    private final PathElement pathElement;
     private final String xmlElementName;
     private final String xmlWrapperElement;
     private final LinkedHashMap<String, LinkedHashMap<String, AttributeDefinition>> attributesByGroup;
@@ -514,41 +522,6 @@ public final class PersistentResourceXMLDescription implements ResourceParser, R
     }
 
     /**
-     * @param resource resource for which path we are creating builder
-     * @return PersistentResourceXMLBuilder
-     * @deprecated please use {@linkplain PersistentResourceXMLBuilder(PathElement, String)} variant
-     */
-    @SuppressWarnings("deprecation")
-    @Deprecated
-    public static PersistentResourceXMLBuilder builder(PersistentResourceDefinition resource) {
-        return new PersistentResourceXMLBuilder(resource.getPathElement());
-    }
-
-    /**
-     * @param resource resource for which path we are creating builder
-     * @return PersistentResourceXMLBuilder
-     * @deprecated please use {@linkplain PersistentResourceXMLBuilder(PathElement, String)} variant
-     */
-    @SuppressWarnings("deprecation")
-    @Deprecated
-    public static PersistentResourceXMLBuilder builder(ResourceDefinition resource) {
-        return new PersistentResourceXMLBuilder(resource.getPathElement());
-    }
-
-    /**
-     *
-     * @param resource resource for which path we are creating builder
-     * @param namespaceURI xml namespace to use for this resource, usually used for top level elements such as subsystems
-     * @return PersistentResourceXMLBuilder
-     * @deprecated please use {@linkplain PersistentResourceXMLBuilder(PathElement, String)} variant
-     */
-    @SuppressWarnings("deprecation")
-    @Deprecated
-    public static PersistentResourceXMLBuilder builder(PersistentResourceDefinition resource, String namespaceURI) {
-        return new PersistentResourceXMLBuilder(resource.getPathElement(), namespaceURI);
-    }
-
-    /**
      * Creates builder for passed path element
      * @param pathElement for which we are creating builder
      * @return PersistentResourceXMLBuilder
@@ -569,20 +542,29 @@ public final class PersistentResourceXMLDescription implements ResourceParser, R
     }
 
     /**
+     * Creates builder for the given subsystem path and namespace.
+     *
+     * @param path a subsystem path element
+     * @param namespace the subsystem namespace
+     * @return a builder for creating a {@link PersistentResourceXMLDescription}.
+     */
+    public static PersistentResourceXMLBuilder builder(PathElement path, Namespace namespace) {
+        return new PersistentResourceXMLBuilder(path, namespace.getUri());
+    }
+
+    /**
      * Creates builder for passed path element
      *
      * @param elementName name of xml element that is used as decorator
      * @return PersistentResourceXMLBuilder
-     * @deprecated decorator element support is currently considered as preview
      * @since 4.0
      */
-    @Deprecated
     public static PersistentResourceXMLBuilder decorator(final String elementName) {
         return new PersistentResourceXMLBuilder(PathElement.pathElement(elementName), null).setDecoratorGroup(elementName);
     }
 
     public static final class PersistentResourceXMLBuilder {
-        protected final PathElement pathElement;
+        private final PathElement pathElement;
         private final String namespaceURI;
         private String xmlElementName;
         private String xmlWrapperElement;
@@ -661,6 +643,11 @@ public final class PersistentResourceXMLDescription implements ResourceParser, R
             return this;
         }
 
+        public PersistentResourceXMLBuilder addAttributes(Stream<? extends AttributeDefinition> attributes) {
+            attributes.forEach(this::addAttribute);
+            return this;
+        }
+
         public PersistentResourceXMLBuilder setXmlWrapperElement(final String xmlWrapperElement) {
             this.xmlWrapperElement = xmlWrapperElement;
             return this;
@@ -671,16 +658,22 @@ public final class PersistentResourceXMLDescription implements ResourceParser, R
             return this;
         }
 
+        /**
+         * @deprecated Use {@link #setNameAttributeName(String)}
+         */
+        @Deprecated(forRemoval = true)
         public PersistentResourceXMLBuilder setUseValueAsElementName(final boolean useValueAsElementName) {
             this.useValueAsElementName = useValueAsElementName;
             return this;
         }
 
+        @SuppressWarnings("unused")
         public PersistentResourceXMLBuilder setNoAddOperation(final boolean noAddOperation) {
             this.noAddOperation = noAddOperation;
             return this;
         }
 
+        @SuppressWarnings("unused")
         public PersistentResourceXMLBuilder setAdditionalOperationsGenerator(final AdditionalOperationsGenerator additionalOperationsGenerator) {
             this.additionalOperationsGenerator = additionalOperationsGenerator;
             return this;
@@ -694,7 +687,10 @@ public final class PersistentResourceXMLDescription implements ResourceParser, R
          *
          * @param forcedName the name to be forced as resourceName
          * @return the PersistentResourceXMLBuilder itself
+         *
+         * @deprecated Use an xml attribute to provide the name of the resource.
          */
+        @Deprecated(forRemoval = true)
         public PersistentResourceXMLBuilder setForcedName(String forcedName) {
             this.forcedName = forcedName;
             return this;

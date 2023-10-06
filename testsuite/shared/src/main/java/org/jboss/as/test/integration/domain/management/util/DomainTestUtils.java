@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2012, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.test.integration.domain.management.util;
@@ -49,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.client.ModelControllerClient;
+import org.jboss.as.controller.client.Operation;
 import org.jboss.as.test.integration.management.util.MgmtOperationException;
 import org.jboss.dmr.ModelNode;
 import org.junit.Assert;
@@ -163,6 +147,29 @@ public class DomainTestUtils {
        return ret.get(RESULT);
     }
 
+
+    /**
+     * Execute for a successful result.
+     *
+     * @param op the operation to execute
+     * @param modelControllerClient the controller client
+     * @return the result
+     * @throws IOException
+     * @throws MgmtOperationException
+     */
+    public static ModelNode executeForResult(final Operation op, final ModelControllerClient modelControllerClient) throws IOException, MgmtOperationException {
+        final ModelNode ret = modelControllerClient.execute(op);
+
+        if (! SUCCESS.equals(ret.get(OUTCOME).asString())) {
+            System.out.println("Failed operation:");
+            System.out.println(op.getOperation());
+            System.out.println("Response:");
+            System.out.println(ret);
+            throw new MgmtOperationException("Management operation failed.", op.getOperation(), ret);
+        }
+        return ret.get(RESULT);
+    }
+
     /**
      * Execute for a failed outcome.
      *
@@ -178,6 +185,25 @@ public class DomainTestUtils {
         if (! FAILED.equals(ret.get(OUTCOME).asString())) {
             System.out.println(ret);
             throw new MgmtOperationException("Management operation succeeded.", op, ret);
+        }
+        return ret.get(FAILURE_DESCRIPTION);
+    }
+
+    /**
+     * Execute for a failed outcome.
+     *
+     * @param op the operation to execute
+     * @param modelControllerClient the controller client
+     * @return the failure description
+     * @throws IOException
+     * @throws MgmtOperationException
+     */
+    public static ModelNode executeForFailure(final Operation op, final ModelControllerClient modelControllerClient) throws IOException, MgmtOperationException {
+        final ModelNode ret = modelControllerClient.execute(op);
+
+        if (! FAILED.equals(ret.get(OUTCOME).asString())) {
+            System.out.println(ret);
+            throw new MgmtOperationException("Management operation succeeded.", op.getOperation(), ret);
         }
         return ret.get(FAILURE_DESCRIPTION);
     }

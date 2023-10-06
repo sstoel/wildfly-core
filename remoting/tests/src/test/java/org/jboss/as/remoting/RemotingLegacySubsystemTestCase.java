@@ -1,25 +1,6 @@
 /*
- *
- *  JBoss, Home of Professional Open Source.
- *  Copyright 2014, Red Hat, Inc., and individual contributors
- *  as indicated by the @author tags. See the copyright.txt file in the
- *  distribution for a full listing of individual contributors.
- *
- *  This is free software; you can redistribute it and/or modify it
- *  under the terms of the GNU Lesser General Public License as
- *  published by the Free Software Foundation; either version 2.1 of
- *  the License, or (at your option) any later version.
- *
- *  This software is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- *  Lesser General Public License for more details.
- *
- *  You should have received a copy of the GNU Lesser General Public
- *  License along with this software; if not, write to the Free
- *  Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- *  02110-1301 USA, or see the FSF site: http://www.fsf.org.
- * /
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.remoting;
 
@@ -37,7 +18,6 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUB
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.VALUE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.WRITE_ATTRIBUTE_OPERATION;
 import static org.jboss.as.remoting.Capabilities.IO_WORKER_CAPABILITY_NAME;
-import static org.jboss.as.remoting.RemotingSubsystemTestUtil.HC_ADDITIONAL_INITIALIZATION;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -47,13 +27,11 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
-import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.capability.registry.RuntimeCapabilityRegistry;
 import org.jboss.as.controller.extension.ExtensionRegistry;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
@@ -81,6 +59,10 @@ import org.xnio.XnioWorker;
  */
 public class RemotingLegacySubsystemTestCase extends AbstractRemotingSubsystemBaseTest {
 
+    public RemotingLegacySubsystemTestCase() {
+        super(RemotingSubsystemSchema.CURRENT);
+    }
+
     @Override
     protected void compare(ModelNode node1, ModelNode node2) {
         // First, clean up io stuff parser adds when the old remoting version is used
@@ -99,39 +81,6 @@ public class RemotingLegacySubsystemTestCase extends AbstractRemotingSubsystemBa
         if (node.hasDefined(SUBSYSTEM, "io")) {
             node.get(SUBSYSTEM).remove("io");
         }
-    }
-
-    @Test
-    public void testSubsystemWithThreadParameters() throws Exception {
-        standardSubsystemTest("remoting-with-threads.xml", null, true, HC_ADDITIONAL_INITIALIZATION);
-    }
-
-    @Test
-    public void testSubsystemWithThreadAttributeChange() throws Exception {
-        KernelServices services = createKernelServicesBuilder(HC_ADDITIONAL_INITIALIZATION)
-                .setSubsystemXmlResource("remoting-with-threads.xml")
-                .build();
-
-        updateAndCheckThreadAttribute(services, CommonAttributes.WORKER_READ_THREADS, 5, 6);
-        updateAndCheckThreadAttribute(services, CommonAttributes.WORKER_TASK_CORE_THREADS, 6, 2);
-        updateAndCheckThreadAttribute(services, CommonAttributes.WORKER_TASK_KEEPALIVE, 7, 3);
-        updateAndCheckThreadAttribute(services, CommonAttributes.WORKER_TASK_LIMIT, 8, 4);
-        updateAndCheckThreadAttribute(services, CommonAttributes.WORKER_TASK_MAX_THREADS, 9, 5);
-        updateAndCheckThreadAttribute(services, CommonAttributes.WORKER_WRITE_THREADS, 10, 6);
-    }
-
-    private void updateAndCheckThreadAttribute(KernelServices services, String attrName, int before, int after) throws Exception {
-        assertEquals(before, services.readWholeModel().get(SUBSYSTEM, RemotingExtension.SUBSYSTEM_NAME, attrName).asInt());
-        ModelNode write = new ModelNode();
-        write.get(OPERATION_HEADERS, ALLOW_RESOURCE_SERVICE_RESTART).set(true);
-        write.get(OP).set(WRITE_ATTRIBUTE_OPERATION);
-        write.get(OP_ADDR).add(SUBSYSTEM, RemotingExtension.SUBSYSTEM_NAME);
-        write.get(NAME).set(attrName);
-        write.get(VALUE).set(after);
-        ModelNode result = services.executeOperation(write);
-        assertFalse(result.get(FAILURE_DESCRIPTION).toString(), result.hasDefined(FAILURE_DESCRIPTION));
-
-        assertEquals(after, services.readWholeModel().get(SUBSYSTEM, RemotingExtension.SUBSYSTEM_NAME, attrName).asInt());
     }
 
     @Test
@@ -175,15 +124,6 @@ public class RemotingLegacySubsystemTestCase extends AbstractRemotingSubsystemBa
 
         ModelNode model = services.readWholeModel();
         ModelNode subsystem = model.require(SUBSYSTEM).require(RemotingExtension.SUBSYSTEM_NAME);
-        for (AttributeDefinition ad : RemotingSubsystemRootResource.LEGACY_ATTRIBUTES) {
-            assertFalse(ad.getName(), subsystem.hasDefined(ad.getName()));
-        }
-        ModelNode endpoint = subsystem.get(RemotingEndpointResource.ENDPOINT_PATH.getKey(), RemotingEndpointResource.ENDPOINT_PATH.getValue());
-        for (AttributeDefinition ad : RemotingEndpointResource.ATTRIBUTES.values()) {
-            ModelNode dflt = ad.getDefaultValue();
-            assertEquals(ad.getName(), dflt == null ? new ModelNode() : dflt, endpoint.require(ad.getName()));
-        }
-
 
         ModelNode connector = subsystem.require(CommonAttributes.CONNECTOR).require("test-connector");
         assertEquals(1, connector.require(CommonAttributes.PROPERTY).require("org.xnio.Options.WORKER_ACCEPT_THREADS").require(CommonAttributes.VALUE).asInt());
@@ -267,8 +207,8 @@ public class RemotingLegacySubsystemTestCase extends AbstractRemotingSubsystemBa
                 .build();
 
         ServiceName remotingEndpointSN = RemotingServices.SUBSYSTEM_ENDPOINT;
-        ServiceName remoteOutboundConnectionSN = RemoteOutboundConnectionService.REMOTE_OUTBOUND_CONNECTION_BASE_SERVICE_NAME.append("remote-conn1");
-        ServiceName localOutboundConnectionSN = LocalOutboundConnectionService.LOCAL_OUTBOUND_CONNECTION_BASE_SERVICE_NAME.append("local-conn1");
+        ServiceName remoteOutboundConnectionSN = AbstractOutboundConnectionResourceDefinition.OUTBOUND_CONNECTION_CAPABILITY.getCapabilityServiceName("remote-conn1");
+        ServiceName localOutboundConnectionSN = AbstractOutboundConnectionResourceDefinition.OUTBOUND_CONNECTION_CAPABILITY.getCapabilityServiceName("local-conn1");
         DependenciesRetrievalService dependencies = DependenciesRetrievalService.create(services, remotingEndpointSN, remoteOutboundConnectionSN, localOutboundConnectionSN);
 
         Object remoingEndpointService = dependencies.getService(remotingEndpointSN);
@@ -279,21 +219,6 @@ public class RemotingLegacySubsystemTestCase extends AbstractRemotingSubsystemBa
 
         Object localOutboundConnectionService = dependencies.getService(localOutboundConnectionSN);
         assertNotNull(localOutboundConnectionService);
-    }
-
-    @Override
-    protected String getSubsystemXml() throws IOException {
-        return readResource("remoting.xml");
-    }
-
-    @Override
-    protected String getSubsystemXml(String resource) throws IOException {
-        return readResource(resource);
-    }
-
-    @Override
-    protected void compareXml(String configId, String original, String marshalled) throws Exception {
-        super.compareXml(configId, original, marshalled, true);
     }
 
     private AdditionalInitialization createRuntimeAdditionalInitialization(final boolean legacyParser) {
@@ -328,8 +253,7 @@ public class RemotingLegacySubsystemTestCase extends AbstractRemotingSubsystemBa
                     // Deal with the fact that legacy parsers will add the io extension/subsystem
                     RemotingSubsystemTestUtil.registerIOExtension(extensionRegistry, rootRegistration);
                 } else {
-                    capabilities.put(buildDynamicCapabilityName(IO_WORKER_CAPABILITY_NAME,
-                            RemotingSubsystemRootResource.WORKER.getDefaultValue().asString()), XnioWorker.class);
+                    capabilities.put(buildDynamicCapabilityName(IO_WORKER_CAPABILITY_NAME, "default"), XnioWorker.class);
                 }
 
                 AdditionalInitialization.registerServiceCapabilities(capabilityRegistry, capabilities);

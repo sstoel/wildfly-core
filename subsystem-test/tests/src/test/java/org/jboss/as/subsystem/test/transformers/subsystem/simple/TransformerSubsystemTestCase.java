@@ -1,24 +1,7 @@
 /*
-* JBoss, Home of Professional Open Source.
-* Copyright 2011, Red Hat Middleware LLC, and individual contributors
-* as indicated by the @author tags. See the copyright.txt file in the
-* distribution for a full listing of individual contributors.
-*
-* This is free software; you can redistribute it and/or modify it
-* under the terms of the GNU Lesser General Public License as
-* published by the Free Software Foundation; either version 2.1 of
-* the License, or (at your option) any later version.
-*
-* This software is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-* Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public
-* License along with this software; if not, write to the Free
-* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA, or see the FSF site: http://www.fsf.org.
-*/
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package org.jboss.as.subsystem.test.transformers.subsystem.simple;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OUTCOME;
@@ -84,15 +67,9 @@ public class TransformerSubsystemTestCase extends AbstractSubsystemBaseTest {
     public void testTransformersAS() throws Exception {
         testTransformers(ModelTestControllerVersion.MASTER);
     }
-
     @Test
-    public void testTransformersEAP640() throws Exception {
-        testTransformers(ModelTestControllerVersion.EAP_6_4_0);
-    }
-
-    @Test
-    public void testTransformersEAP700() throws Exception {
-        testTransformers(ModelTestControllerVersion.EAP_7_0_0);
+    public void testTransformersEAP740() throws Exception {
+        testTransformers(ModelTestControllerVersion.EAP_7_4_0);
     }
 
     private void testTransformers(ModelTestControllerVersion controllerVersion) throws Exception {
@@ -109,7 +86,7 @@ public class TransformerSubsystemTestCase extends AbstractSubsystemBaseTest {
 
 
         ModelNode mainModel = mainServices.readWholeModel();
-        ModelNode mainSubsystem = mainModel.get(SUBSYSTEM, "test-subsystem");
+        ModelNode mainSubsystem = mainModel.get(SUBSYSTEM, "versioned-subsystem");
         Assert.assertEquals(3, mainSubsystem.keys().size());
         Assert.assertEquals("This is only a test", mainSubsystem.get("test-attribute").asString());
         Assert.assertTrue(mainSubsystem.hasDefined("new-element"));
@@ -118,7 +95,7 @@ public class TransformerSubsystemTestCase extends AbstractSubsystemBaseTest {
         Assert.assertTrue(mainSubsystem.get("renamed").hasDefined("element"));
 
         ModelNode legacyModel = legacyServices.readWholeModel();
-        ModelNode legacySubsystem = legacyModel.get(SUBSYSTEM, "test-subsystem");
+        ModelNode legacySubsystem = legacyModel.get(SUBSYSTEM, "versioned-subsystem");
         Assert.assertEquals(2, legacySubsystem.keys().size());
         Assert.assertEquals("This is only a test", legacySubsystem.get("test-attribute").asString());
         Assert.assertTrue(legacySubsystem.hasDefined("element"));
@@ -126,7 +103,7 @@ public class TransformerSubsystemTestCase extends AbstractSubsystemBaseTest {
 
         checkSubsystemModelTransformation(mainServices, oldVersion);
 
-        PathAddress subsystemAddress = PathAddress.pathAddress(SUBSYSTEM, "test-subsystem");
+        PathAddress subsystemAddress = PathAddress.pathAddress(SUBSYSTEM, "versioned-subsystem");
         ModelNode writeAttribute = Util.getWriteAttributeOperation(subsystemAddress, "test-attribute", "do reject");
         OperationTransformer.TransformedOperation op = mainServices.executeInMainAndGetTheTransformedOperation(writeAttribute, oldVersion);
         Assert.assertFalse(op.rejectOperation(success()));

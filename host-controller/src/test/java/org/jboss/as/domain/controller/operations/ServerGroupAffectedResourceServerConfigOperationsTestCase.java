@@ -1,25 +1,6 @@
 /*
- *
- *  * JBoss, Home of Professional Open Source.
- *  * Copyright 2013, Red Hat, Inc., and individual contributors
- *  * as indicated by the @author tags. See the copyright.txt file in the
- *  * distribution for a full listing of individual contributors.
- *  *
- *  * This is free software; you can redistribute it and/or modify it
- *  * under the terms of the GNU Lesser General Public License as
- *  * published by the Free Software Foundation; either version 2.1 of
- *  * the License, or (at your option) any later version.
- *  *
- *  * This software is distributed in the hope that it will be useful,
- *  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- *  * Lesser General Public License for more details.
- *  *
- *  * You should have received a copy of the GNU Lesser General Public
- *  * License along with this software; if not, write to the Free
- *  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- *  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
- *
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.domain.controller.operations;
 
@@ -45,8 +26,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
-import javax.security.auth.callback.CallbackHandler;
-
+import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.BlockingTimeout;
 import org.jboss.as.controller.ControlledProcessState;
 import org.jboss.as.controller.ControlledProcessState.State;
@@ -57,7 +37,6 @@ import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.ProxyController;
 import org.jboss.as.controller.client.helpers.domain.ServerStatus;
-import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.domain.controller.LocalHostControllerInfo;
 import org.jboss.as.host.controller.ServerInventory;
 import org.jboss.as.host.controller.discovery.DiscoveryOption;
@@ -179,7 +158,7 @@ public class ServerGroupAffectedResourceServerConfigOperationsTestCase extends A
 
     private void testAddServerConfigBadInfo(boolean primary, boolean rollback, boolean badServerGroup, SocketBindingGroupOverrideType socketBindingGroupOverride) throws Exception {
         PathAddress pa = PathAddress.pathAddress(PathElement.pathElement(HOST, "localhost"), PathElement.pathElement(SERVER_CONFIG, "server-four"));
-        final MockOperationContext operationContext = getOperationContext(rollback, pa);
+        final MockOperationContext operationContext = new MockOperationContext(pa, rollback);
 
         String serverGroupName = badServerGroup ? "bad-server-group" : "group-one";
         String socketBindingGroupName;
@@ -239,7 +218,7 @@ public class ServerGroupAffectedResourceServerConfigOperationsTestCase extends A
 
     private void testRemoveServerConfig(boolean primary, boolean rollback) throws Exception {
         PathAddress pa = PathAddress.pathAddress(PathElement.pathElement(HOST, "localhost"), PathElement.pathElement(SERVER_CONFIG, "server-one"));
-        final MockOperationContext operationContext = getOperationContext(rollback, pa);
+        final MockOperationContext operationContext = new MockOperationContext(pa, rollback);
 
         final ModelNode operation = new ModelNode();
         operation.get(OP_ADDR).set(pa.toModelNode());
@@ -299,7 +278,7 @@ public class ServerGroupAffectedResourceServerConfigOperationsTestCase extends A
 
     private void testUpdateServerConfigServerGroup(boolean primary, boolean rollback, boolean badGroup) throws Exception {
         PathAddress pa = PathAddress.pathAddress(PathElement.pathElement(HOST, "localhost"), PathElement.pathElement(SERVER_CONFIG, "server-one"));
-        final MockOperationContext operationContext = getOperationContext(rollback, pa);
+        final MockOperationContext operationContext = new MockOperationContext(pa, rollback);
 
         String groupName = badGroup ? "bad-group" : "group-two";
 
@@ -397,7 +376,7 @@ public class ServerGroupAffectedResourceServerConfigOperationsTestCase extends A
     private void testUpdateServerConfigSocketBindingGroup(boolean primary, boolean rollback, SocketBindingGroupOverrideType socketBindingGroupOverride) throws Exception {
 
         PathAddress pa = PathAddress.pathAddress(PathElement.pathElement(HOST, "localhost"), PathElement.pathElement(SERVER_CONFIG, "server-one"));
-        final MockOperationContext operationContext = getOperationContext(rollback, pa);
+        final MockOperationContext operationContext = new MockOperationContext(pa, rollback);
 
         String socketBindingGroupName;
         if (socketBindingGroupOverride == SocketBindingGroupOverrideType.GOOD) {
@@ -430,11 +409,6 @@ public class ServerGroupAffectedResourceServerConfigOperationsTestCase extends A
         }
 
         Assert.assertFalse(operationContext.isReloadRequired());
-    }
-
-    MockOperationContext getOperationContext(final boolean rollback, final PathAddress operationAddress) {
-        final Resource root = createRootResource();
-        return new MockOperationContext(root, false, operationAddress, rollback);
     }
 
     private static class MockHostControllerInfo implements LocalHostControllerInfo {
@@ -586,7 +560,7 @@ public class ServerGroupAffectedResourceServerConfigOperationsTestCase extends A
         }
 
         @Override
-        public void reconnectServer(String serverName, ModelNode domainModel, String authKey, boolean running, boolean stopping) {
+        public void reconnectServer(String serverName, ModelNode domainModel, boolean running, boolean stopping) {
             throw new UnsupportedOperationException("Not supported yet.");
         }
 
@@ -602,11 +576,6 @@ public class ServerGroupAffectedResourceServerConfigOperationsTestCase extends A
 
         @Override
         public void killServer(String serverName) {
-            throw new UnsupportedOperationException("Not supported yet.");
-        }
-
-        @Override
-        public CallbackHandler getServerCallbackHandler() {
             throw new UnsupportedOperationException("Not supported yet.");
         }
 
@@ -689,6 +658,7 @@ public class ServerGroupAffectedResourceServerConfigOperationsTestCase extends A
         public List<ModelNode> suspendServers(Set<String> serverNames, int timeout, BlockingTimeout blockingTimeout) {
             throw new UnsupportedOperationException("Not supported yet.");
         }
+
     }
 
     private class MockOperationContext extends AbstractOperationTestCase.MockOperationContext {
@@ -696,8 +666,8 @@ public class ServerGroupAffectedResourceServerConfigOperationsTestCase extends A
         private boolean rollback;
         private final Queue<OperationStepHandler> nextHandlers = new ArrayDeque<>();
 
-        protected MockOperationContext(final Resource root, final boolean booting, final PathAddress operationAddress, final boolean rollback) {
-            super(root, booting, operationAddress);
+        protected MockOperationContext(PathAddress operationAddress, boolean rollback) {
+            super(createRootResource(), false, operationAddress, ServerConfigResourceDefinition.WRITABLE_ATTRIBUTES.toArray(AttributeDefinition[]::new));
             this.rollback = rollback;
             when(this.registration.getCapabilities()).thenReturn(Collections.singleton(ServerConfigResourceDefinition.SERVER_CONFIG_CAPABILITY));
         }
@@ -710,15 +680,10 @@ public class ServerGroupAffectedResourceServerConfigOperationsTestCase extends A
         @Override
         public void completeStep(ResultHandler resultHandler) {
             if (!nextHandlers.isEmpty()) {
-                stepCompleted();
+                completed();
             } else if (rollback) {
                 resultHandler.handleResult(ResultAction.ROLLBACK, this, null);
             }
-        }
-
-        @Override
-        public void stepCompleted() {
-            completed();
         }
 
         private void completed() {

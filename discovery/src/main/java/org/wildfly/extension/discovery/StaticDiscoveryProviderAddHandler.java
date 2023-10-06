@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2016, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.wildfly.extension.discovery;
@@ -28,14 +11,13 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import org.jboss.as.controller.AbstractAddStepHandler;
+import org.jboss.as.controller.CapabilityServiceBuilder;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.dmr.ModelNode;
 import org.jboss.msc.Service;
-import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceController;
-import org.jboss.msc.service.ServiceName;
 import org.wildfly.discovery.AttributeValue;
 import org.wildfly.discovery.ServiceURL;
 import org.wildfly.discovery.impl.StaticDiscoveryProvider;
@@ -46,10 +28,6 @@ import org.wildfly.discovery.spi.DiscoveryProvider;
  * @author <a href="mailto:paul.ferraro@redhat.com">Paul Ferraro</a>
  */
 class StaticDiscoveryProviderAddHandler extends AbstractAddStepHandler {
-
-    StaticDiscoveryProviderAddHandler() {
-        super(new Parameters().addAttribute(StaticDiscoveryProviderDefinition.SERVICES));
-    }
 
     @Override
     protected void performRuntime(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {
@@ -85,9 +63,8 @@ class StaticDiscoveryProviderAddHandler extends AbstractAddStepHandler {
             serviceURLs.add(serviceURL);
         }
 
-        ServiceName name = DiscoveryExtension.DISCOVERY_PROVIDER_CAPABILITY.getCapabilityServiceName(context.getCurrentAddress());
-        ServiceBuilder<?> builder = context.getCapabilityServiceTarget().addService(name);
-        Consumer<DiscoveryProvider> provider = builder.provides(name);
+        CapabilityServiceBuilder<?> builder = context.getCapabilityServiceTarget().addService();
+        Consumer<DiscoveryProvider> provider = builder.provides(DiscoveryExtension.DISCOVERY_PROVIDER_CAPABILITY);
         builder.setInstance(Service.newInstance(provider, new StaticDiscoveryProvider(serviceURLs)))
             .setInitialMode(ServiceController.Mode.ON_DEMAND)
             .install();

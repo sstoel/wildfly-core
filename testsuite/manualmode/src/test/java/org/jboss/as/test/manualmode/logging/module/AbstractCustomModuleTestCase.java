@@ -1,20 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- *
- * Copyright 2021 Red Hat, Inc., and individual contributors
- * as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.test.manualmode.logging.module;
@@ -39,6 +25,7 @@ import org.jboss.msc.service.ServiceActivator;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
 import org.wildfly.core.testrunner.ServerControl;
@@ -55,6 +42,8 @@ public abstract class AbstractCustomModuleTestCase extends AbstractLoggingTestCa
 
     @AfterClass
     public static void cleanup() throws Exception {
+        Assert.assertNotNull(container);
+        Assert.assertTrue(container.isStarted()); // if container is not started, we get a NPE in container.getClient() within undeploy()
         container.undeploy(DEPLOYMENT_NAME);
         try {
             final CompositeOperationBuilder builder = CompositeOperationBuilder.create();
@@ -73,6 +62,7 @@ public abstract class AbstractCustomModuleTestCase extends AbstractLoggingTestCa
     @BeforeClass
     public static void startServer() {
         TestEnvironment.createModules();
+        Assert.assertNotNull(container);
         container.start();
     }
 

@@ -1,24 +1,7 @@
 /*
-* JBoss, Home of Professional Open Source.
-* Copyright 2011, Red Hat Middleware LLC, and individual contributors
-* as indicated by the @author tags. See the copyright.txt file in the
-* distribution for a full listing of individual contributors.
-*
-* This is free software; you can redistribute it and/or modify it
-* under the terms of the GNU Lesser General Public License as
-* published by the Free Software Foundation; either version 2.1 of
-* the License, or (at your option) any later version.
-*
-* This software is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-* Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public
-* License along with this software; if not, write to the Free
-* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA, or see the FSF site: http://www.fsf.org.
-*/
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package org.jboss.as.model.test;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.FAILED;
@@ -89,7 +72,7 @@ public abstract class ModelTestKernelServicesImpl<T extends ModelTestKernelServi
         this.persister = persister;
         this.operationValidator = operationValidator;
         this.rootRegistration = rootRegistration;
-        this.legacyServices = legacyModelVersion != null ? null : new HashMap<ModelVersion, T>();
+        this.legacyServices = legacyModelVersion != null ? null : new HashMap<>();
         this.successfulBoot = successfulBoot;
         this.bootError = bootError;
     }
@@ -207,7 +190,7 @@ public abstract class ModelTestKernelServicesImpl<T extends ModelTestKernelServi
         } else {
             ExecutorService executor = Executors.newCachedThreadPool();
             try {
-                ModelControllerClient client = controller.createClient(executor);
+                ModelControllerClient client = controllerService.getModelControllerClientFactory().createClient(executor);
                 OperationBuilder builder = OperationBuilder.create(operation);
                 for (InputStream in : inputStreams) {
                     builder.addInputStream(in);
@@ -245,7 +228,6 @@ public abstract class ModelTestKernelServicesImpl<T extends ModelTestKernelServi
      * Execute an operation in the model controller, expecting failure.
      *
      * @param operation the operation to execute
-     * @return the result of the operation
      */
     @Override
     public void executeForFailure(ModelNode operation, InputStream...inputStreams) {
@@ -253,6 +235,7 @@ public abstract class ModelTestKernelServicesImpl<T extends ModelTestKernelServi
             executeForResult(operation, inputStreams);
             Assert.fail("Should have given error");
         } catch (OperationFailedException expected) {
+            // ignore
         }
     }
 
@@ -332,10 +315,6 @@ public abstract class ModelTestKernelServicesImpl<T extends ModelTestKernelServi
 
     protected TransformerRegistry getTransformersRegistry() {
         return controllerService.getTransformersRegistry();
-    }
-
-    protected String getControllerClassSimpleName() {
-        return controllerService.getClass().getSimpleName();
     }
 
 }

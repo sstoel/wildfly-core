@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2016, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller;
@@ -554,7 +537,7 @@ public final class CapabilityRegistry implements ImmutableCapabilityRegistry, Po
 
     /**
      * Registers a capability with the system. Any
-     * {@link org.jboss.as.controller.capability.AbstractCapability#getRequirements() requirements}
+     * {@link org.jboss.as.controller.capability.Capability#getRequirements() requirements}
      * associated with the capability will be recorded as requirements.
      *
      * @param capability the capability. Cannot be {@code null}
@@ -943,11 +926,24 @@ public final class CapabilityRegistry implements ImmutableCapabilityRegistry, Po
         if (satisfactoryCapability == null) {
             if (forServer) {
                 throw ControllerLogger.MGMT_OP_LOGGER.unknownCapability(capabilityName);
+            }
+            if (getRegistrationPoints(capabilityName).isEmpty()) {
+                throw ControllerLogger.MGMT_OP_LOGGER.unknownCapability(capabilityName);
             } else {
-                throw ControllerLogger.MGMT_OP_LOGGER.unknownCapabilityInContext(capabilityName, capabilityScope.getName());
+                throw ControllerLogger.MGMT_OP_LOGGER.noSatisfactoryCapability(capabilityName, capabilityScope.getName(), getRegistrationPoints(capabilityName), capabilityScope.getName());
             }
         }
         return capabilities.get(satisfactoryCapability.singleCapability);
+    }
+
+    private Set<RegistrationPoint> getRegistrationPoints(String capabilityName) {
+        Set<RegistrationPoint> registrationPoints = new HashSet<>();
+        for (CapabilityId key: capabilities.keySet()) {
+            if (key.getName().equals(capabilityName)) {
+                registrationPoints = capabilities.get(key).getRegistrationPoints();
+            }
+        }
+        return registrationPoints;
     }
 
     private SatisfactoryCapability findSatisfactoryCapability(String capabilityName, CapabilityScope dependentContext,
@@ -1016,11 +1012,17 @@ public final class CapabilityRegistry implements ImmutableCapabilityRegistry, Po
                     boolean found = false;
                     for (PathAddress pattern : possibleProviders) {
                         if (pattern.matches(regPoint.getAddress())) {
-                            //WFCORE-2690 we need something better for multiple dynamic parts
-                            capabilityNames.add(registration.getCapabilityName().
-                                    substring(registration.getCapabilityName().lastIndexOf(".") + 1));
-                            found = true;
-                            break;
+                            if (referencedCapability.equals("org.wildfly.security.virtual-security-domain")) {
+                                capabilityNames.add(registration.getCapabilityName().substring(referencedCapability.length() + 1));
+                                found = true;
+                                break;
+                            } else {
+                                //WFCORE-2690 we need something better for multiple dynamic parts
+                                capabilityNames.add(registration.getCapabilityName().
+                                        substring(registration.getCapabilityName().lastIndexOf(".") + 1));
+                                found = true;
+                                break;
+                            }
                         }
                     }
                     if (found) {

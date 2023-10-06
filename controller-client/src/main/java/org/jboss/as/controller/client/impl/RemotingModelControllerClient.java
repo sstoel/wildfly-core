@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller.client.impl;
@@ -49,7 +32,7 @@ import org.wildfly.common.ref.Reference;
  */
 public class RemotingModelControllerClient extends AbstractModelControllerClient {
 
-    private static final Reaper<RemotingModelControllerClient, ClientCloseable> REAPER = new Reaper<RemotingModelControllerClient, ClientCloseable>() {
+    private static final Reaper<RemotingModelControllerClient, ClientCloseable> REAPER = new Reaper<>() {
         @Override
         public void reap(Reference<RemotingModelControllerClient, ClientCloseable> reference) {
             ClientCloseable closeable = reference.getAttachment();
@@ -65,19 +48,16 @@ public class RemotingModelControllerClient extends AbstractModelControllerClient
     };
 
     public static RemotingModelControllerClient create(final ModelControllerClientConfiguration configuration) {
-        @SuppressWarnings("deprecation")
         RemotingModelControllerClient client = new RemotingModelControllerClient(configuration);
         // Use a PhantomReference instead of overriding finalize() to ensure close gets called
         // CleanerReference handles ensuring there's a strong ref to itself so we can just construct it and move on
-        new CleanerReference<RemotingModelControllerClient, ClientCloseable>(client, client.closeable, REAPER);
+        new CleanerReference<>(client, client.closeable, REAPER);
         return client;
     }
 
     private final ClientCloseable closeable;
 
-    /** @deprecated Use {@link #create(ModelControllerClientConfiguration)}  */
-    @Deprecated
-    public RemotingModelControllerClient(final ModelControllerClientConfiguration configuration) {
+    private RemotingModelControllerClient(final ModelControllerClientConfiguration configuration) {
 
         ManagementChannelHandler handler = new ManagementChannelHandler(new ManagementClientChannelStrategy() {
             @Override
@@ -117,7 +97,7 @@ public class RemotingModelControllerClient extends AbstractModelControllerClient
 
                     closeable.strategy = ManagementClientChannelStrategy.create(configuration, closeable.channelAssociation, closeable.clientConfiguration.getCallbackHandler(),
                             closeable.clientConfiguration.getSaslOptions(), closeable.clientConfiguration.getSSLContext(),
-                            new CloseHandler<Channel>() {
+                            new CloseHandler<>() {
                                 @Override
                                 public void handleClose(final Channel closed, final IOException exception) {
                                     closeable.channelAssociation.handleChannelClosed(closed, exception);

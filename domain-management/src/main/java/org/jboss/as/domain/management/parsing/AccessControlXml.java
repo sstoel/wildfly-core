@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2015, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.domain.management.parsing;
@@ -62,6 +45,7 @@ import java.util.TreeSet;
 
 import javax.xml.stream.XMLStreamException;
 
+import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.ListAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.operations.common.Util;
@@ -75,6 +59,7 @@ import org.jboss.as.domain.management.access.ApplicationClassificationTypeResour
 import org.jboss.as.domain.management.access.HostScopedRolesResourceDefinition;
 import org.jboss.as.domain.management.access.PrincipalResourceDefinition;
 import org.jboss.as.domain.management.access.RoleMappingResourceDefinition;
+import org.jboss.as.domain.management.access.ScopedRoleResourceDefinition;
 import org.jboss.as.domain.management.access.SensitivityClassificationTypeResourceDefinition;
 import org.jboss.as.domain.management.access.SensitivityResourceDefinition;
 import org.jboss.as.domain.management.access.ServerGroupScopedRoleResourceDefinition;
@@ -156,7 +141,7 @@ public class AccessControlXml {
             switch (element) {
                 case ROLE: {
                     parseScopedRole(reader, address, list, scopedRoleType, Element.SERVER_GROUP,
-                            ServerGroupScopedRoleResourceDefinition.BASE_ROLE, ServerGroupScopedRoleResourceDefinition.SERVER_GROUPS, true);
+                            ScopedRoleResourceDefinition.BASE_ROLE, ServerGroupScopedRoleResourceDefinition.SERVER_GROUPS, true);
                     break;
                 }
                 default: {
@@ -178,7 +163,7 @@ public class AccessControlXml {
             switch (element) {
                 case ROLE: {
                     parseScopedRole(reader, address, list, scopedRoleType, Element.HOST,
-                            HostScopedRolesResourceDefinition.BASE_ROLE, HostScopedRolesResourceDefinition.HOSTS, false);
+                            ScopedRoleResourceDefinition.BASE_ROLE, HostScopedRolesResourceDefinition.HOSTS, false);
                     break;
                 }
                 default: {
@@ -437,18 +422,18 @@ public class AccessControlXml {
                     }
                     case REQUIRES_READ: {
                         values.put(SensitivityResourceDefinition.CONFIGURED_REQUIRES_READ.getName(),
-                                SensitivityResourceDefinition.CONFIGURED_REQUIRES_READ.parse(value, reader));
+                                parse(SensitivityResourceDefinition.CONFIGURED_REQUIRES_READ, value, reader));
                         break;
                     }
                     case REQUIRES_WRITE: {
                         values.put(SensitivityResourceDefinition.CONFIGURED_REQUIRES_WRITE.getName(),
-                                SensitivityResourceDefinition.CONFIGURED_REQUIRES_WRITE.parse(value, reader));
+                                parse(SensitivityResourceDefinition.CONFIGURED_REQUIRES_WRITE, value, reader));
                         break;
                     }
                     case REQUIRES_ADDRESSABLE: {
                         if (!vault) {
                             values.put(SensitivityResourceDefinition.CONFIGURED_REQUIRES_ADDRESSABLE.getName(),
-                                SensitivityResourceDefinition.CONFIGURED_REQUIRES_ADDRESSABLE.parse(value, reader));
+                                parse(SensitivityResourceDefinition.CONFIGURED_REQUIRES_ADDRESSABLE, value, reader));
                             break;
                         }
                     }
@@ -833,5 +818,9 @@ public class AccessControlXml {
         }
 
         return configuredConstraints;
+    }
+
+    private static ModelNode parse(AttributeDefinition ad, String value, XMLExtendedStreamReader reader) throws XMLStreamException {
+        return ad.getParser().parse(ad,value,reader);
     }
 }

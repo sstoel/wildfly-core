@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat Middleware LLC, and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.remoting;
 
@@ -53,7 +36,11 @@ public class RemotingServices {
     /** The name of the remoting service */
     public static final ServiceName REMOTING_BASE = ServiceName.JBOSS.append("remoting");
 
-    /** The name of the endpoint service installed by the remoting subsystem.  */
+    /**
+     * The name of the endpoint service installed by the remoting subsystem.
+     * @deprecated Reference remoting endpoint capability instead.
+     */
+    @Deprecated(forRemoval = true)
     public static final ServiceName SUBSYSTEM_ENDPOINT = REMOTING_ENDPOINT_CAPABILITY.getCapabilityServiceName(Endpoint.class);//REMOTING_BASE.append("endpoint", "subsystem");
 
     /** The base name of the connector services */
@@ -62,6 +49,10 @@ public class RemotingServices {
     /** The base name of the stream server services */
     private static final ServiceName SERVER_BASE = REMOTING_BASE.append("server");
 
+    /**
+     * @deprecated Reference listener register capability instead
+     */
+    @Deprecated(forRemoval = true)
     public static final ServiceName HTTP_LISTENER_REGISTRY = HTTP_LISTENER_REGISTRY_CAPABILITY.getCapabilityServiceName(ListenerRegistry.class);
 
     /**
@@ -151,7 +142,7 @@ public class RemotingServices {
         final Supplier<SocketBindingManager> sbmSupplier = builder.requires(socketBindingManager);
         final Supplier<SocketBinding> sbSupplier = builder.requires(socketBindingName);
         builder.setInstance(new InjectedSocketBindingStreamServerService(streamServerConsumer,
-                eSupplier, safSupplier, scSupplier, sbmSupplier, sbSupplier, connectorPropertiesOptionMap));
+                eSupplier, safSupplier, scSupplier, sbmSupplier, sbSupplier, connectorPropertiesOptionMap, connectorName));
         builder.install();
     }
 

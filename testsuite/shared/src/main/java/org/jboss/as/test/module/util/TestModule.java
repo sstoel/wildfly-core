@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2012, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.test.module.util;
 
@@ -31,6 +14,7 @@ import java.io.InputStream;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -269,7 +253,7 @@ public class TestModule {
         return new File(getModulesDirectory(createParent), this.moduleName.replace('.', File.separatorChar));
     }
 
-    static File getModulesDirectory(boolean create) {
+    public static File getModulesDirectory(boolean create) {
         String modulePath = System.getProperty("module.path", null);
 
         if (modulePath == null) {
@@ -298,7 +282,7 @@ public class TestModule {
             modulePath = pathElement;
         }
 
-        File moduleDir = new File(modulePath);
+        File moduleDir = Path.of(modulePath).toFile();
 
         if (!moduleDir.exists()) {
             if (create && isUnderCurrentProjectBuildDir(moduleDir)) {
@@ -320,7 +304,8 @@ public class TestModule {
     }
 
     private static boolean isImmutableModulePath(String path) {
-        return path.contains(ILLEGAL_BUILD_DIR) || path.contains(ILLEGAL_DIST_DIR);
+        String thePath = Path.of(path).toString();
+        return thePath.contains(ILLEGAL_BUILD_DIR) || thePath.contains(ILLEGAL_DIST_DIR);
     }
 
     private static boolean isUnderCurrentProjectBuildDir(File moduleRoot) {

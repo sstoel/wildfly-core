@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2010, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server;
@@ -53,7 +36,7 @@ public final class Services {
     /**
      * The service corresponding to the {@link java.util.concurrent.ExecutorService} for this instance.
      *
-     * @deprecated use capability org.wildfly.management.executor
+     * @deprecated use capability @code{org.wildfly.management.executor}
      */
     @Deprecated
     public static final ServiceName JBOSS_SERVER_EXECUTOR = JBOSS_AS.append("server-executor");
@@ -66,13 +49,15 @@ public final class Services {
     /**
      * The service corresponding to the {@link org.jboss.as.server.moduleservice.ExternalModuleService} for this instance.
      *
-     * @deprecated use capability org.wildfly.management.external-module
+     * @deprecated use capability @code{org.wildfly.management.external-module}
      */
     @Deprecated
     public static final ServiceName JBOSS_EXTERNAL_MODULE_SERVICE = JBOSS_AS.append("external-module-service");
 
     public static final ServiceName JBOSS_PRODUCT_CONFIG_SERVICE = JBOSS_AS.append("product-config");
 
+    /** @deprecated use capability @code{org.wildfly.server.suspend-controller}  */
+    @Deprecated
     public static final ServiceName JBOSS_SUSPEND_CONTROLLER = ServerService.SUSPEND_CONTROLLER_CAPABILITY.getCapabilityServiceName();
 
     /**

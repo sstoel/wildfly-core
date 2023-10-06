@@ -1,17 +1,6 @@
 /*
- * Copyright 2018 JBoss by Red Hat.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.controller.persistence;
 
@@ -54,6 +43,7 @@ public class RemoteGitPersistenceResourceTestCase extends AbstractGitPersistence
             try (Git git = Git.init().setDirectory(baseDir).setInitialBranch(Constants.MASTER).call()) {
                 StoredConfig config = git.getRepository().getConfig();
                 config.setBoolean(ConfigConstants.CONFIG_COMMIT_SECTION, null, ConfigConstants.CONFIG_KEY_GPGSIGN, false);
+                config.setBoolean(ConfigConstants.CONFIG_TAG_SECTION, null, ConfigConstants.CONFIG_KEY_GPGSIGN, false);
                 config.save();
                 git.add().addFilepattern("standard.xml").call();
                 git.commit().setMessage("Repository initialized").call();
@@ -80,15 +70,15 @@ public class RemoteGitPersistenceResourceTestCase extends AbstractGitPersistence
         Path standard = createFile(root, "standard.xml", "std");
         ConfigurationFile configurationFile = new ConfigurationFile(root.toFile(), "standard.xml", null, ConfigurationFile.InteractionPolicy.STANDARD, true, null);
         Assert.assertEquals(standard.toAbsolutePath().toString(), configurationFile.getBootFile().getAbsolutePath());
-        GitRepositoryConfiguration.Builder.getInstance()
-                .setBasePath(root)
-                .setRepository(remoteRoot.resolve(Constants.DOT_GIT).toAbsolutePath().toString())
-                .build();
         try (GitRepository gitRepository = new GitRepository(GitRepositoryConfiguration.Builder.getInstance()
                 .setBasePath(root)
                 .setRepository(remoteRoot.resolve(Constants.DOT_GIT).toAbsolutePath().toString())
                 .build())) {
             List<String> commits = listCommits(repository);
+            Assert.assertEquals(1, repository.getRemoteNames().size());
+            Assert.assertTrue(repository.getRemoteNames().contains("origin"));
+            StoredConfig config = repository.getConfig();
+            Assert.assertEquals(remoteRoot.resolve(Constants.DOT_GIT).toAbsolutePath().toString(), config.getString(ConfigConstants.CONFIG_REMOTE_SECTION, "origin", ConfigConstants.CONFIG_KEY_URL));
             Assert.assertEquals(2, commits.size());
             Assert.assertEquals("Adding .gitignore", commits.get(0));
             Assert.assertEquals("Repository initialized", commits.get(1));
@@ -135,7 +125,15 @@ public class RemoteGitPersistenceResourceTestCase extends AbstractGitPersistence
             commits = listCommits(remoteRepository);
             Assert.assertEquals(1, commits.size());
             Assert.assertEquals("Repository initialized", commits.get(0));
+            //Publish to default remote
             persister.publish(null);
+            // Publish to an invalid remote location
+            try {
+                persister.publish("invalid_remote");
+                Assert.fail("Should have thrown an exception");
+            } catch (ConfigurationPersistenceException expected){
+                Assert.assertTrue(expected.getMessage().contains("WFLYCTL0503"));
+            }
             commits = listCommits(remoteRepository);
             Assert.assertEquals(5, commits.size());
             Assert.assertEquals("1st snapshot", commits.get(0));

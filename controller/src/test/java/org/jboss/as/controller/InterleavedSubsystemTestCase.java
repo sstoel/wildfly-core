@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller;
@@ -42,7 +25,6 @@ import org.jboss.as.controller.descriptions.NonResolvingResourceDescriptionResol
 import org.jboss.as.controller.extension.ExtensionAddHandler;
 import org.jboss.as.controller.extension.ExtensionRegistry;
 import org.jboss.as.controller.extension.ExtensionRegistryType;
-import org.jboss.as.controller.extension.RuntimeHostControllerInfoAccessor;
 import org.jboss.as.controller.extension.MutableRootResourceRegistrationProvider;
 import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.controller.operations.global.GlobalNotifications;
@@ -127,8 +109,8 @@ public class InterleavedSubsystemTestCase {
         assertTrue(result.get(RESULT, SUBSYSTEM, "c", "attribute").asBoolean());
 
     }
-    static final AttributeDefinition ATTRIBUTE_DEFINITION = new SimpleAttributeDefinition("attribute", ModelType.BOOLEAN, true);
-    static final AttributeDefinition MODULE = new SimpleAttributeDefinition("module", ModelType.STRING, true);
+    static final AttributeDefinition ATTRIBUTE_DEFINITION = new SimpleAttributeDefinitionBuilder("attribute", ModelType.BOOLEAN, true).build();
+    static final AttributeDefinition MODULE = new SimpleAttributeDefinitionBuilder("module", ModelType.STRING, true).build();
 
     public static class InterleavedSubsystemModelControllerService extends TestModelControllerService {
 
@@ -168,7 +150,7 @@ public class InterleavedSubsystemTestCase {
         private final ManagementResourceRegistration rootRegistration;
 
         private FakeExtensionAddHandler(ManagementResourceRegistration rootRegistration, MutableRootResourceRegistrationProvider rootResourceRegistrationProvider) {
-            super(new ExtensionRegistry(ProcessType.EMBEDDED_SERVER, new RunningModeControl(RunningMode.NORMAL), null, null, null, RuntimeHostControllerInfoAccessor.SERVER), false, ExtensionRegistryType.SERVER, rootResourceRegistrationProvider);
+            super(ExtensionRegistry.builder(ProcessType.EMBEDDED_SERVER).build(), false, ExtensionRegistryType.SERVER, rootResourceRegistrationProvider);
             this.rootRegistration = rootRegistration;
         }
 

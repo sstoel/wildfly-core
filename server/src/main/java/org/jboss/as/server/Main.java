@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server;
@@ -43,7 +26,6 @@ import org.jboss.as.process.ExitCodes;
 import org.jboss.as.server.logging.ServerLogger;
 import org.jboss.as.version.ProductConfig;
 import org.jboss.modules.Module;
-import org.jboss.msc.service.ServiceActivator;
 import org.jboss.stdio.LoggingOutputStream;
 import org.jboss.stdio.NullInputStream;
 import org.jboss.stdio.SimpleStdioContextSelector;
@@ -107,8 +89,7 @@ public final class Main {
                 final Bootstrap bootstrap = Bootstrap.Factory.newInstance();
                 final Bootstrap.Configuration configuration = new Bootstrap.Configuration(serverEnvironmentWrapper.getServerEnvironment());
                 configuration.setModuleLoader(Module.getBootModuleLoader());
-                bootstrap.bootstrap(configuration, Collections.<ServiceActivator>emptyList()).get();
-                return;
+                bootstrap.bootstrap(configuration, Collections.emptyList()).get();
             }
         } catch (Throwable t) {
             abort(t);
@@ -123,13 +104,6 @@ public final class Main {
         } finally {
             SystemExiter.abort(ExitCodes.FAILED);
         }
-    }
-
-    /** @deprecated use {@link #determineEnvironment(String[], Properties, Map, ServerEnvironment.LaunchType, long)}  */
-    @Deprecated
-    public static ServerEnvironmentWrapper determineEnvironment(String[] args, Properties systemProperties, Map<String, String> systemEnvironment,
-                                                         ServerEnvironment.LaunchType launchType) {
-        return determineEnvironment(args, systemProperties, systemEnvironment, launchType, Module.getStartTime());
     }
 
     /**
@@ -235,7 +209,7 @@ public final class Main {
                         value = "true";
                     } else {
                         name = arg.substring(2, idx);
-                        value = arg.substring(idx + 1, arg.length());
+                        value = arg.substring(idx + 1);
                     }
                     systemProperties.setProperty(name, value);
                 } else if (arg.startsWith(CommandLineConstants.PUBLIC_BIND_ADDRESS)) {
@@ -360,7 +334,7 @@ public final class Main {
                             return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                         }
                     } else {
-                        gitRepository = arg.substring(idx + 1, arg.length());
+                        gitRepository = arg.substring(idx + 1);
                     }
                 } else if(arg.startsWith(CommandLineConstants.GIT_AUTH)) {
                     int idx = arg.indexOf("=");
@@ -375,7 +349,7 @@ public final class Main {
                             return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                         }
                     } else {
-                        gitAuthConfiguration = arg.substring(idx + 1, arg.length());
+                        gitAuthConfiguration = arg.substring(idx + 1);
                     }
                 } else if(arg.startsWith(CommandLineConstants.GIT_BRANCH)) {
                     int idx = arg.indexOf("=");
@@ -390,7 +364,7 @@ public final class Main {
                             return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                         }
                     } else {
-                        gitBranch = arg.substring(idx + 1, arg.length());
+                        gitBranch = arg.substring(idx + 1);
                     }
                 } else if(ConfigurationExtensionFactory.isConfigurationExtensionSupported()
                         && ConfigurationExtensionFactory.commandLineContainsArgument(arg)) {
@@ -406,7 +380,7 @@ public final class Main {
                             return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                         }
                     } else {
-                        supplementalConfiguration = arg.substring(idx + 1, arg.length());
+                        supplementalConfiguration = arg.substring(idx + 1);
                     }
                 } else {
                     STDERR.println(ServerLogger.ROOT_LOGGER.invalidCommandLineOption(arg));

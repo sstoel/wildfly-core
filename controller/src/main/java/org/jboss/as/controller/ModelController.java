@@ -1,36 +1,16 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller;
 
 import java.security.Permission;
-import java.util.concurrent.Executor;
 
-import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.client.Operation;
 import org.jboss.as.controller.client.OperationAttachments;
 import org.jboss.as.controller.client.OperationMessageHandler;
 import org.jboss.as.controller.client.OperationResponse;
-import org.jboss.as.controller.registry.NotificationHandlerRegistration;
 import org.jboss.as.controller.security.ControllerPermission;
 import org.jboss.dmr.ModelNode;
 
@@ -74,40 +54,6 @@ public interface ModelController {
      * @throws SecurityException if the caller does not have {@link #ACCESS_PERMISSION}
      */
     OperationResponse execute(Operation operation, OperationMessageHandler handler, OperationTransactionControl control);
-
-    /**
-     * Create an in-VM client whose operations are executed as if they were invoked by a user in the
-     * RBAC {@code SuperUser} role, regardless of any security identity that is or isn't associated
-     * with the calling thread when the client is invoked. <strong>This client generally should not
-     * be used to handle requests from external callers, and if it is used great care should be
-     * taken to ensure such use is not suborning the intended access control scheme.</strong>
-     * <p>
-     * In a VM with a {@link java.lang.SecurityManager SecurityManager} installed, invocations
-     * against the returned client can only occur from a calling context with the
-     * {@link org.jboss.as.controller.security.ControllerPermission#PERFORM_IN_VM_CALL PERFORM_IN_VM_CALL}
-     * permission. Without this permission a {@link SecurityException} will be thrown.
-     *
-     * @param executor the executor to use for asynchronous operation execution. Cannot be {@code null}
-     * @return the client. Will not return {@code null}
-     *
-     * @throws SecurityException if the caller does not have the
-     *            {@link org.jboss.as.controller.security.ControllerPermission#CAN_ACCESS_MODEL_CONTROLLER CAN_ACCESS_MODEL_CONTROLLER}
-     *            permission
-     *
-     * @deprecated Use {@link ModelControllerClientFactory}. Will be removed in the next major or minor release.
-     */
-    @Deprecated
-    ModelControllerClient createClient(Executor executor);
-
-    /**
-     * Returns the {@code NotificationHandlerRegistration} that registers notification handlers for this model controller.
-     *
-     * @return the notification handler registration
-     *
-     * @deprecated Use {@link org.jboss.as.controller.notification.NotificationHandlerRegistry}. Will be removed in the next major or minor release.
-     */
-    @Deprecated
-    NotificationHandlerRegistration getNotificationRegistry();
 
     /**
      * A callback interface for the operation's completion status.  Implemented in order to control whether a complete

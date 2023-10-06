@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2012, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller.remote;
@@ -74,6 +57,19 @@ import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**
  * Base implementation for the transactional protocol.
+ * <p />
+ * This implementation uses Management requests to keep operation's transaniolabitility as follows:
+ * <ul>
+ * <li>Initiates the transaction with an {@link ExecuteRequest}, which is handled on the remote side via an
+ * {@link TransactionalProtocolOperationHandler.ExecuteRequestHandler}. This handler executes the operation on the remote
+ * controller and returns the prepared response. The operation is suspended on the remote side waiting for the client until a
+ * commit or rollaback is received.</li>
+ * <li>Once the prepared response is received on the client side, the operation is committed or rollback on the client side
+ * which sends the decided TX status to the remote side by using a {@link CompleteTxRequest}. This request is handled on the
+ * remote side via an {@link TransactionalProtocolOperationHandler.CompleteTxOperationHandler}</li>
+ * <li>Once the remote side receives the TX status from the client, the prepared operation continues the complete step
+ * executions and the final result is send back to the client.</li>
+ * </ul>
  *
  * @author Emanuel Muckenhuber
  * @author <a href="mailto:darran.lofthouse@jboss.com">Darran Lofthouse</a>

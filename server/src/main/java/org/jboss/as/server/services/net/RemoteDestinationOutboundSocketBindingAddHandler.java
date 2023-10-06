@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server.services.net;
@@ -61,7 +44,7 @@ public class RemoteDestinationOutboundSocketBindingAddHandler extends AbstractAd
     static final RemoteDestinationOutboundSocketBindingAddHandler INSTANCE = new RemoteDestinationOutboundSocketBindingAddHandler();
 
     private RemoteDestinationOutboundSocketBindingAddHandler() {
-        super(OutboundSocketBindingResourceDefinition.OUTBOUND_SOCKET_BINDING_CAPABILITY, RemoteDestinationOutboundSocketBindingResourceDefinition.ATTRIBUTES);
+        super(RemoteDestinationOutboundSocketBindingResourceDefinition.ATTRIBUTES);
     }
 
     @Override
@@ -155,7 +138,8 @@ public class RemoteDestinationOutboundSocketBindingAddHandler extends AbstractAd
         final Supplier<NetworkInterfaceBinding> nibSupplier = sourceInterfaceName != null ? builder.requiresCapability("org.wildfly.network.interface", NetworkInterfaceBinding.class, sourceInterfaceName) : null;
         builder.setInstance(new RemoteDestinationOutboundSocketBindingService(osbConsumer, sbmSupplier, nibSupplier, outboundSocketName, destinationHost, destinationPort, sourcePort, fixedSourcePort));
         builder.setInitialMode(ServiceController.Mode.ON_DEMAND);
-        builder.addAliases(OutboundSocketBinding.OUTBOUND_SOCKET_BINDING_BASE_SERVICE_NAME.append(outboundSocketName));
+
+        builder.addAliases(OUTBOUND_SOCKET_BINDING_CAPABILITY.getCapabilityServiceName((outboundSocketName)));
         builder.install();
     }
 }

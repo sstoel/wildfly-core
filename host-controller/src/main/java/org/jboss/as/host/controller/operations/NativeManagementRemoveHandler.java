@@ -1,28 +1,11 @@
 /*
- * Copyright (C) 2015 Red Hat, inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA 02110-1301  USA
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.host.controller.operations;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HTTP_INTERFACE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.MANAGEMENT_INTERFACE;
-import static org.jboss.as.host.controller.resources.NativeManagementResourceDefinition.NATIVE_MANAGEMENT_RUNTIME_CAPABILITY;
 
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
@@ -42,7 +25,6 @@ public class NativeManagementRemoveHandler extends ReloadRequiredRemoveStepHandl
     public static final NativeManagementRemoveHandler INSTANCE = new NativeManagementRemoveHandler();
 
     public NativeManagementRemoveHandler() {
-        super(NATIVE_MANAGEMENT_RUNTIME_CAPABILITY);
     }
 
     @Override

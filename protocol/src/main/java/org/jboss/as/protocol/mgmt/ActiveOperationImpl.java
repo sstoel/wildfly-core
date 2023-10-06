@@ -1,17 +1,6 @@
 /*
-Copyright 2016 Red Hat, Inc.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-  http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.protocol.mgmt;
@@ -25,6 +14,7 @@ import org.jboss.as.protocol.logging.ProtocolLogger;
 import org.jboss.remoting3.Channel;
 import org.jboss.threads.AsyncFuture;
 import org.jboss.threads.AsyncFutureTask;
+import org.wildfly.common.Assert;
 import org.xnio.Cancellable;
 
 /** Standard ActiveOperation implementation */
@@ -91,8 +81,13 @@ class ActiveOperationImpl<T, A> extends AsyncFutureTask<T> implements ActiveOper
                 }
             }
 
+            /**
+             * @param t the exception must not be null
+             * @return true if the result was successfully set, or false if a result was already set
+             */
             @Override
-            public boolean failed(Throwable t) {
+            public boolean failed(final Throwable t) {
+                Assert.checkNotNullParam("Throwable", t);
                 try {
                     boolean failed = ActiveOperationImpl.this.setFailed(t);
                     if(failed) {

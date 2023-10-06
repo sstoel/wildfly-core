@@ -1,19 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2015 Red Hat, Inc., and individual contributors
- * as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.wildfly.extension.elytron;
@@ -44,6 +31,8 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.UnrecoverableKeyException;
+import java.util.stream.Stream;
+
 import javax.crypto.SecretKey;
 
 import org.jboss.as.controller.AbstractAddStepHandler;
@@ -54,6 +43,7 @@ import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
+import org.jboss.as.controller.ReloadRequiredWriteAttributeHandler;
 import org.jboss.as.controller.ResourceDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
@@ -83,6 +73,7 @@ import org.wildfly.extension.elytron.FileAttributeDefinitions.PathResolver;
 import org.wildfly.security.auth.realm.FileSystemSecurityRealm;
 import org.wildfly.security.auth.realm.FileSystemSecurityRealmBuilder;
 import org.wildfly.security.auth.server.NameRewriter;
+import org.wildfly.security.auth.server.RealmUnavailableException;
 import org.wildfly.security.auth.server.SecurityRealm;
 import org.wildfly.security.credential.SecretKeyCredential;
 import org.wildfly.security.credential.source.CredentialSource;
@@ -164,7 +155,7 @@ class FileSystemRealmDefinition extends SimpleResourceDefinition {
                     .setRequires(ElytronDescriptionConstants.KEY_STORE_ALIAS)
                     .setMinSize(1)
                     .setRestartAllServices()
-                    .setCapabilityReference(KEY_STORE_CAPABILITY, SECURITY_REALM_CAPABILITY, true)
+                    .setCapabilityReference(KEY_STORE_CAPABILITY, SECURITY_REALM_RUNTIME_CAPABILITY)
                     .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                     .build();
 
@@ -176,7 +167,11 @@ class FileSystemRealmDefinition extends SimpleResourceDefinition {
                     .setRestartAllServices()
                     .build();
 
-    static final AttributeDefinition[] ATTRIBUTES = new AttributeDefinition[]{PATH, RELATIVE_TO, LEVELS, ENCODED, HASH_ENCODING, HASH_CHARSET, CREDENTIAL_STORE, SECRET_KEY, KEY_STORE, KEY_STORE_ALIAS};
+    static final AttributeDefinition[] ATTRIBUTES = new AttributeDefinition[]{PATH, RELATIVE_TO, LEVELS, ENCODED, HASH_ENCODING, HASH_CHARSET};
+    static final AttributeDefinition[] INTEGRITY_ATTRIBUTES = new AttributeDefinition[]{KEY_STORE, KEY_STORE_ALIAS};
+    static final AttributeDefinition[] ENCRYPTION_ATTRIBUTES = new AttributeDefinition[]{CREDENTIAL_STORE, SECRET_KEY};
+    static final AttributeDefinition[] ALL_ATTRIBUTES = Stream.of(ATTRIBUTES, INTEGRITY_ATTRIBUTES, ENCRYPTION_ATTRIBUTES)
+            .flatMap(Stream::of).toArray(AttributeDefinition[]::new);
 
     private static final AbstractAddStepHandler ADD = new RealmAddHandler();
     private static final OperationStepHandler REMOVE = new TrivialCapabilityServiceRemoveHandler(ADD, MODIFIABLE_SECURITY_REALM_RUNTIME_CAPABILITY, SECURITY_REALM_RUNTIME_CAPABILITY);
@@ -194,8 +189,17 @@ class FileSystemRealmDefinition extends SimpleResourceDefinition {
     @Override
     public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
         AbstractWriteAttributeHandler handler = new ElytronReloadRequiredWriteAttributeHandler(ATTRIBUTES);
+        AbstractWriteAttributeHandler integrityHandler = new IntegrityWriteAttributeDisabledHandler(INTEGRITY_ATTRIBUTES);
+        AbstractWriteAttributeHandler encryptionHandler = new EncryptionWriteAttributeDisabledHandler(ENCRYPTION_ATTRIBUTES);
+
         for (AttributeDefinition attr : ATTRIBUTES) {
             resourceRegistration.registerReadWriteAttribute(attr, null, handler);
+        }
+        for (AttributeDefinition attr : INTEGRITY_ATTRIBUTES) {
+            resourceRegistration.registerReadWriteAttribute(attr, null, integrityHandler);
+        }
+        for (AttributeDefinition attr : ENCRYPTION_ATTRIBUTES) {
+            resourceRegistration.registerReadWriteAttribute(attr, null, encryptionHandler);
         }
     }
 
@@ -265,7 +269,7 @@ class FileSystemRealmDefinition extends SimpleResourceDefinition {
     private static class RealmAddHandler extends BaseAddHandler {
 
         private RealmAddHandler() {
-            super(SECURITY_REALM_RUNTIME_CAPABILITY, ATTRIBUTES);
+            super(SECURITY_REALM_RUNTIME_CAPABILITY, ALL_ATTRIBUTES);
         }
 
         private static SecretKey getSecretKey(OperationContext context, String credentialStoreReference, String alias) throws OperationFailedException {
@@ -423,6 +427,64 @@ class FileSystemRealmDefinition extends SimpleResourceDefinition {
            throw ROOT_LOGGER.requiredServiceNotUp(mainServiceName, serviceState);
        }
         return serviceContainer.getService();
+    }
+
+    /**
+     * Integrity keypair can only be added at initialization, unless realm contains no identities. Existing realms should
+     * be upgraded with Elytron Tool.
+     *
+     * @see <a href="https://issues.redhat.com/browse/WFCORE-6129">WFCORE-6129</a>
+     */
+    private static class IntegrityWriteAttributeDisabledHandler extends ReloadRequiredWriteAttributeHandler {
+        public IntegrityWriteAttributeDisabledHandler(final AttributeDefinition... definitions) {
+            super(definitions);
+        }
+
+        @Override
+        protected boolean applyUpdateToRuntime(OperationContext context, ModelNode operation, String attributeName,
+                                               ModelNode resolvedValue, ModelNode currentValue, HandbackHolder<Void> voidHandback) throws OperationFailedException {
+
+            TrivialService<FileSystemSecurityRealm> filesystemService = (TrivialService<FileSystemSecurityRealm>) getFileSystemService(context);
+            FileSystemSecurityRealm fileSystemRealm = filesystemService.getValue();
+
+            try {
+                if (!currentValue.isDefined() && fileSystemRealm.getRealmIdentityIterator().hasNext()) {
+                    throw ROOT_LOGGER.addKeypairToInitializedFilesystemRealm();
+                }
+            } catch (RealmUnavailableException ignored) {
+                throw ROOT_LOGGER.addKeypairToInitializedFilesystemRealm();
+            }
+            return super.applyUpdateToRuntime(context, operation, attributeName, resolvedValue, currentValue, voidHandback);
+        }
+    }
+
+    /**
+     * Encryption secret key can only be added at initialization, unless realm contains no identities. Existing realms should
+     * be upgraded with Elytron Tool.
+     *
+     * @see <a href="https://issues.redhat.com/browse/WFCORE-6129">WFCORE-6129</a>
+     */
+    private static class EncryptionWriteAttributeDisabledHandler extends ReloadRequiredWriteAttributeHandler {
+
+        public EncryptionWriteAttributeDisabledHandler(final AttributeDefinition... definitions) {
+            super(definitions);
+        }
+
+        @Override
+        protected boolean applyUpdateToRuntime(OperationContext context, ModelNode operation, String attributeName,
+                                               ModelNode resolvedValue, ModelNode currentValue, HandbackHolder<Void> voidHandback) throws OperationFailedException {
+            TrivialService<FileSystemSecurityRealm> filesystemService = (TrivialService<FileSystemSecurityRealm>) getFileSystemService(context);
+            FileSystemSecurityRealm fileSystemRealm = filesystemService.getValue();
+
+            try {
+                if (!currentValue.isDefined() && fileSystemRealm.getRealmIdentityIterator().hasNext()) {
+                    throw ROOT_LOGGER.addSecretKeyToInitializedFilesystemRealm();
+                }
+            } catch (RealmUnavailableException ignored) {
+                throw ROOT_LOGGER.addSecretKeyToInitializedFilesystemRealm();
+            }
+            return super.applyUpdateToRuntime(context, operation, attributeName, resolvedValue, currentValue, voidHandback);
+        }
     }
 
 }

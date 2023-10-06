@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.remoting;
@@ -29,10 +12,10 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import org.jboss.as.network.NetworkUtils;
+import org.jboss.as.network.OutboundConnection;
 import org.jboss.as.network.OutboundSocketBinding;
 import org.jboss.as.remoting.logging.RemotingLogger;
-import org.jboss.msc.service.Service;
-import org.jboss.msc.service.ServiceName;
+import org.jboss.msc.Service;
 import org.jboss.msc.service.StartContext;
 import org.jboss.msc.service.StartException;
 import org.jboss.msc.service.StopContext;
@@ -52,10 +35,8 @@ import javax.net.ssl.SSLContext;
  * @author Jaikiran Pai
  * @author <a href="mailto:ropalka@redhat.com">Richard Opalka</a>
  */
-final class RemoteOutboundConnectionService extends AbstractOutboundConnectionService implements Service<RemoteOutboundConnectionService> {
+final class RemoteOutboundConnectionService implements Service, OutboundConnection {
 
-    static final ServiceName REMOTE_OUTBOUND_CONNECTION_BASE_SERVICE_NAME = RemotingServices.SUBSYSTEM_ENDPOINT.append("remote-outbound-connection");
-    private static final String JBOSS_LOCAL_USER = "JBOSS-LOCAL-USER";
     private static final AuthenticationContextConfigurationClient AUTH_CONFIGURATION_CLIENT = doPrivileged(AuthenticationContextConfigurationClient.ACTION);
 
     private final Consumer<RemoteOutboundConnectionService> serviceConsumer;
@@ -83,6 +64,7 @@ final class RemoteOutboundConnectionService extends AbstractOutboundConnectionSe
         this.protocol = protocol;
     }
 
+    @Override
     public void start(final StartContext context) throws StartException {
         final OutboundSocketBinding binding = outboundSocketBindingSupplier.get();
         final String hostName = NetworkUtils.formatPossibleIpv6Address(binding.getUnresolvedDestinationAddress());
@@ -124,6 +106,7 @@ final class RemoteOutboundConnectionService extends AbstractOutboundConnectionSe
         this.serviceConsumer.accept(this);
     }
 
+    @Override
     public void stop(final StopContext context) {
         serviceConsumer.accept(null);
         authenticationConfiguration = null;
@@ -131,6 +114,7 @@ final class RemoteOutboundConnectionService extends AbstractOutboundConnectionSe
         sslContext = null;
     }
 
+    @Override
     public AuthenticationConfiguration getAuthenticationConfiguration() {
         final AuthenticationConfiguration authenticationConfiguration = this.authenticationConfiguration.get();
         final OptionMap optionMap = this.connectionCreationOptions;
@@ -140,16 +124,13 @@ final class RemoteOutboundConnectionService extends AbstractOutboundConnectionSe
         return authenticationConfiguration;
     }
 
+    @Override
     public SSLContext getSSLContext() {
         return sslContext;
     }
 
+    @Override
     public URI getDestinationUri() {
         return destination;
-    }
-
-    @Override
-    public RemoteOutboundConnectionService getValue() throws IllegalStateException, IllegalArgumentException {
-        return this;
     }
 }

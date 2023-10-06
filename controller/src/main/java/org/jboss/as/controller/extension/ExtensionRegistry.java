@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller.extension;
@@ -45,7 +28,6 @@ import org.jboss.as.controller.Extension;
 import org.jboss.as.controller.CapabilityReferenceRecorder;
 import org.jboss.as.controller.ExtensionContext;
 import org.jboss.as.controller.ModelVersion;
-import org.jboss.as.controller.ModelVersionRange;
 import org.jboss.as.controller.NotificationDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationDefinition;
@@ -91,15 +73,12 @@ import org.jboss.as.controller.registry.NotificationEntry;
 import org.jboss.as.controller.registry.OperationEntry;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.controller.services.path.PathManager;
-import org.jboss.as.controller.transform.CombinedTransformer;
-import org.jboss.as.controller.transform.OperationTransformer;
-import org.jboss.as.controller.transform.ResourceTransformer;
 import org.jboss.as.controller.transform.TransformerRegistry;
-import org.jboss.as.controller.transform.TransformersSubRegistration;
 import org.jboss.dmr.ModelNode;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLElementWriter;
 import org.jboss.staxmapper.XMLMapper;
+import org.wildfly.common.function.Functions;
 import org.wildfly.security.auth.server.SecurityIdentity;
 
 /**
@@ -114,13 +93,103 @@ import org.wildfly.security.auth.server.SecurityIdentity;
  */
 public final class ExtensionRegistry {
 
+    /**
+     * Returns a builder for creating an {@link ExtensionRegistry}.
+     * @param processType the process type
+     * @return an extension registry builder
+     */
+    public static Builder builder(ProcessType processType) {
+        return new Builder(processType);
+    }
+
+    /**
+     * Builder for an {@link ExtensionRegistry}.
+     */
+    public static class Builder {
+        private final ProcessType processType;
+        private RunningModeControl runningModeControl = new RunningModeControl(RunningMode.NORMAL);
+        private ManagedAuditLogger auditLogger = AuditLogger.NO_OP_LOGGER;
+        private JmxAuthorizer authorizer = NO_OP_AUTHORIZER;
+        private Supplier<SecurityIdentity> securityIdentitySupplier = Functions.constantSupplier(null);
+        private RuntimeHostControllerInfoAccessor hostControllerInfoAccessor = RuntimeHostControllerInfoAccessor.SERVER;
+
+        private Builder(ProcessType processType) {
+            this.processType = processType;
+        }
+
+        /**
+         * Convenience method for setting the {@link RunningModeControl} of the extension registry.
+         * @param mode the running mode
+         * @return a reference to this builder
+         */
+        public Builder withRunningMode(RunningMode mode) {
+            return this.withRunningModeControl(new RunningModeControl(mode));
+        }
+
+        /**
+         * Overrides the default {@link RunningModeControl} of the extension registry.
+         * @param runningModeControl the running mode control
+         * @return a reference to this builder
+         */
+        public Builder withRunningModeControl(RunningModeControl runningModeControl) {
+            this.runningModeControl = runningModeControl;
+            return this;
+        }
+
+        /**
+         * Overrides the default {@link ManagedAuditLogger} of the extension registry.
+         * @param auditLogger the logger for auditing changes
+         * @return a reference to this builder
+         */
+        public Builder withAuditLogger(ManagedAuditLogger auditLogger) {
+            this.auditLogger = auditLogger;
+            return this;
+        }
+
+        /**
+         * Overrides the default {@link JmxAuthorizer} of the extension registry.
+         * @param authorizer hook for exposing access control information to the JMX subsystem
+         * @return a reference to this builder
+         */
+        public Builder withAuthorizer(JmxAuthorizer authorizer) {
+            this.authorizer = authorizer;
+            return this;
+        }
+
+        /**
+         * Overrides the default {@link SecurityIdentity} supplier of the extension registry.
+         * @param securityIdentitySupplier supplier of a security identity
+         * @return a reference to this builder
+         */
+        public Builder withSecurityIdentitySupplier(Supplier<SecurityIdentity> securityIdentitySupplier) {
+            this.securityIdentitySupplier = securityIdentitySupplier;
+            return this;
+        }
+
+        /**
+         * Overrides the default {@link RuntimeHostControllerInfoAccessor} of the extension registry.
+         * @param hostControllerInfoAccessor the host controller
+         * @return a reference to this builder
+         */
+        public Builder withHostControllerInfoAccessor(RuntimeHostControllerInfoAccessor hostControllerInfoAccessor) {
+            this.hostControllerInfoAccessor = hostControllerInfoAccessor;
+            return this;
+        }
+
+        /**
+         * Constructs an extension registry.
+         * @return a new extension registry
+         */
+        public ExtensionRegistry build() {
+            return new ExtensionRegistry(this);
+        }
+    }
+
     // Hack to restrict the extensions to which we expose ExtensionContextSupplement
     private static final Set<String> legallySupplemented;
     static {
-        Set<String> set = new HashSet<>(4);
-        set.add("org.jboss.as.jmx");
-        set.add("Test");  // used by shared subsystem test fixture TestModelControllerService
-        legallySupplemented = Collections.unmodifiableSet(set);
+        // used by shared subsystem test fixture TestModelControllerService
+        legallySupplemented = Set.of("org.jboss.as.jmx", "Test");
     }
 
     private final ProcessType processType;
@@ -129,16 +198,25 @@ public final class ExtensionRegistry {
     private volatile PathManager pathManager;
     private volatile ResolverExtensionRegistry resolverExtensionRegistry;
 
-    private final ConcurrentMap<String, ExtensionInfo> extensions = new ConcurrentHashMap<String, ExtensionInfo>();
+    private final ConcurrentMap<String, ExtensionInfo> extensions = new ConcurrentHashMap<>();
     // subsystem -> extension
-    private final ConcurrentMap<String, String> reverseMap = new ConcurrentHashMap<String, String>();
+    private final ConcurrentMap<String, String> reverseMap = new ConcurrentHashMap<>();
     private final RunningModeControl runningModeControl;
     private final ManagedAuditLogger auditLogger;
     private final JmxAuthorizer authorizer;
     private final Supplier<SecurityIdentity> securityIdentitySupplier;
-    private final ConcurrentHashMap<String, SubsystemInformation> subsystemsInfo = new ConcurrentHashMap<String, SubsystemInformation>();
+    private final ConcurrentHashMap<String, SubsystemInformation> subsystemsInfo = new ConcurrentHashMap<>();
     private volatile TransformerRegistry transformerRegistry = TransformerRegistry.Factory.create();
     private final RuntimeHostControllerInfoAccessor hostControllerInfoAccessor;
+
+    private ExtensionRegistry(Builder builder) {
+        this.processType = builder.processType;
+        this.runningModeControl = builder.runningModeControl;
+        this.auditLogger = builder.auditLogger;
+        this.authorizer = builder.authorizer;
+        this.securityIdentitySupplier = builder.securityIdentitySupplier;
+        this.hostControllerInfoAccessor = builder.hostControllerInfoAccessor;
+    }
 
     /**
      * Constructor
@@ -148,19 +226,20 @@ public final class ExtensionRegistry {
      * @param auditLogger logger for auditing changes
      * @param authorizer hook for exposing access control information to the JMX subsystem
      * @param hostControllerInfoAccessor the host controller
+     * @deprecated Use {@link #builder(ProcessType)} instead.
      */
+    @Deprecated(forRemoval = true)
     public ExtensionRegistry(ProcessType processType, RunningModeControl runningModeControl, ManagedAuditLogger auditLogger, JmxAuthorizer authorizer,
             Supplier<SecurityIdentity> securityIdentitySupplier, RuntimeHostControllerInfoAccessor hostControllerInfoAccessor) {
-        this.processType = processType;
-        this.runningModeControl = runningModeControl;
-        this.auditLogger = auditLogger != null ? auditLogger : AuditLogger.NO_OP_LOGGER;
-        this.authorizer = authorizer != null ? authorizer : NO_OP_AUTHORIZER;
-        this.securityIdentitySupplier = securityIdentitySupplier;
-        this.hostControllerInfoAccessor = hostControllerInfoAccessor;
+        this(builder(processType).withRunningModeControl(runningModeControl)
+                .withAuditLogger((auditLogger != null) ? auditLogger : AuditLogger.NO_OP_LOGGER)
+                .withAuthorizer((authorizer != null) ? authorizer : NO_OP_AUTHORIZER)
+                .withSecurityIdentitySupplier((securityIdentitySupplier != null) ? securityIdentitySupplier : Functions.constantSupplier(null))
+                .withHostControllerInfoAccessor(hostControllerInfoAccessor));
     }
 
     /**
-     * Constructor
+     * Constructor used by legacy controllers when testing backwards compatibility.
      *
      * @param processType the type of the process
      * @param runningModeControl the process' running mode
@@ -168,7 +247,7 @@ public final class ExtensionRegistry {
      */
     @Deprecated
     public ExtensionRegistry(ProcessType processType, RunningModeControl runningModeControl) {
-        this(processType, runningModeControl, null, null, null, RuntimeHostControllerInfoAccessor.SERVER);
+        this(builder(processType).withRunningModeControl(runningModeControl));
     }
 
     /**
@@ -219,7 +298,7 @@ public final class ExtensionRegistry {
         if (info != null) {
             //noinspection SynchronizationOnLocalVariableOrMethodParameter
             synchronized (info) {
-                result = Collections.unmodifiableMap(new HashMap<String, SubsystemInformation>(info.subsystems));
+                result = Map.copyOf(info.subsystems);
             }
         }
         return result;
@@ -250,28 +329,10 @@ public final class ExtensionRegistry {
      * @param xmlMapper  the {@link XMLMapper} handling the extension parsing. Can be {@code null} if there won't
      *                   be any actual parsing (e.g. in a slave Host Controller or in a server in a managed domain)
      */
-    public final void initializeParsers(final Extension extension, final String moduleName, final XMLMapper xmlMapper) {
+    public void initializeParsers(final Extension extension, final String moduleName, final XMLMapper xmlMapper) {
         ExtensionParsingContextImpl parsingContext = new ExtensionParsingContextImpl(moduleName, xmlMapper);
         extension.initializeParsers(parsingContext);
         parsingContext.attemptCurrentParserInitialization();
-    }
-
-    /**
-     * Gets an {@link ExtensionContext} for use when handling an {@code add} operation for
-     * a resource representing an {@link org.jboss.as.controller.Extension}.
-     *
-     * @param moduleName the name of the extension's module. Cannot be {@code null}
-     * @param rootRegistration the root management resource registration
-     * @param isMasterDomainController set to {@code true} if we are the master domain controller, in which case transformers get registered
-     *
-     * @return  the {@link ExtensionContext}.  Will not return {@code null}
-     *
-     * @deprecated use {@link #getExtensionContext(String, ManagementResourceRegistration, ExtensionRegistryType)}. Main code should be using this, but this is left behind in case any tests need to use this code.
-     */
-    @Deprecated
-    public ExtensionContext getExtensionContext(final String moduleName, ManagementResourceRegistration rootRegistration, boolean isMasterDomainController) {
-        ExtensionRegistryType type = isMasterDomainController ? ExtensionRegistryType.MASTER : ExtensionRegistryType.SLAVE;
-        return getExtensionContext(moduleName, rootRegistration, type);
     }
 
     /**
@@ -300,7 +361,7 @@ public final class ExtensionRegistry {
     }
 
     public Set<ProfileParsingCompletionHandler> getProfileParsingCompletionHandlers() {
-        Set<ProfileParsingCompletionHandler> result = new HashSet<ProfileParsingCompletionHandler>();
+        Set<ProfileParsingCompletionHandler> result = new HashSet<>();
 
         for (ExtensionInfo extensionInfo : extensions.values()) {
             //noinspection SynchronizationOnLocalVariableOrMethodParameter
@@ -348,8 +409,7 @@ public final class ExtensionRegistry {
 
                 Set<String> subsystemNames = extension.subsystems.keySet();
 
-                final boolean dcExtension = processType.isHostController() ?
-                    rootRegistration.getPathAddress().size() == 0 : false;
+                final boolean dcExtension = processType.isHostController() && rootRegistration.getPathAddress().size() == 0;
 
                 for (String subsystem : subsystemNames) {
                     if (hasSubsystemsRegistered(rootResource, subsystem, dcExtension)) {
@@ -367,7 +427,7 @@ public final class ExtensionRegistry {
                     }
 
                     if (extension.xmlMapper != null) {
-                        SubsystemInformationImpl subsystemInformation = SubsystemInformationImpl.class.cast(entry.getValue());
+                        SubsystemInformationImpl subsystemInformation = (SubsystemInformationImpl) entry.getValue();
                         for (String namespace : subsystemInformation.getXMLNamespaces()) {
                             extension.xmlMapper.unregisterRootElement(new QName(namespace, SUBSYSTEM));
                         }
@@ -576,26 +636,6 @@ public final class ExtensionRegistry {
         }
 
         @Override
-        @Deprecated
-        @SuppressWarnings("deprecation")
-        public SubsystemRegistration registerSubsystem(String name, int majorVersion, int minorVersion) throws IllegalArgumentException, IllegalStateException {
-            return registerSubsystem(name, majorVersion, minorVersion, 0);
-        }
-
-        @Override
-        @Deprecated
-        @SuppressWarnings("deprecation")
-        public SubsystemRegistration registerSubsystem(String name, int majorVersion, int minorVersion, int microVersion) {
-            return registerSubsystem(name, majorVersion, minorVersion, microVersion, false);
-        }
-
-        @Override
-        @Deprecated
-        public SubsystemRegistration registerSubsystem(String name, int majorVersion, int minorVersion, int microVersion, boolean deprecated) {
-            return registerSubsystem(name, ModelVersion.create(majorVersion, minorVersion, microVersion), deprecated);
-        }
-
-        @Override
         public SubsystemRegistration registerSubsystem(String name, ModelVersion version, boolean deprecated) {
             assert name != null : "name is null";
             checkNewSubystem(extension.extensionModuleName, name);
@@ -650,10 +690,7 @@ public final class ExtensionRegistry {
             if (processType.isServer()) {
                 return true;
             }
-            if (processType.isHostController() && extensionRegistryType == ExtensionRegistryType.HOST) {
-                return true;
-            }
-            return false;
+            return processType.isHostController() && extensionRegistryType == ExtensionRegistryType.HOST;
         }
 
         @Override
@@ -662,12 +699,6 @@ public final class ExtensionRegistry {
                 throw ControllerLogger.ROOT_LOGGER.pathManagerNotAvailable(processType);
             }
             return pathManager;
-        }
-
-        @Override
-        @Deprecated
-        public boolean isRegisterTransformers() {
-            return registerTransformers;
         }
 
         // ExtensionContextSupplement implementation
@@ -717,10 +748,10 @@ public final class ExtensionRegistry {
         }
     }
 
-    private class SubsystemInformationImpl implements SubsystemInformation {
+    private static class SubsystemInformationImpl implements SubsystemInformation {
 
         private ModelVersion version;
-        private final List<String> parsingNamespaces = new ArrayList<String>();
+        private final List<String> parsingNamespaces = new ArrayList<>();
 
         @Override
         public List<String> getXMLNamespaces() {
@@ -764,7 +795,6 @@ public final class ExtensionRegistry {
         private final ExtensionRegistryType extensionRegistryType;
         private final String extensionModuleName;
         private volatile boolean hostCapable;
-        private volatile boolean modelsRegistered;
 
         private SubsystemRegistrationImpl(String name, ModelVersion version,
                                           ManagementResourceRegistration profileRegistration,
@@ -787,9 +817,6 @@ public final class ExtensionRegistry {
 
         @Override
         public void setHostCapable() {
-            if (modelsRegistered) {
-                throw ControllerLogger.ROOT_LOGGER.registerHostCapableMustHappenFirst(name);
-            }
             hostCapable = true;
         }
 
@@ -808,42 +835,12 @@ public final class ExtensionRegistry {
 
         @Override
         public void registerXMLElementWriter(XMLElementWriter<SubsystemMarshallingContext> writer) {
-            writerRegistry.registerSubsystemWriter(name, writer);
+            writerRegistry.registerSubsystemWriter(name, Functions.constantSupplier(writer));
         }
 
         @Override
         public void registerXMLElementWriter(Supplier<XMLElementWriter<SubsystemMarshallingContext>> writer) {
             writerRegistry.registerSubsystemWriter(name, writer);
-        }
-
-        @Override
-        public TransformersSubRegistration registerModelTransformers(final ModelVersionRange range, final ResourceTransformer subsystemTransformer) {
-            modelsRegistered = true;
-            checkHostCapable();
-            return transformerRegistry.registerSubsystemTransformers(name, range, subsystemTransformer);
-        }
-
-        @Override
-        public TransformersSubRegistration registerModelTransformers(ModelVersionRange version, ResourceTransformer resourceTransformer, OperationTransformer operationTransformer, boolean placeholder) {
-            modelsRegistered = true;
-            checkHostCapable();
-            return transformerRegistry.registerSubsystemTransformers(name, version, resourceTransformer, operationTransformer, placeholder);
-        }
-
-        @Override
-        @Deprecated
-        public TransformersSubRegistration registerModelTransformers(ModelVersionRange version, ResourceTransformer resourceTransformer, OperationTransformer operationTransformer) {
-            modelsRegistered = true;
-            checkHostCapable();
-            return transformerRegistry.registerSubsystemTransformers(name, version, resourceTransformer, operationTransformer, false);
-        }
-
-
-        @Override
-        public TransformersSubRegistration registerModelTransformers(ModelVersionRange version, CombinedTransformer combinedTransformer) {
-            modelsRegistered = true;
-            checkHostCapable();
-            return transformerRegistry.registerSubsystemTransformers(name, version, combinedTransformer, combinedTransformer, false);
         }
 
         @Override
@@ -859,7 +856,7 @@ public final class ExtensionRegistry {
     }
 
     private class ExtensionInfo {
-        private final Map<String, SubsystemInformation> subsystems = new HashMap<String, SubsystemInformation>();
+        private final Map<String, SubsystemInformation> subsystems = new HashMap<>();
         private final String extensionModuleName;
         private XMLMapper xmlMapper;
         private ProfileParsingCompletionHandler parsingCompletionHandler;
@@ -873,7 +870,7 @@ public final class ExtensionRegistry {
         private SubsystemInformationImpl getSubsystemInfo(final String subsystemName) {
             checkNewSubystem(extensionModuleName, subsystemName);
             synchronized (this) {
-                SubsystemInformationImpl subsystem = SubsystemInformationImpl.class.cast(subsystems.get(subsystemName));
+                SubsystemInformationImpl subsystem = (SubsystemInformationImpl) subsystems.get(subsystemName);
                 if (subsystem == null) {
                     subsystem = new SubsystemInformationImpl();
                     subsystems.put(subsystemName, subsystem);
@@ -939,14 +936,6 @@ public final class ExtensionRegistry {
         public boolean isRuntimeOnly() {
             return deployments.isRuntimeOnly();
         }
-
-        @Override
-        @SuppressWarnings("deprecation")
-        public void setRuntimeOnly(final boolean runtimeOnly) {
-            deployments.setRuntimeOnly(runtimeOnly);
-            subdeployments.setRuntimeOnly(runtimeOnly);
-        }
-
 
         @Override
         public boolean isRemote() {

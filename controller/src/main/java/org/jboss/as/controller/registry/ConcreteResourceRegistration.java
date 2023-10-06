@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller.registry;
@@ -73,7 +56,7 @@ final class ConcreteResourceRegistration extends AbstractResourceRegistration {
 
     private Set <String> orderedChildTypes;
 
-    private boolean runtimeOnly;
+    private final boolean runtimeOnly;
     private final boolean ordered;
     private final AccessConstraintUtilizationRegistry constraintUtilizationRegistry;
     private final CapabilityRegistry capabilityRegistry;
@@ -157,17 +140,6 @@ final class ConcreteResourceRegistration extends AbstractResourceRegistration {
             return runtimeOnly;
         } finally {
             readLock.unlock();
-        }
-    }
-
-    @Override
-    public void setRuntimeOnly(final boolean runtimeOnly) {
-        checkPermission();
-        writeLock.lock();
-        try {
-            this.runtimeOnly = runtimeOnly;
-        } finally {
-            writeLock.unlock();
         }
     }
 
@@ -702,22 +674,6 @@ final class ConcreteResourceRegistration extends AbstractResourceRegistration {
             if (capabilityRegistry != null) {
                 capabilityRegistry.registerPossibleCapability(capability, getPathAddress());
             }
-
-            // Move packages associated to the capability in additionalPackages set
-            // additionalPackages becomes the only package provider
-            Set<String> packages = capability.getAdditionalRequiredPackages();
-            if (!packages.isEmpty()) {
-                if (additionalPackages == null) {
-                    additionalPackages = new HashMap<>();
-                }
-                for (String pkg : packages) {
-                    if (additionalPackages.containsKey(pkg)) {
-                        ControllerLogger.ROOT_LOGGER.runtimePackageDependencyAlreadyRegistered(pkg, getLocationString());
-                    } else {
-                        additionalPackages.put(pkg, RuntimePackageDependency.required(pkg));
-                    }
-                }
-            }
         } finally {
             writeLock.unlock();
         }
@@ -1020,20 +976,22 @@ final class ConcreteResourceRegistration extends AbstractResourceRegistration {
 
     @Override
     public void registerAdditionalRuntimePackages(RuntimePackageDependency... pkgs) {
-        writeLock.lock();
-        try {
-            if (additionalPackages == null) {
-                additionalPackages = new HashMap<>();
-            }
-            for (RuntimePackageDependency pkg : pkgs) {
-                if(additionalPackages.containsKey(pkg.getName())) {
-                    ControllerLogger.ROOT_LOGGER.runtimePackageDependencyAlreadyRegistered(pkg.getName(), getLocationString());
-                } else {
-                    additionalPackages.put(pkg.getName(), pkg);
+        if (pkgs.length > 0) {
+            writeLock.lock();
+            try {
+                if (additionalPackages == null) {
+                    additionalPackages = new HashMap<>();
                 }
+                for (RuntimePackageDependency pkg : pkgs) {
+                    if (additionalPackages.containsKey(pkg.getName())) {
+                        ControllerLogger.ROOT_LOGGER.runtimePackageDependencyAlreadyRegistered(pkg.getName(), getLocationString());
+                    } else {
+                        additionalPackages.put(pkg.getName(), pkg);
+                    }
+                }
+            } finally {
+                writeLock.unlock();
             }
-        } finally {
-            writeLock.unlock();
         }
     }
 
@@ -1042,7 +1000,7 @@ final class ConcreteResourceRegistration extends AbstractResourceRegistration {
         checkPermission();
         readLock.lock();
         try {
-            return additionalPackages == null ? Collections.emptySet() : Collections.unmodifiableSet(new HashSet<RuntimePackageDependency>(additionalPackages.values()));
+            return additionalPackages == null ? Collections.emptySet() : Collections.unmodifiableSet(new HashSet<>(additionalPackages.values()));
         } finally {
             readLock.unlock();
         }

@@ -1,28 +1,12 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.test.integration.domain;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.DEPLOYMENT;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.INCLUDE_RUNTIME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SERVER;
 
 import java.io.File;
@@ -109,7 +93,7 @@ public class DomainControllerMigrationTestCase {
                 domainControllerClientConfig.close();
             }
         }
-
+        Assert.assertNotNull(jarFile);
         Assert.assertTrue(jarFile.delete());
     }
 
@@ -252,6 +236,7 @@ public class DomainControllerMigrationTestCase {
     private Set<String> getHosts(DomainLifecycleUtil hostUtil) throws IOException {
         ModelNode readOp = new ModelNode();
         readOp.get(ModelDescriptionConstants.OP).set(ModelDescriptionConstants.READ_RESOURCE_OPERATION);
+        readOp.get(INCLUDE_RUNTIME).set(true);
         ModelNode domain = hostUtil.executeForResult(readOp);
         Assert.assertTrue(domain.get("host").isDefined());
         return domain.get("host").keys();

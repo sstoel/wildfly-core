@@ -1,24 +1,7 @@
 /*
-* JBoss, Home of Professional Open Source.
-* Copyright 2011, Red Hat, Inc., and individual contributors
-* as indicated by the @author tags. See the copyright.txt file in the
-* distribution for a full listing of individual contributors.
-*
-* This is free software; you can redistribute it and/or modify it
-* under the terms of the GNU Lesser General Public License as
-* published by the Free Software Foundation; either version 2.1 of
-* the License, or (at your option) any later version.
-*
-* This software is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-* Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public
-* License along with this software; if not, write to the Free
-* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA, or see the FSF site: http://www.fsf.org.
-*/
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
 package org.jboss.as.controller;
 
@@ -30,9 +13,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.ResourceBundle;
 import java.util.Set;
-
-import javax.xml.stream.XMLStreamException;
-import javax.xml.stream.XMLStreamReader;
 
 import org.jboss.as.controller.access.management.AccessConstraintDefinition;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
@@ -122,11 +102,6 @@ public class ObjectTypeAttributeDefinition extends SimpleAttributeDefinition {
 
     public final AttributeDefinition[] getValueTypes() {
         return valueTypes;
-    }
-
-    @Override
-    public ModelNode parse(final String value, final XMLStreamReader reader) throws XMLStreamException {
-        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -235,17 +210,6 @@ public class ObjectTypeAttributeDefinition extends SimpleAttributeDefinition {
         // Validate the entire object
         getValidator().validateParameter(getName(), result);
         return result;
-    }
-
-    /**
-     *
-     * @deprecated use #addValueTypeDescription(ModelNode, String, ResourceBundle, boolean, ResourceDescriptionResolver, Locale)
-     */
-    @Deprecated
-    protected void addValueTypeDescription(final ModelNode node, final String prefix, final ResourceBundle bundle,
-                                               final ResourceDescriptionResolver resolver,
-                                               final Locale locale) {
-        addValueTypeDescription(node, prefix, bundle, false, resolver, locale);
     }
 
     protected void addValueTypeDescription(final ModelNode node, final String prefix, final ResourceBundle bundle,
@@ -363,15 +327,6 @@ public class ObjectTypeAttributeDefinition extends SimpleAttributeDefinition {
         public Builder setSuffix(final String suffix) {
             this.suffix = suffix;
             return this;
-        }
-
-        /*
-       --------------------------
-       added for binary compatibility for running compatibilty tests
-         */
-        @Override
-        public Builder setAllowNull(boolean allowNull) {
-            return super.setAllowNull(allowNull);
         }
     }
 

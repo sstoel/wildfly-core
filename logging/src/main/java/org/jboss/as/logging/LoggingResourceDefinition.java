@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2012, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.logging;
@@ -53,6 +36,7 @@ import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleOperationDefinition;
 import org.jboss.as.controller.SimpleOperationDefinitionBuilder;
+import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.operations.validation.IntRangeValidator;
 import org.jboss.as.controller.operations.validation.StringLengthValidator;
 import org.jboss.as.controller.registry.AttributeAccess.Flag;
@@ -74,7 +58,7 @@ import org.jboss.dmr.Property;
  * @author <a href="mailto:tomaz.cerar@redhat.com">Tomaz Cerar</a>
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-public class LoggingResourceDefinition extends TransformerResourceDefinition {
+public class LoggingResourceDefinition extends SimpleResourceDefinition {
 
     static final PathElement SUBSYSTEM_PATH = PathElement.pathElement(SUBSYSTEM, LoggingExtension.SUBSYSTEM_NAME);
 
@@ -183,21 +167,28 @@ public class LoggingResourceDefinition extends TransformerResourceDefinition {
     }
 
     @Override
-    public void registerTransformers(final KnownModelVersion modelVersion, final ResourceTransformationDescriptionBuilder rootResourceBuilder, final ResourceTransformationDescriptionBuilder loggingProfileBuilder) {
-        switch (modelVersion) {
-            case VERSION_1_5_0: {
-                rootResourceBuilder.getAttributeBuilder()
-                        .setDiscard(DiscardAttributeChecker.DEFAULT_VALUE, USE_DEPLOYMENT_LOGGING_CONFIG)
-                        .addRejectCheck(RejectAttributeChecker.DEFINED, USE_DEPLOYMENT_LOGGING_CONFIG)
-                        .end();
-                break;
-            }
-        }
-    }
-
-    @Override
     public void registerAdditionalRuntimePackages(ManagementResourceRegistration resourceRegistration) {
         resourceRegistration.registerAdditionalRuntimePackages(LoggingModuleDependency.getRuntimeDependencies());
+    }
+
+    static final class TransformerDefinition extends TransformerResourceDefinition {
+
+        TransformerDefinition() {
+            super(SUBSYSTEM_PATH);
+        }
+
+        @Override
+        public void registerTransformers(final KnownModelVersion modelVersion, final ResourceTransformationDescriptionBuilder rootResourceBuilder, final ResourceTransformationDescriptionBuilder loggingProfileBuilder) {
+            switch (modelVersion) {
+                case VERSION_1_5_0: {
+                    rootResourceBuilder.getAttributeBuilder()
+                            .setDiscard(DiscardAttributeChecker.DEFAULT_VALUE, USE_DEPLOYMENT_LOGGING_CONFIG)
+                            .addRejectCheck(RejectAttributeChecker.DEFINED, USE_DEPLOYMENT_LOGGING_CONFIG)
+                            .end();
+                    break;
+                }
+            }
+        }
     }
 
     private class ListLogFilesOperation implements OperationStepHandler {

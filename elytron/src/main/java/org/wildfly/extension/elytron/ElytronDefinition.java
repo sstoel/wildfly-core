@@ -1,24 +1,12 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2014 Red Hat, Inc., and individual contributors
- * as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.wildfly.extension.elytron;
 
 
+import static org.jboss.as.server.security.VirtualDomainUtil.VIRTUAL_SECURITY_DOMAIN_CREATION_SERVICE;
 import static org.wildfly.extension.elytron.Capabilities.AUTHENTICATION_CONTEXT_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.ELYTRON_RUNTIME_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.EVIDENCE_DECODER_RUNTIME_CAPABILITY;
@@ -77,6 +65,7 @@ import org.jboss.as.controller.registry.RuntimePackageDependency;
 import org.jboss.as.server.AbstractDeploymentChainStep;
 import org.jboss.as.server.DeploymentProcessorTarget;
 import org.jboss.as.server.deployment.Phase;
+import org.jboss.as.server.security.VirtualSecurityDomainCreationService;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.msc.service.Service;
@@ -90,6 +79,7 @@ import org.wildfly.extension.elytron.capabilities.CredentialSecurityFactory;
 import org.wildfly.extension.elytron.capabilities.PrincipalTransformer;
 import org.wildfly.extension.elytron.capabilities._private.SecurityEventListener;
 import org.wildfly.extension.elytron.expression.DeploymentExpressionResolverProcessor;
+import org.wildfly.security.SecurityFactory;
 import org.wildfly.security.Version;
 import org.wildfly.security.auth.client.AuthenticationContext;
 import org.wildfly.security.auth.jaspi.ElytronAuthConfigFactory;
@@ -200,6 +190,7 @@ class ElytronDefinition extends SimpleResourceDefinition {
 
         // Domain
         resourceRegistration.registerSubModel(new DomainDefinition());
+        resourceRegistration.registerSubModel(new VirtualDomainDefinition());
 
         // Security Realms
         resourceRegistration.registerSubModel(new AggregateRealmDefinition());
@@ -220,7 +211,7 @@ class ElytronDefinition extends SimpleResourceDefinition {
         resourceRegistration.registerSubModel(new JaasRealmDefinition());
 
         // Security Factories
-        resourceRegistration.registerSubModel(new CustomComponentDefinition<>(CredentialSecurityFactory.class, Function.identity(), ElytronDescriptionConstants.CUSTOM_CREDENTIAL_SECURITY_FACTORY, SECURITY_FACTORY_CREDENTIAL_RUNTIME_CAPABILITY));
+        resourceRegistration.registerSubModel(new CustomComponentDefinition<>(SecurityFactory.class, CredentialSecurityFactory::from, ElytronDescriptionConstants.CUSTOM_CREDENTIAL_SECURITY_FACTORY, SECURITY_FACTORY_CREDENTIAL_RUNTIME_CAPABILITY));
         resourceRegistration.registerSubModel(KerberosSecurityFactoryDefinition.getKerberosSecurityFactoryDefinition());
 
         // Permission Mappers
@@ -243,7 +234,7 @@ class ElytronDefinition extends SimpleResourceDefinition {
         resourceRegistration.registerSubModel(PrincipalTransformerDefinitions.getAggregatePrincipalTransformerDefinition());
         resourceRegistration.registerSubModel(PrincipalTransformerDefinitions.getChainedPrincipalTransformerDefinition());
         resourceRegistration.registerSubModel(PrincipalTransformerDefinitions.getConstantPrincipalTransformerDefinition());
-        resourceRegistration.registerSubModel(new CustomComponentDefinition<>(PrincipalTransformer.class, Function.identity(), ElytronDescriptionConstants.CUSTOM_PRINCIPAL_TRANSFORMER, PRINCIPAL_TRANSFORMER_RUNTIME_CAPABILITY));
+        resourceRegistration.registerSubModel(new CustomComponentDefinition<>(Function.class, PrincipalTransformer::from, ElytronDescriptionConstants.CUSTOM_PRINCIPAL_TRANSFORMER, PRINCIPAL_TRANSFORMER_RUNTIME_CAPABILITY));
         resourceRegistration.registerSubModel(PrincipalTransformerDefinitions.getRegexPrincipalTransformerDefinition());
         resourceRegistration.registerSubModel(PrincipalTransformerDefinitions.getRegexValidatingPrincipalTransformerDefinition());
         resourceRegistration.registerSubModel(PrincipalTransformerDefinitions.getCasePrincipalTransformerDefinition());
@@ -440,7 +431,7 @@ class ElytronDefinition extends SimpleResourceDefinition {
     private static class ElytronAdd extends AbstractBoottimeAddStepHandler implements ElytronOperationStepHandler {
 
         private ElytronAdd() {
-            super(ELYTRON_RUNTIME_CAPABILITY, DEFAULT_AUTHENTICATION_CONTEXT, INITIAL_PROVIDERS, FINAL_PROVIDERS, DISALLOWED_PROVIDERS, SECURITY_PROPERTIES, REGISTER_JASPI_FACTORY, DEFAULT_SSL_CONTEXT);
+            super(DEFAULT_AUTHENTICATION_CONTEXT, INITIAL_PROVIDERS, FINAL_PROVIDERS, DISALLOWED_PROVIDERS, SECURITY_PROPERTIES, REGISTER_JASPI_FACTORY, DEFAULT_SSL_CONTEXT);
         }
 
         @Override
@@ -460,6 +451,7 @@ class ElytronDefinition extends SimpleResourceDefinition {
 
             ServiceTarget target = context.getServiceTarget();
             installService(SecurityPropertyService.SERVICE_NAME, new SecurityPropertyService(securityProperties), target);
+            installService(VIRTUAL_SECURITY_DOMAIN_CREATION_SERVICE, new VirtualSecurityDomainCreationService(), target);
 
             List<String> providers = DISALLOWED_PROVIDERS.unwrap(context, operation);
 
@@ -545,6 +537,7 @@ class ElytronDefinition extends SimpleResourceDefinition {
         protected void rollbackRuntime(OperationContext context, ModelNode operation, Resource resource) {
             uninstallSecurityPropertyService(context);
             context.removeService(ProviderRegistrationService.SERVICE_NAME);
+            context.removeService(VIRTUAL_SECURITY_DOMAIN_CREATION_SERVICE);
             AUTHENITCATION_CONTEXT_PROCESSOR.setDefaultAuthenticationContext(null);
         }
 
@@ -557,7 +550,6 @@ class ElytronDefinition extends SimpleResourceDefinition {
     private static class ElytronRemove extends ElytronRemoveStepHandler {
 
         private ElytronRemove() {
-            super(ELYTRON_RUNTIME_CAPABILITY);
         }
 
         @Override
@@ -569,6 +561,7 @@ class ElytronDefinition extends SimpleResourceDefinition {
                     context.attach(SECURITY_PROPERTY_SERVICE_KEY, securityPropertyService);
                 }
                 context.removeService(ProviderRegistrationService.SERVICE_NAME);
+                context.removeService(VIRTUAL_SECURITY_DOMAIN_CREATION_SERVICE);
             } else {
                 context.reloadRequired();
             }
@@ -584,6 +577,7 @@ class ElytronDefinition extends SimpleResourceDefinition {
             }
             List<String> providers = DISALLOWED_PROVIDERS.unwrap(context, model);
             installService(ProviderRegistrationService.SERVICE_NAME, new ProviderRegistrationService(providers), target);
+            installService(VIRTUAL_SECURITY_DOMAIN_CREATION_SERVICE, new VirtualSecurityDomainCreationService(), target);
         }
 
     }

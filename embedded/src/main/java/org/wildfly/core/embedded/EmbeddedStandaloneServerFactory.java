@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2010, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.wildfly.core.embedded;
@@ -56,9 +39,9 @@ import org.jboss.msc.value.Value;
 import org.wildfly.core.embedded.logging.EmbeddedLogger;
 
 /**
- * This is the counter-part of EmbeddedServerFactory which lives behind a module class loader.
+ * This is the standalone server counter-part of EmbeddedProcessFactory which lives behind a module class loader.
  * <p>
- * ServerFactory that sets up a standalone server using modular classloading.
+ * Factory that sets up an embedded @{link StandaloneServer} using modular classloading.
  * </p>
  * <p>
  * To use this class the <code>jboss.home.dir</code> system property must be set to the
@@ -274,29 +257,6 @@ public class EmbeddedStandaloneServerFactory {
                     bootstrap = Bootstrap.Factory.newInstance();
 
                     Bootstrap.Configuration configuration = new Bootstrap.Configuration(serverEnvironment);
-
-                    /*
-                     * This would setup an {@link TransientConfigurationPersister} which does not persist anything
-                     *
-                    final ExtensionRegistry extensionRegistry = configuration.getExtensionRegistry();
-                    final Bootstrap.ConfigurationPersisterFactory configurationPersisterFactory = new Bootstrap.ConfigurationPersisterFactory() {
-                        @Override
-                        public ExtensibleConfigurationPersister createConfigurationPersister(ServerEnvironment serverEnvironment, ExecutorService executorService) {
-                            final QName rootElement = new QName(Namespace.CURRENT.getUriString(), "server");
-                            final StandaloneXml parser = new StandaloneXml(Module.getBootModuleLoader(), executorService, extensionRegistry);
-                            final File configurationFile = serverEnvironment.getServerConfigurationFile().getBootFile();
-                            XmlConfigurationPersister persister = new TransientConfigurationPersister(configurationFile, rootElement, parser, parser);
-                            for (Namespace namespace : Namespace.domainValues()) {
-                                if (!namespace.equals(Namespace.CURRENT)) {
-                                    persister.registerAdditionalRootElement(new QName(namespace.getUriString(), "server"), parser);
-                                }
-                            }
-                            extensionRegistry.setWriterRegistry(persister);
-                            return persister;
-                        }
-                    };
-                    configuration.setConfigurationPersisterFactory(configurationPersisterFactory);
-                    */
 
                     configuration.setModuleLoader(moduleLoader);
 

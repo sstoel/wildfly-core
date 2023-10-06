@@ -1,24 +1,7 @@
 /*
-* JBoss, Home of Professional Open Source.
-* Copyright 2012, Red Hat Middleware LLC, and individual contributors
-* as indicated by the @author tags. See the copyright.txt file in the
-* distribution for a full listing of individual contributors.
-*
-* This is free software; you can redistribute it and/or modify it
-* under the terms of the GNU Lesser General Public License as
-* published by the Free Software Foundation; either version 2.1 of
-* the License, or (at your option) any later version.
-*
-* This software is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-* Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public
-* License along with this software; if not, write to the Free
-* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA, or see the FSF site: http://www.fsf.org.
-*/
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package org.jboss.as.server.mgmt;
 
 import java.net.BindException;
@@ -35,7 +18,6 @@ import java.util.function.Supplier;
 import javax.net.ssl.SSLContext;
 
 import org.jboss.as.controller.ModelController;
-import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.management.HttpInterfaceCommonPolicy.Header;
 import org.jboss.as.domain.http.server.ConsoleAvailability;
@@ -58,6 +40,10 @@ import org.jboss.msc.service.StartException;
 import org.jboss.msc.service.StopContext;
 import org.wildfly.common.Assert;
 import org.wildfly.security.auth.server.HttpAuthenticationFactory;
+import org.wildfly.security.auth.server.MechanismConfiguration;
+import org.wildfly.security.auth.server.MechanismConfigurationSelector;
+import org.wildfly.security.auth.server.SecurityDomain;
+import org.wildfly.security.http.HttpServerAuthenticationMechanismFactory;
 import org.xnio.SslClientAuthMode;
 import org.xnio.XnioWorker;
 
@@ -74,7 +60,6 @@ public class UndertowHttpManagementService implements Service<HttpManagement> {
 
     public static final RuntimeCapability<Void> EXTENSIBLE_HTTP_MANAGEMENT_CAPABILITY =
             RuntimeCapability.Builder.of("org.wildfly.management.http.extensible", ExtensibleHttpManagement.class)
-                    .addAdditionalRequiredPackages("org.jboss.as.domain-http-error-context")
                     .build();
     public static final ServiceName SERVICE_NAME = EXTENSIBLE_HTTP_MANAGEMENT_CAPABILITY.getCapabilityServiceName();
 
@@ -95,7 +80,6 @@ public class UndertowHttpManagementService implements Service<HttpManagement> {
     private final Supplier<NetworkInterfaceBinding> interfaceBindingSupplier;
     private final Supplier<NetworkInterfaceBinding> secureInterfaceBindingSupplier;
     private final Supplier<SocketBindingManager> socketBindingManagerSupplier;
-    private final Supplier<ProcessStateNotifier> processStateNotifierSupplier;
     private final Supplier<ManagementHttpRequestProcessor> requestProcessorSupplier;
     private final Supplier<XnioWorker> workerSupplier;
     private final Supplier<Executor> executorSupplier;
@@ -105,9 +89,11 @@ public class UndertowHttpManagementService implements Service<HttpManagement> {
     private final Supplier<HttpAuthenticationFactory> httpAuthFactorySupplier;
     private final Supplier<SSLContext> sslContextSupplier;
     private final ConsoleMode consoleMode;
-    private final String consoleSlot;
+    private final Supplier<String> consoleSlot;
     private final Map<String, List<Header>> constantHeaders;
     private final Supplier<ConsoleAvailability> consoleAvailabilitySupplier;
+    private final Supplier<SecurityDomain> virtualSecurityDomainSupplier;
+    private final Supplier<HttpServerAuthenticationMechanismFactory> virtualMechanismFactorySupplier;
 
     private ManagementHttpServer serverManagement;
     private SocketBindingManager socketBindingManager;
@@ -208,7 +194,6 @@ public class UndertowHttpManagementService implements Service<HttpManagement> {
                                          final Supplier<SocketBindingManager> socketBindingManagerSupplier,
                                          final Supplier<NetworkInterfaceBinding> interfaceBindingSupplier,
                                          final Supplier<NetworkInterfaceBinding> secureInterfaceBindingSupplier,
-                                         final Supplier<ProcessStateNotifier> processStateNotifierSupplier,
                                          final Supplier<ManagementHttpRequestProcessor> requestProcessorSupplier,
                                          final Supplier<XnioWorker> workerSupplier,
                                          final Supplier<Executor> executorSupplier,
@@ -218,9 +203,37 @@ public class UndertowHttpManagementService implements Service<HttpManagement> {
                                          final Integer securePort,
                                          final Collection<String> allowedOrigins,
                                          final ConsoleMode consoleMode,
-                                         final String consoleSlot,
+                                         final Supplier<String> consoleSlot,
                                          final Map<String, List<Header>> constantHeaders,
                                          final Supplier<ConsoleAvailability> consoleAvailabilitySupplier) {
+        this(httpManagementConsumer, listenerRegistrySupplier, modelControllerSupplier, socketBindingSupplier,
+                secureSocketBindingSupplier, socketBindingManagerSupplier, interfaceBindingSupplier, secureInterfaceBindingSupplier,
+                requestProcessorSupplier, workerSupplier, executorSupplier, httpAuthFactorySupplier, sslContextSupplier, port, securePort,
+                allowedOrigins, consoleMode, consoleSlot, constantHeaders, consoleAvailabilitySupplier, null, null);
+    }
+
+    public UndertowHttpManagementService(final Consumer<HttpManagement> httpManagementConsumer,
+                                         final Supplier<ListenerRegistry> listenerRegistrySupplier,
+                                         final Supplier<ModelController> modelControllerSupplier,
+                                         final Supplier<SocketBinding> socketBindingSupplier,
+                                         final Supplier<SocketBinding> secureSocketBindingSupplier,
+                                         final Supplier<SocketBindingManager> socketBindingManagerSupplier,
+                                         final Supplier<NetworkInterfaceBinding> interfaceBindingSupplier,
+                                         final Supplier<NetworkInterfaceBinding> secureInterfaceBindingSupplier,
+                                         final Supplier<ManagementHttpRequestProcessor> requestProcessorSupplier,
+                                         final Supplier<XnioWorker> workerSupplier,
+                                         final Supplier<Executor> executorSupplier,
+                                         final Supplier<HttpAuthenticationFactory> httpAuthFactorySupplier,
+                                         final Supplier<SSLContext> sslContextSupplier,
+                                         final Integer port,
+                                         final Integer securePort,
+                                         final Collection<String> allowedOrigins,
+                                         final ConsoleMode consoleMode,
+                                         final Supplier<String> consoleSlot,
+                                         final Map<String, List<Header>> constantHeaders,
+                                         final Supplier<ConsoleAvailability> consoleAvailabilitySupplier,
+                                         final Supplier<SecurityDomain> virtualSecurityDomainSupplier,
+                                         final Supplier<HttpServerAuthenticationMechanismFactory> virtualMechanismFactorySupplier) {
         this.httpManagementConsumer = httpManagementConsumer;
         this.listenerRegistrySupplier = listenerRegistrySupplier;
         this.modelControllerSupplier = modelControllerSupplier;
@@ -229,7 +242,6 @@ public class UndertowHttpManagementService implements Service<HttpManagement> {
         this.socketBindingManagerSupplier = socketBindingManagerSupplier;
         this.interfaceBindingSupplier = interfaceBindingSupplier;
         this.secureInterfaceBindingSupplier = secureInterfaceBindingSupplier;
-        this.processStateNotifierSupplier = processStateNotifierSupplier;
         this.requestProcessorSupplier = requestProcessorSupplier;
         this.workerSupplier = workerSupplier;
         this.executorSupplier = executorSupplier;
@@ -242,6 +254,8 @@ public class UndertowHttpManagementService implements Service<HttpManagement> {
         this.consoleSlot = consoleSlot;
         this.constantHeaders = constantHeaders;
         this.consoleAvailabilitySupplier = consoleAvailabilitySupplier;
+        this.virtualSecurityDomainSupplier = virtualSecurityDomainSupplier;
+        this.virtualMechanismFactorySupplier = virtualMechanismFactorySupplier;
     }
 
     /**
@@ -253,7 +267,6 @@ public class UndertowHttpManagementService implements Service<HttpManagement> {
     @Override
     public synchronized void start(final StartContext context) throws StartException {
         final ModelController modelController = modelControllerSupplier.get();
-        final ProcessStateNotifier processStateNotifier = processStateNotifierSupplier.get();
         final ConsoleAvailability consoleAvailability = consoleAvailabilitySupplier.get();
         socketBindingManager = socketBindingManagerSupplier != null ? socketBindingManagerSupplier.get() : null;
 
@@ -327,23 +340,36 @@ public class UndertowHttpManagementService implements Service<HttpManagement> {
         }
 
         try {
-            serverManagement = ManagementHttpServer.builder()
+            ManagementHttpServer.Builder serverManagementBuilder = ManagementHttpServer.builder()
                     .setBindAddress(bindAddress)
                     .setSecureBindAddress(secureBindAddress)
                     .setModelController(modelController)
                     .setSSLContext(sslContext)
-                    .setHttpAuthenticationFactory(httpAuthenticationFactory)
-                    .setControlledProcessStateNotifier(processStateNotifier)
                     .setConsoleMode(consoleMode)
-                    .setConsoleSlot(consoleSlot)
+                    .setConsoleSlot(consoleSlot.get())
                     .setChannelUpgradeHandler(upgradeHandler)
                     .setManagementHttpRequestProcessor(requestProcessorSupplier.get())
                     .setAllowedOrigins(allowedOrigins)
                     .setWorker(workerSupplier.get())
                     .setExecutor(executorSupplier.get())
                     .setConstantHeaders(constantHeaders)
-                    .setConsoleAvailability(consoleAvailability)
-                    .build();
+                    .setConsoleAvailability(consoleAvailability);
+
+            if (virtualSecurityDomainSupplier != null && virtualMechanismFactorySupplier != null) {
+                // use a virtual http authentication factory instead
+                SecurityDomain virtualSecurityDomain = virtualSecurityDomainSupplier.get();
+                HttpServerAuthenticationMechanismFactory virtualMechanismFactory = virtualMechanismFactorySupplier.get();
+                HttpAuthenticationFactory virtualHttpAuthenticationFactory = HttpAuthenticationFactory.builder()
+                        .setFactory(virtualMechanismFactory)
+                        .setSecurityDomain(virtualSecurityDomain)
+                        .setMechanismConfigurationSelector(MechanismConfigurationSelector.constantSelector(MechanismConfiguration.EMPTY))
+                        .build();
+                serverManagementBuilder.setHttpAuthenticationFactory(virtualHttpAuthenticationFactory);
+            } else {
+                serverManagementBuilder.setHttpAuthenticationFactory(httpAuthenticationFactory);
+            }
+
+            serverManagement = serverManagementBuilder.build();
 
             serverManagement.start();
 
@@ -432,5 +458,4 @@ public class UndertowHttpManagementService implements Service<HttpManagement> {
     public HttpManagement getValue() throws IllegalStateException, IllegalArgumentException {
         return httpManagement;
     }
-
 }

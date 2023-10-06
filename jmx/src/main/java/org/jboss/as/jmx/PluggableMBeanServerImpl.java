@@ -1,24 +1,7 @@
 /*
-* JBoss, Home of Professional Open Source.
-* Copyright 2011, Red Hat Middleware LLC, and individual contributors
-* as indicated by the @author tags. See the copyright.txt file in the
-* distribution for a full listing of individual contributors.
-*
-* This is free software; you can redistribute it and/or modify it
-* under the terms of the GNU Lesser General Public License as
-* published by the Free Software Foundation; either version 2.1 of
-* the License, or (at your option) any later version.
-*
-* This software is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-* Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public
-* License along with this software; if not, write to the Free
-* Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
-* 02110-1301 USA, or see the FSF site: http://www.fsf.org.
-*/
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package org.jboss.as.jmx;
 
 import static java.security.AccessController.doPrivileged;
@@ -97,6 +80,7 @@ import org.jboss.as.controller.audit.ManagedAuditLogger;
 import org.jboss.as.jmx.logging.JmxLogger;
 import org.jboss.as.server.jmx.MBeanServerPlugin;
 import org.jboss.as.server.jmx.PluggableMBeanServer;
+import org.wildfly.common.function.Functions;
 import org.wildfly.security.auth.server.SecurityIdentity;
 import org.wildfly.security.manager.WildFlySecurityManager;
 
@@ -118,7 +102,7 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
     private final Set<MBeanServerPlugin> delegates = new CopyOnWriteArraySet<MBeanServerPlugin>();
 
     private volatile JmxAuthorizer authorizer;
-    private volatile Supplier<SecurityIdentity> securityIdentitySupplier;
+    private volatile Supplier<SecurityIdentity> securityIdentitySupplier = Functions.constantSupplier(null);
     private volatile JmxEffect jmxEffect;
 
     /**
@@ -141,6 +125,10 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
 
     void setSecurityIdentitySupplier(Supplier<SecurityIdentity> securityIdentitySupplier) {
         this.securityIdentitySupplier = securityIdentitySupplier;
+    }
+
+    void clearSecurityIdentity() {
+        this.securityIdentitySupplier = Functions.constantSupplier(null);
     }
 
     void setNonFacadeMBeansSensitive(boolean sensitive) {
@@ -1179,7 +1167,8 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
     }
 
     void log(boolean readOnly, Throwable error, String methodName, String[] methodSignature, Object...methodParams) {
-        final String userId = securityIdentitySupplier != null ? securityIdentitySupplier.get().getPrincipal().getName() : null;
+        SecurityIdentity securityIdentity = securityIdentitySupplier.get();
+        final String userId = securityIdentity != null ? securityIdentity.getPrincipal().getName() : null;
         if (WildFlySecurityManager.isChecking()) {
             doPrivileged(new LogAction(userId, auditLogger, readOnly, error, methodName, methodSignature, methodParams));
         } else {
@@ -1199,7 +1188,7 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
             JmxTarget target = new JmxTarget(methodName, name, isNonFacadeMBeansSensitive(), jmxEffect, jmxEffect);
             JmxAction action = new JmxAction(methodName, impact, attributeName);
             //TODO populate the 'environment' variable
-            SecurityIdentity securityIdentity = securityIdentitySupplier != null ? securityIdentitySupplier.get() : null;
+            SecurityIdentity securityIdentity = securityIdentitySupplier.get();
             AuthorizationResult authorizationResult = authorizer.authorizeJmxOperation(securityIdentity, null, action, target);
             if (authorizationResult.getDecision() != Decision.PERMIT) {
                 if (exception) {
@@ -1221,7 +1210,7 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
             JmxTarget target = new JmxTarget(methodName, objectName, isNonFacadeMBeansSensitive(), jmxEffect, jmxEffect);
             JmxAction action = new JmxAction(methodName, JmxAction.Impact.CLASSLOADING);
             //TODO populate the 'environment' variable
-            SecurityIdentity securityIdentity = securityIdentitySupplier != null ? securityIdentitySupplier.get() : null;
+            SecurityIdentity securityIdentity = securityIdentitySupplier.get();
             AuthorizationResult authorizationResult = authorizer.authorizeJmxOperation(securityIdentity, null, action, target);
             if (authorizationResult.getDecision() != Decision.PERMIT) {
                 throw JmxLogger.ROOT_LOGGER.unauthorized();
@@ -1514,7 +1503,16 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
 
         public ObjectInstance registerMBean(Object object, ObjectName name) throws InstanceAlreadyExistsException, MBeanRegistrationException,
                 NotCompliantMBeanException {
-            return delegate.registerMBean(object, name);
+            if (object == null) {
+                // The MBeanServer.registerMBean() javadoc indicates this is the error to throw if null
+                throw new RuntimeOperationsException(new IllegalArgumentException());
+            }
+            ClassLoader old = pushClassLoaderFromObject(object);
+            try {
+                return delegate.registerMBean(object, name);
+            } finally {
+                resetClassLoader(old);
+            }
         }
 
         public void removeNotificationListener(ObjectName name, NotificationListener listener, NotificationFilter filter, Object handback)
@@ -1586,7 +1584,12 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
         }
 
         public void unregisterMBean(ObjectName name) throws InstanceNotFoundException, MBeanRegistrationException {
-            delegate.unregisterMBean(name);
+            ClassLoader old = pushClassLoader(name);
+            try {
+                delegate.unregisterMBean(name);
+            } finally {
+                resetClassLoader(old);
+            }
         }
 
         private ClassLoader pushClassLoader(final ObjectName name) throws InstanceNotFoundException {
@@ -1620,6 +1623,7 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
                     public ClassLoader run() throws Exception {
                         return delegate.getClassLoader(loaderName);
                     }
+
                 });
             } catch (PrivilegedActionException e) {
                 try {
@@ -1635,6 +1639,16 @@ class PluggableMBeanServerImpl implements PluggableMBeanServer {
                 }
             }
             return WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(mbeanCl);
+        }
+
+        private ClassLoader pushClassLoaderFromObject(final Object o) {
+            ClassLoader cl = doPrivileged(new PrivilegedAction<ClassLoader>() {
+                @Override
+                public ClassLoader run() {
+                    return o.getClass().getClassLoader();
+                }
+            });
+            return WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(cl);
         }
 
         private void resetClassLoader(ClassLoader cl) {

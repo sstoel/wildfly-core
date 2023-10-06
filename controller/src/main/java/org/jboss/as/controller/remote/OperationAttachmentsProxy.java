@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2012, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller.remote;
@@ -61,7 +44,7 @@ class OperationAttachmentsProxy implements Operation {
     }
 
     private static List<ProxiedInputStream> getProxiedStreams(final ManagementChannelAssociation channelAssociation, final int batchId, final int size) {
-        List<ProxiedInputStream> proxiedStreams = new ArrayList<ProxiedInputStream>(size);
+        List<ProxiedInputStream> proxiedStreams = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             proxiedStreams.add(new ProxiedInputStream(channelAssociation, batchId, i));
         }
@@ -75,8 +58,7 @@ class OperationAttachmentsProxy implements Operation {
 
     @Override
     public List<InputStream> getInputStreams() {
-        List<InputStream> result = new ArrayList<InputStream>();
-        result.addAll(proxiedStreams);
+        List<InputStream> result = new ArrayList<>(proxiedStreams);
         return Collections.unmodifiableList(result);
     }
 
@@ -94,19 +76,6 @@ class OperationAttachmentsProxy implements Operation {
     @Override
     public ModelNode getOperation() {
         return operation;
-    }
-
-    @SuppressWarnings("CloneDoesntCallSuperClone")
-    @Override
-    @Deprecated
-    public final Operation clone() {
-        return new OperationAttachmentsProxy(operation, proxiedStreams);
-    }
-
-    @Override
-    @Deprecated
-    public Operation clone(ModelNode operation) {
-        return new OperationAttachmentsProxy(operation, proxiedStreams);
     }
 
     private static class ProxiedInputStream extends InputStream {
@@ -168,7 +137,7 @@ class OperationAttachmentsProxy implements Operation {
                 try {
                     final OutputStream os = pipe.getOut();
                     // Execute the async request
-                    channelAssociation.executeRequest(batchId, new AbstractManagementRequest<Object, Object>() {
+                    channelAssociation.executeRequest(batchId, new AbstractManagementRequest<>() {
 
                         @Override
                         public byte getOperationType() {

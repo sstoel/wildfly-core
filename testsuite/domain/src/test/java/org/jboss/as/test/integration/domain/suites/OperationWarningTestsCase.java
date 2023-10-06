@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2017, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.test.integration.domain.suites;
@@ -57,7 +40,6 @@ public class OperationWarningTestsCase {
 
     private static DomainTestSupport testSupport;
     private static DomainLifecycleUtil domainPrimaryLifecycleUtil;
-    private static DomainLifecycleUtil domainSecondaryLifecycleUtil;
 
     protected static final String NAME_WORKER = "puppet-primary";
     protected static final String WORKER = "worker";
@@ -65,15 +47,13 @@ public class OperationWarningTestsCase {
     protected static final PathAddress ADDRESS_WORKER = PathAddress.pathAddress(PathElement.pathElement(PROFILE, NAME_PROFILE),
             PathElement.pathElement(SUBSYSTEM, "io"), PathElement.pathElement(WORKER, NAME_WORKER));
     protected static final PathAddress ADDRESS_REMOTING = PathAddress.pathAddress(
-            PathElement.pathElement(PROFILE, NAME_PROFILE), PathElement.pathElement(SUBSYSTEM, "remoting"),
-            PathElement.pathElement("configuration", "endpoint"));
+            PathElement.pathElement(PROFILE, NAME_PROFILE), PathElement.pathElement(SUBSYSTEM, "remoting"));
     protected static final String BAD_LEVEL = "X_X";
 
     @BeforeClass
     public static void beforeClass() throws Exception {
         testSupport = DomainTestSuite.createSupport(OperationWarningTestsCase.class.getSimpleName());
         domainPrimaryLifecycleUtil = testSupport.getDomainPrimaryLifecycleUtil();
-        domainSecondaryLifecycleUtil = testSupport.getDomainSecondaryLifecycleUtil();
         addWorker();
     }
 
@@ -90,7 +70,6 @@ public class OperationWarningTestsCase {
         }
         testSupport = null;
         domainPrimaryLifecycleUtil = null;
-        domainSecondaryLifecycleUtil = null;
         DomainTestSuite.stopSupport();
     }
 

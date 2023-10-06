@@ -1,34 +1,19 @@
 /*
- * JBoss, Home of Professional Open Source
- * Copyright 2010, Red Hat Inc., and individual contributors as indicated
- * by the @authors tag. See the copyright.txt in the distribution for a
- * full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.server.deployment.module;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.jboss.as.server.deployment.SimpleAttachable;
 import org.jboss.modules.DependencySpec;
@@ -47,13 +32,16 @@ public class ModuleSpecification extends SimpleAttachable {
     /**
      * System dependencies are dependencies that are added automatically by the container.
      */
-    private final List<ModuleDependency> systemDependencies = new ArrayList<ModuleDependency>();
+    private final List<ModuleDependency> systemDependencies = new ArrayList<>();
 
-    private final Set<ModuleIdentifier> systemDependenciesSet = new HashSet<ModuleIdentifier>();
+    /** Unique names of system dependencies, used to ensure only one system ModuleDependency per name is added. */
+    private final Set<ModuleIdentifier> systemDependenciesSet = new HashSet<>();
+
     /**
      * Local dependencies are dependencies on other parts of the deployment, such as class-path entry
      */
-    private final List<ModuleDependency> localDependencies = new ArrayList<ModuleDependency>();
+    private final Set<ModuleDependency> localDependencies = new LinkedHashSet<>();
+
     /**
      * If set to true this indicates that a dependency on this module requires a dependency on all it's local
      * dependencies.
@@ -66,26 +54,36 @@ public class ModuleSpecification extends SimpleAttachable {
      * <p/>
      * User dependencies are not affected by exclusions.
      */
-    private final List<ModuleDependency> userDependencies = new ArrayList<ModuleDependency>();
+    private final List<ModuleDependency> userDependencies = new ArrayList<>();
+    /**
+     * Set view of user dependencies, used to prevent duplicates in the userDependencies list.
+     * TODO update getMutableUserDependencies and replace the list with this.
+     */
+    private final Set<ModuleDependency> userDependenciesSet = new HashSet<>();
 
-    private final List<ResourceLoaderSpec> resourceLoaders = new ArrayList<ResourceLoaderSpec>();
+    private final List<ResourceLoaderSpec> resourceLoaders = new ArrayList<>();
 
     /**
      * The class transformers
      */
-    private final List<String> classTransformers = new ArrayList<String>();
+    private final List<String> classTransformers = new ArrayList<>();
 
     private volatile List<ModuleDependency> allDependencies = null;
 
     /**
      * Modules that cannot be added as dependencies to the deployment, as the user has excluded them
      */
-    private final Set<ModuleIdentifier> exclusions = new HashSet<ModuleIdentifier>();
+    private final Set<ModuleIdentifier> exclusions = new HashSet<>();
+
+    /**
+     * A Map structure that contains an exclusion target module as a key and its aliases as values.
+     */
+    private final HashMap<ModuleIdentifier, List<ModuleIdentifier>> exclusionsMap = new HashMap<>();
 
     /**
      * A subset of found dependencies that are excluded in process of deployment, as the user has excluded them
      */
-    private final Set<ModuleIdentifier> excludedDependencies = new HashSet<ModuleIdentifier>();
+    private final Set<ModuleIdentifier> excludedDependencies = new HashSet<>();
 
     /**
      * Flag that is set to true if modules of non private sub deployments should be able to see each other
@@ -119,7 +117,7 @@ public class ModuleSpecification extends SimpleAttachable {
     /**
      * Module aliases
      */
-    private final List<ModuleIdentifier> aliases = new ArrayList<ModuleIdentifier>();
+    private final List<ModuleIdentifier> aliases = new ArrayList<>();
 
     /**
      * JBoss modules system dependencies, which allow you to specify dependencies on the app class loader
@@ -130,7 +128,7 @@ public class ModuleSpecification extends SimpleAttachable {
     /**
      * The minimum permission set for this module, wrapped as {@code PermissionFactory} instances.
      */
-    private final List<PermissionFactory> permissionFactories = new ArrayList<PermissionFactory>();
+    private final List<PermissionFactory> permissionFactories = new ArrayList<>();
 
     public void addSystemDependency(final ModuleDependency dependency) {
         if (!exclusions.contains(dependency.getIdentifier()) && !systemDependenciesSet.contains(dependency.getIdentifier())) {
@@ -150,12 +148,16 @@ public class ModuleSpecification extends SimpleAttachable {
 
     public void addUserDependency(final ModuleDependency dependency) {
         allDependencies = null;
-        this.userDependencies.add(dependency);
+        if (this.userDependenciesSet.add(dependency)) {
+            this.userDependencies.add(dependency);
+        }
     }
 
     public void addUserDependencies(final Collection<ModuleDependency> dependencies) {
         allDependencies = null;
-        userDependencies.addAll(dependencies);
+        for (final ModuleDependency dependency : dependencies) {
+            addUserDependency(dependency);
+        }
     }
 
     public void addLocalDependency(final ModuleDependency dependency) {
@@ -180,6 +182,24 @@ public class ModuleSpecification extends SimpleAttachable {
 
     public void addExclusion(final ModuleIdentifier exclusion) {
         allDependencies = null;
+        final String targetModule = ModuleAliasChecker.getTargetModule(exclusion.toString());
+        if (targetModule != null) {
+            final ModuleIdentifier identifier = ModuleIdentifier.create(targetModule);
+            // The exclusion is an alias
+            final List<ModuleIdentifier> aliases;
+            if (exclusionsMap.containsKey(identifier)) {
+                aliases = exclusionsMap.get(identifier);
+            } else {
+                aliases = new ArrayList<>();
+                exclusionsMap.put(identifier, aliases);
+            }
+            aliases.add(exclusion);
+            exclusions.add(identifier);
+        } else {
+            // The exclusion is not an alias
+            exclusionsMap.putIfAbsent(exclusion, new ArrayList<>());
+        }
+        // list of exclusions, aliases or target modules
         exclusions.add(exclusion);
         Iterator<ModuleDependency> it = systemDependencies.iterator();
         while (it.hasNext()) {
@@ -205,7 +225,7 @@ public class ModuleSpecification extends SimpleAttachable {
 
 
     public List<ModuleDependency> getLocalDependencies() {
-        return Collections.unmodifiableList(localDependencies);
+        return Collections.unmodifiableList(new ArrayList<>(localDependencies));
     }
 
     public List<ModuleDependency> getUserDependencies() {
@@ -215,7 +235,7 @@ public class ModuleSpecification extends SimpleAttachable {
     /**
      * Gets a modifiable view of the user dependencies list.
      *
-     * @return The user dependencies
+     * @return The user dependencies TODO change the return type to Collection and return a Set
      */
     public List<ModuleDependency> getMutableUserDependencies() {
         allDependencies = null;
@@ -297,24 +317,6 @@ public class ModuleSpecification extends SimpleAttachable {
         this.localDependenciesTransitive = localDependenciesTransitive;
     }
 
-    /**
-     * @return
-     * @deprecated since AS 8.x. Use {@link #isLocalDependenciesTransitive()} instead
-     */
-    @Deprecated
-    public boolean isRequiresTransitiveDependencies() {
-        return localDependenciesTransitive;
-    }
-
-    /**
-     * @param requiresTransitiveDependencies
-     * @deprecated since AS 8.x. Use {@link #setLocalDependenciesTransitive(boolean)} instead
-     */
-    @Deprecated
-    public void setRequiresTransitiveDependencies(final boolean requiresTransitiveDependencies) {
-        this.localDependenciesTransitive = requiresTransitiveDependencies;
-    }
-
     public boolean isLocalLast() {
         return localLast;
     }
@@ -375,6 +377,18 @@ public class ModuleSpecification extends SimpleAttachable {
 
     public Set<ModuleIdentifier> getNonexistentExcludedDependencies() {
         // WFCORE-4234 check all excluded dependencies via jboss-deployment-structure.xml are also valid.
-        return exclusions.stream().filter(e -> !excludedDependencies.contains(e)).collect(Collectors.toSet());
+        final Set<ModuleIdentifier> unExcludedModuleExclusion = new HashSet<>(exclusions);
+        for (ModuleIdentifier identifier : excludedDependencies) {
+            for (Map.Entry<ModuleIdentifier, List<ModuleIdentifier>> entry : exclusionsMap.entrySet()) {
+                if (entry.getKey().equals(identifier) || entry.getValue().contains(identifier)) {
+                    unExcludedModuleExclusion.remove(entry.getKey());
+                    unExcludedModuleExclusion.removeAll(entry.getValue());
+
+                    break;
+                }
+            }
+        }
+        return unExcludedModuleExclusion;
     }
+
 }

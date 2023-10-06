@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2012, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.host.controller;
 
@@ -193,6 +176,7 @@ public class ManagedServerBootCmdFactory implements ManagedServerBootConfigurati
         this.expressionResolver.addResolvableValue(ServerEnvironment.SERVER_LOG_DIR, logDir);
         this.expressionResolver.addResolvableValue(ServerEnvironment.SERVER_TEMP_DIR, tmpDir);
         this.expressionResolver.addResolvableValue(ServerEnvironment.SERVER_DATA_DIR, dataDir);
+        this.expressionResolver.addResolvableValue(ServerEnvironment.SERVER_NAME, this.serverName);
 
         final String jvmName = serverVMName != null ? serverVMName : groupVMName;
         final ModelNode hostVM = jvmName != null ? hostModel.get(JVM, jvmName) : null;
@@ -370,6 +354,7 @@ public class ManagedServerBootCmdFactory implements ManagedServerBootConfigurati
         }
 
         command.addAll(localJvmType.getDefaultArguments());
+        command.addAll(localJvmType.getOptionalDefaultArguments());
 
         command.add(String.format("-D%s=%s", ServerEnvironment.SERVER_LOG_DIR, this.logDir));
         command.add(String.format("-D%s=%s", ServerEnvironment.SERVER_TEMP_DIR, this.tmpDir));
@@ -636,11 +621,12 @@ public class ManagedServerBootCmdFactory implements ManagedServerBootConfigurati
             super(true);
             this.delegate = delegate;
             this.serverName = serverName;
-            this.resolvableData = new HashMap<String, String>() {{
+            this.resolvableData = new HashMap<>() {{
                 put(ServerEnvironment.SERVER_BASE_DIR, null);
                 put(ServerEnvironment.SERVER_DATA_DIR, null);
                 put(ServerEnvironment.SERVER_LOG_DIR, null);
                 put(ServerEnvironment.SERVER_TEMP_DIR, null);
+                put(ServerEnvironment.SERVER_NAME, null);
             }};
         }
 
@@ -651,9 +637,7 @@ public class ManagedServerBootCmdFactory implements ManagedServerBootConfigurati
                 String expressionValue = expression.substring(2, expression.length() - 1);
                 if (resolvableData.containsKey(expressionValue)) {
                     String resolved = resolvableData.get(expressionValue);
-                    if (resolved == null) {
-                        return;
-                    } else {
+                    if (resolved != null) {
                         node.set(resolved);
                     }
                 } else {

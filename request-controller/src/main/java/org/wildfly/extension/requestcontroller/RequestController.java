@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2014, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.wildfly.extension.requestcontroller;
 
@@ -33,6 +16,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+import java.util.function.Supplier;
 
 import org.jboss.as.server.suspend.CountingRequestCountCallback;
 import org.jboss.as.server.suspend.ServerActivity;
@@ -43,7 +27,6 @@ import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.StartContext;
 import org.jboss.msc.service.StartException;
 import org.jboss.msc.service.StopContext;
-import org.jboss.msc.value.InjectedValue;
 import org.wildfly.extension.requestcontroller.logging.RequestControllerLogger;
 
 /**
@@ -59,8 +42,7 @@ import org.wildfly.extension.requestcontroller.logging.RequestControllerLogger;
  */
 public class RequestController implements Service<RequestController>, ServerActivity {
 
-    @Deprecated
-    public static final ServiceName SERVICE_NAME = RequestControllerRootDefinition.REQUEST_CONTROLLER_CAPABILITY.getCapabilityServiceName();
+    static final ServiceName SERVICE_NAME = RequestControllerRootDefinition.REQUEST_CONTROLLER_CAPABILITY.getCapabilityServiceName();
 
     private static final AtomicIntegerFieldUpdater<RequestController> activeRequestCountUpdater = AtomicIntegerFieldUpdater.newUpdater(RequestController.class, "activeRequestCount");
     private static final AtomicReferenceFieldUpdater<RequestController, ServerActivityCallback> listenerUpdater = AtomicReferenceFieldUpdater.newUpdater(RequestController.class, ServerActivityCallback.class, "listener");
@@ -73,15 +55,15 @@ public class RequestController implements Service<RequestController>, ServerActi
 
     private final Map<ControlPointIdentifier, ControlPoint> entryPoints = new HashMap<>();
 
-    private final InjectedValue<SuspendController> shutdownControllerInjectedValue = new InjectedValue<>();
-
     @SuppressWarnings("unused")
     private volatile ServerActivityCallback listener = null;
 
     private final boolean trackIndividualControlPoints;
+    private final Supplier<SuspendController> suspendController;
 
-    public RequestController(boolean trackIndividualControlPoints) {
+    public RequestController(boolean trackIndividualControlPoints, Supplier<SuspendController> suspendControllerSupplier) {
         this.trackIndividualControlPoints = trackIndividualControlPoints;
+        this.suspendController = suspendControllerSupplier;
     }
 
     @Override
@@ -320,13 +302,13 @@ public class RequestController implements Service<RequestController>, ServerActi
 
     @Override
     public void start(StartContext startContext) throws StartException {
-        shutdownControllerInjectedValue.getValue().registerActivity(this);
+        suspendController.get().registerActivity(this);
         timer = new Timer();
     }
 
     @Override
     public void stop(StopContext stopContext) {
-        shutdownControllerInjectedValue.getValue().unRegisterActivity(this);
+        suspendController.get().unRegisterActivity(this);
         timer.cancel();
         timer = null;
         while (!taskQueue.isEmpty()) {
@@ -340,10 +322,6 @@ public class RequestController implements Service<RequestController>, ServerActi
     @Override
     public RequestController getValue() throws IllegalStateException, IllegalArgumentException {
         return this;
-    }
-
-    public InjectedValue<SuspendController> getShutdownControllerInjectedValue() {
-        return shutdownControllerInjectedValue;
     }
 
     public int getActiveRequestCount() {

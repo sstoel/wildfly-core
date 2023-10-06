@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2013, Red Hat Middleware LLC, and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.host.controller.discovery;
 
@@ -140,15 +123,15 @@ public class S3Util {
     /**
      * Use this helper method to generate pre-signed S3 urls. You'll need to generate urls for both the put and delete
      * http methods. Example: Your AWS Access Key is "abcd". Your AWS Secret Access Key is "efgh". You want this node to
-     * write its information to "/S3/master/jboss-domain-master-data". So, your bucket is "S3" and your key is
-     * "master/jboss-domain-master-data". You want this to expire one year from now, or (System.currentTimeMillis /
+     * write its information to "/S3/primary/jboss-domain-primary-data". So, your bucket is "S3" and your key is
+     * "primary/jboss-domain-primary-data". You want this to expire one year from now, or (System.currentTimeMillis /
      * 1000) + (60 * 60 * 24 * 365) Let's assume that this equals 1316286684
      *
      * Here's how to generate the value for the pre_signed_put_url property: String putUrl =
-     * S3Util.generatePreSignedUrl("abcd", "efgh", "put", "S3", "master/jboss-domain-master-data", 1316286684);
+     * S3Util.generatePreSignedUrl("abcd", "efgh", "put", "S3", "primary/jboss-domain-primary-data", 1316286684);
      *
      * Here's how to generate the value for the pre_signed_delete_url property: String deleteUrl =
-     * S3Util.generatePreSignedUrl("abcd", "efgh", "delete", "S3", "master/jboss-domain-master-data", 1316286684);
+     * S3Util.generatePreSignedUrl("abcd", "efgh", "delete", "S3", "primary/jboss-domain-primary-data", 1316286684);
      *
      * @param awsAccessKey Your AWS Access Key
      * @param awsSecretAccessKey Your AWS Secret Access Key

@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Identifies the launch script type.
+export JBOSS_LAUNCH_SCRIPT="linux"
+
 DIRNAME=`dirname "$0"`
 PROGNAME=`basename "$0"`
 GREP="grep"
@@ -96,45 +99,6 @@ if [ "x$JAVA" = "x" ]; then
     else
         JAVA="java"
     fi
-fi
-
-# Check for -d32/-d64 in JAVA_OPTS
-JVM_OPTVERSION="-version"
-JVM_D64_OPTION=`echo $JAVA_OPTS | $GREP "\-d64"`
-JVM_D32_OPTION=`echo $JAVA_OPTS | $GREP "\-d32"`
-test "x$JVM_D64_OPTION" != "x" && JVM_OPTVERSION="-d64 $JVM_OPTVERSION"
-test "x$JVM_D32_OPTION" != "x" && JVM_OPTVERSION="-d32 $JVM_OPTVERSION"
-
-# If -server not set in JAVA_OPTS, set it, if supported
-SERVER_SET=`echo $JAVA_OPTS | $GREP "\-server"`
-if [ "x$SERVER_SET" = "x" ]; then
-
-    # Check for SUN(tm) JVM w/ HotSpot support
-    if [ "x$HAS_HOTSPOT" = "x" ]; then
-        HAS_HOTSPOT=`"$JAVA" $JVM_OPTVERSION -version 2>&1 | $GREP -i HotSpot`
-    fi
-
-    # Check for OpenJDK JVM w/server support
-    if [ "x$HAS_OPENJDK" = "x" ]; then
-        HAS_OPENJDK=`"$JAVA" $JVM_OPTVERSION 2>&1 | $GREP -i OpenJDK`
-    fi
-
-    # Check for IBM JVM w/server support
-    if [ "x$HAS_IBM" = "x" ]; then
-        HAS_IBM=`"$JAVA" $JVM_OPTVERSION 2>&1 | $GREP -i "IBM J9"`
-    fi
-
-    # Enable -server if we have Hotspot or OpenJDK, unless we can't
-    if [ "x$HAS_HOTSPOT" != "x" -o "x$HAS_OPENJDK" != "x" -o "x$HAS_IBM" != "x" ]; then
-        # MacOS does not support -server flag
-        if [ "$darwin" != "true" ]; then
-            PROCESS_CONTROLLER_JAVA_OPTS="-server $PROCESS_CONTROLLER_JAVA_OPTS"
-            HOST_CONTROLLER_JAVA_OPTS="-server $HOST_CONTROLLER_JAVA_OPTS"
-            JVM_OPTVERSION="-server $JVM_OPTVERSION"
-        fi
-    fi
-else
-    JVM_OPTVERSION="-server $JVM_OPTVERSION"
 fi
 
 if [ "x$JBOSS_MODULEPATH" = "x" ]; then
@@ -348,7 +312,7 @@ while true; do
          JBOSS_STATUS=0
       fi
       if [ "$JBOSS_STATUS" -ne 10 ]; then
-            # Wait for a complete shudown
+            # Wait for a complete shutdown
             wait $JBOSS_PID 2>/dev/null
       fi
       if [ "x$JBOSS_PIDFILE" != "x" ]; then
@@ -356,7 +320,11 @@ while true; do
       fi
    fi
    if [ "$JBOSS_STATUS" -eq 10 ]; then
-      echo "Restarting..."
+      echo "INFO: Restarting..."
+   elif [ "$JBOSS_STATUS" -eq 20 ]; then
+      echo "INFO: Executing the installation manager"
+      "${JBOSS_HOME}/bin/installation-manager.sh" "${JBOSS_HOME}" "${JBOSS_CONFIG_DIR}/logging.properties"
+      echo "INFO: Restarting..."
    else
       exit $JBOSS_STATUS
    fi

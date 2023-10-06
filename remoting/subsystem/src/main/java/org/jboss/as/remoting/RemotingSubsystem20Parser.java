@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.remoting;
@@ -38,22 +21,20 @@ import static org.jboss.as.remoting.CommonAttributes.HTTP_CONNECTOR;
 import static org.jboss.as.remoting.CommonAttributes.SECURITY_REALM;
 
 import java.util.EnumSet;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
-import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 
 import org.jboss.as.controller.AttributeDefinition;
-import org.jboss.as.controller.AttributeParser;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.controller.parsing.ParseUtils;
 import org.jboss.as.remoting.logging.RemotingLogger;
 import org.jboss.dmr.ModelNode;
-import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
 
 /**
@@ -63,7 +44,7 @@ import org.jboss.staxmapper.XMLExtendedStreamReader;
  * @author Stuart Douglas
  * @author Tomaz Cerar
  */
-class RemotingSubsystem20Parser extends RemotingSubsystem11Parser implements XMLStreamConstants, XMLElementReader<List<ModelNode>> {
+class RemotingSubsystem20Parser extends RemotingSubsystem11Parser {
 
     @Override
     public void readElement(XMLExtendedStreamReader reader, List<ModelNode> list) throws XMLStreamException {
@@ -126,17 +107,15 @@ class RemotingSubsystem20Parser extends RemotingSubsystem11Parser implements XML
     }
 
     private void parseEndpoint(final XMLExtendedStreamReader reader, final ModelNode subsystemAdd) throws XMLStreamException {
+        Map<String, AttributeDefinition> attributes = RemotingSubsystemRootResource.ATTRIBUTES.stream().collect(Collectors.toMap(AttributeDefinition::getName, Function.identity()));
         for (int i = 0; i < reader.getAttributeCount(); i++) {
             String attributeName = reader.getAttributeLocalName(i);
             String value = reader.getAttributeValue(i);
-            if (RemotingEndpointResource.ATTRIBUTES.containsKey(attributeName)) {
-                AttributeDefinition def = RemotingEndpointResource.ATTRIBUTES.get(attributeName);
-                AttributeParser parser = def.getParser();
-                assert parser != null;
-                parser.parseAndSetParameter(def, value, subsystemAdd, reader);
+            AttributeDefinition attribute = attributes.get(attributeName);
+            if (attribute != null) {
+                attribute.getParser().parseAndSetParameter(attribute, value, subsystemAdd, reader);
             } else {
-                Set<String> possible = new LinkedHashSet<>(RemotingEndpointResource.ATTRIBUTES.keySet());
-                throw ParseUtils.unexpectedAttribute(reader, i, possible);
+                throw ParseUtils.unexpectedAttribute(reader, i, attributes.keySet());
             }
         }
         ParseUtils.requireNoContent(reader);

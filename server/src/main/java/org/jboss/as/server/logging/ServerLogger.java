@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server.logging;
@@ -65,9 +48,12 @@ import org.jboss.logging.annotations.MessageLogger;
 import org.jboss.logging.annotations.Param;
 import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoadException;
+import org.jboss.msc.service.ServiceController.State;
+import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceNotFoundException;
 import org.jboss.msc.service.StartException;
 import org.jboss.vfs.VirtualFile;
+import org.wildfly.security.mechanism.AuthenticationMechanismException;
 
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
@@ -231,12 +217,12 @@ public interface ServerLogger extends BasicLogger {
     void cannotAddURLStreamHandlerFactory(@Cause Exception cause, String moduleID);
 
     @LogMessage(level = INFO)
-    @Message(id = 25, value = "%s started in %dms - Started %d of %d services (%d services are lazy, passive or on-demand) %s")
-    void startedClean(String prettyVersionString, long time, int startedServices, int allServices, int passiveOnDemandServices, String append);
+    @Message(id = 25, value = "%s")
+    void startedClean(String bootStatisticsMessage);
 
     @LogMessage(level = ERROR)
-    @Message(id = 26, value = "%s started (with errors) in %dms - Started %d of %d services (%d services failed or missing dependencies, %d services are lazy, passive or on-demand) %s")
-    void startedWitErrors(String prettyVersionString, long time, int startedServices, int allServices, int problemServices, int passiveOnDemandServices, String append);
+    @Message(id = 26, value = "%s")
+    void startedWitErrors(String bootStatisticsMessage);
 
     @LogMessage(level = INFO)
     @Message(id = 27, value = "Starting deployment of \"%s\" (runtime-name: \"%s\")")
@@ -811,8 +797,8 @@ public interface ServerLogger extends BasicLogger {
     /////////////////////////////////////
     // New range of ids
 
-    @Message(id = 120, value = "Bundles directory does not exist: %s")
-    IllegalStateException bundlesDirectoryDoesNotExist(File f);
+//    @Message(id = 120, value = "Bundles directory does not exist: %s")
+//    IllegalStateException bundlesDirectoryDoesNotExist(File f);
 
     @Message(id = 121, value = "Configuration directory does not exist: %s")
     IllegalStateException configDirectoryDoesNotExist(File f);
@@ -1396,6 +1382,64 @@ public interface ServerLogger extends BasicLogger {
     @Message(id = 290, value = "Couldn't find the specified YAML file %s")
     IllegalArgumentException unableToFindYaml(String file);
 
+    /**
+     * Creates an exception as placeholder for a missing exception.
+     *
+     * @return an {@link IllegalStateException} for the error.
+     */
+    @Message(id = 291, value = "The error cause is unknown at this thread. Check other log messages and caller to know the possible cause.")
+    IllegalStateException throwableIsNull();
+
+    @Message(id = 292, value = "The required service '%s' is not UP, it is currently '%s'.")
+    DeploymentUnitProcessingException requiredServiceNotUp(ServiceName serviceName, State state);
+
+    @LogMessage(level = WARN)
+    @Message(id=293, value = "The '%s' module alias has been added as a dependency to '%s' deployment via %s. While this is allowed, it is recommended to use its target module instead. Consider replacing this alias with its target module '%s'.")
+    void aliasAddedAsDependency(String aliasModule, String deploymentName, String context, String targetModule);
+
+    @LogMessage(level = WARN)
+    @Message(id=294, value = "The '%s' module alias has been excluded from '%s' deployment via %s. While this is allowed, it is recommended to use its target module instead. Consider replacing this alias with its target module '%s'.")
+    void aliasAddedAsExclusion(String aliasModule, String deploymentName, String context, String targetModule);
+
+    @Message(id = 295, value = "No %s installation has been prepared.")
+    OperationFailedException noServerInstallationPrepared(String productName);
+
+    @Message(id = 296, value = "Authentication mechanism authentication is not yet complete")
+    IllegalStateException mechAuthenticationNotComplete();
+
+    @Message(id = 297, value = "Authentication mechanism exchange received a message after authentication was already complete")
+    AuthenticationMechanismException mechMessageAfterComplete();
+
+    @Message(id = 298, value = "Authentication mechanism message is too long")
+    AuthenticationMechanismException mechMessageTooLong();
+
+    @Message(id = 299, value = "Authentication mechanism server-side authentication failed")
+    AuthenticationMechanismException mechServerSideAuthenticationFailed(@Cause Exception e);
+
+    @Message(id = 300, value = "Authentication mechanism token not verified")
+    AuthenticationMechanismException mechTokenNotVerified();
+
+    @Message(id = 301, value = "Authentication mechanism authorization failed: \"%s\" running as \"%s\"")
+    AuthenticationMechanismException mechAuthorizationFailed(String userName, String authorizationId);
+
+    @Message(id = 302, value = "Authentication mechanism does not support security layer (wrapping/unwrapping)")
+    IllegalStateException mechNoSecurityLayer();
+
+    @Message(id = 303, value = "Invalid authentication mechanism negotiation message received")
+    AuthenticationMechanismException mechInvalidMessageReceived();
+
+    @Message(id = 304, value = "No authentication mechanism token was given")
+    AuthenticationMechanismException mechNoTokenGiven();
+
+    @Message(id = 305, value = "Authentication mechanism authentication failed due to one or more malformed fields")
+    AuthenticationMechanismException mechMalformedFields(@Cause IllegalArgumentException ex);
+
+    @Message(id = 306, value = "Callback handler failed for unknown reason")
+    AuthenticationMechanismException mechCallbackHandlerFailedForUnknownReason(@Cause Throwable cause);
+
+    @Message(id = 307, value = "No authentication mechanism login name was given")
+    AuthenticationMechanismException mechNoLoginNameGiven();
+
     ////////////////////////////////////////////////
     //Messages without IDs
 
@@ -1413,4 +1457,11 @@ public interface ServerLogger extends BasicLogger {
 
     @Message(id = Message.NONE, value = "- Server configuration file in use: %s")
     String serverConfigFileInUse(String serverConfigFile);
+
+    @Message(id = Message.NONE, value = "%s started in %dms - Started %d of %d services (%d services are lazy, passive or on-demand) %s")
+    String startedCleanMessage(String prettyVersionString, long time, int startedServices, int allServices, int passiveOnDemandServices, String append);
+
+    @Message(id = Message.NONE, value = "%s started (with errors) in %dms - Started %d of %d services (%d services failed or missing dependencies, %d services are lazy, passive or on-demand) %s")
+    String startedWitErrorsMessage(String prettyVersionString, long time, int startedServices, int allServices, int problemServices, int passiveOnDemandServices, String append);
+
 }

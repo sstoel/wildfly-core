@@ -1,19 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2014 Red Hat, Inc., and individual contributors
- * as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.wildfly.extension.elytron;
@@ -71,8 +58,10 @@ public class ElytronExtension implements Extension {
     static final String NAMESPACE_15_0 = "urn:wildfly:elytron:15.0";
     static final String NAMESPACE_15_1 = "urn:wildfly:elytron:15.1";
     static final String NAMESPACE_16_0 = "urn:wildfly:elytron:16.0";
+    static final String NAMESPACE_17_0 = "urn:wildfly:elytron:17.0";
+    static final String NAMESPACE_18_0 = "urn:wildfly:elytron:18.0";
 
-    static final String CURRENT_NAMESPACE = NAMESPACE_16_0;
+    static final String CURRENT_NAMESPACE = NAMESPACE_18_0;
 
     /**
      * The name of our subsystem within the model.
@@ -102,8 +91,10 @@ public class ElytronExtension implements Extension {
     static final ModelVersion ELYTRON_15_0_0 = ModelVersion.create(15);
     static final ModelVersion ELYTRON_15_1_0 = ModelVersion.create(15, 1);
     static final ModelVersion ELYTRON_16_0_0 = ModelVersion.create(16);
+    static final ModelVersion ELYTRON_17_0_0 = ModelVersion.create(17);
+    static final ModelVersion ELYTRON_18_0_0 = ModelVersion.create(18);
 
-    private static final ModelVersion ELYTRON_CURRENT = ELYTRON_16_0_0;
+    private static final ModelVersion ELYTRON_CURRENT = ELYTRON_18_0_0;
 
     static final String ISO_8601_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSSZ";
 
@@ -152,6 +143,8 @@ public class ElytronExtension implements Extension {
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_15_0, () -> new ElytronSubsystemParser15_0());
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_15_1, () -> new ElytronSubsystemParser15_1());
         context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_16_0, () -> new ElytronSubsystemParser16_0());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_17_0, () -> new ElytronSubsystemParser17_0());
+        context.setSubsystemXmlMapping(SUBSYSTEM_NAME, NAMESPACE_18_0, () -> new ElytronSubsystemParser18_0());
     }
 
     @Override
@@ -164,7 +157,7 @@ public class ElytronExtension implements Extension {
         AtomicReference<ExpressionResolverExtension> resolverRef = new AtomicReference<>();
         final ManagementResourceRegistration registration = subsystemRegistration.registerSubsystemModel(new ElytronDefinition(resolverRef));
         registration.registerOperationHandler(GenericSubsystemDescribeHandler.DEFINITION, GenericSubsystemDescribeHandler.INSTANCE);
-        subsystemRegistration.registerXMLElementWriter(() -> new ElytronSubsystemParser16_0());
+        subsystemRegistration.registerXMLElementWriter(() -> new ElytronSubsystemParser18_0());
 
         context.registerExpressionResolverExtension(resolverRef::get, ExpressionResolverResourceDefinition.INITIAL_PATTERN, false);
     }

@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller;
@@ -33,10 +16,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import org.jboss.as.controller.logging.ControllerLogger;
+import org.jboss.msc.service.ServiceContainer;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
-import org.jboss.msc.service.ServiceRegistry;
-import org.jboss.msc.service.StabilityMonitor;
 import org.jboss.msc.service.StartException;
 
 import static org.jboss.as.controller.logging.ControllerLogger.ROOT_LOGGER;
@@ -47,17 +29,15 @@ import static org.jboss.as.controller.logging.ControllerLogger.ROOT_LOGGER;
  */
 final class ContainerStateMonitor {
 
-    private final ServiceRegistry serviceRegistry;
-    private final StabilityMonitor monitor;
+    private final ServiceContainer container;
     private final Set<ServiceController<?>> failed = new HashSet<ServiceController<?>>();
     private final Set<ServiceController<?>> problems = new HashSet<ServiceController<?>>();
 
     private Set<ServiceName> previousMissingDepSet = new HashSet<ServiceName>();
     private Set<ServiceController<?>> previousFailedSet = new HashSet<>();
 
-    ContainerStateMonitor(final ServiceRegistry registry, final StabilityMonitor stabilityMonitor) {
-        serviceRegistry = registry;
-        monitor = stabilityMonitor;
+    ContainerStateMonitor(final ServiceContainer container) {
+        this.container = container;
     }
 
     /**
@@ -72,10 +52,6 @@ final class ContainerStateMonitor {
             final String msg = createChangeReportLogMessage(changeReport, false);
             ROOT_LOGGER.info(msg);
         }
-    }
-
-    StabilityMonitor getStabilityMonitor() {
-        return monitor;
     }
 
     /**
@@ -96,7 +72,7 @@ final class ContainerStateMonitor {
                     toWait = msTimeout - System.currentTimeMillis();
                 }
                 try {
-                    if (toWait <= 0 || !monitor.awaitStability(toWait, TimeUnit.MILLISECONDS, failed, problems)) {
+                    if (toWait <= 0 || !container.awaitStability(toWait, TimeUnit.MILLISECONDS, failed, problems)) {
                         throw new TimeoutException();
                     }
                     break;
@@ -121,7 +97,7 @@ final class ContainerStateMonitor {
      * @throws java.util.concurrent.TimeoutException if service container stability is not reached before the specified timeout
      */
     void awaitStability(long timeout, TimeUnit timeUnit) throws InterruptedException, TimeoutException {
-        if (!monitor.awaitStability(timeout, timeUnit, failed, problems)) {
+        if (!container.awaitStability(timeout, timeUnit, failed, problems)) {
             throw new TimeoutException();
         }
     }
@@ -140,7 +116,7 @@ final class ContainerStateMonitor {
      * @throws java.util.concurrent.TimeoutException if service container stability is not reached before the specified timeout
      */
     ContainerStateChangeReport awaitContainerStateChangeReport(long timeout, TimeUnit timeUnit) throws InterruptedException, TimeoutException {
-        if (monitor.awaitStability(timeout, timeUnit, failed, problems)) {
+        if (container.awaitStability(timeout, timeUnit, failed, problems)) {
             return createContainerStateChangeReport(false);
         }
         throw new TimeoutException();
@@ -166,13 +142,16 @@ final class ContainerStateMonitor {
             missingDeps =new HashMap<ServiceName, Set<ServiceName>>(problems.size());
             for (ServiceController<?> controller : problems) {
                 if (controller.getState() != ServiceController.State.REMOVED) {
-                    for (ServiceName missing : controller.getUnavailableDependencies()) {
+                    for (ServiceName missing : controller.missing()) {
                         Set<ServiceName> dependents = missingDeps.get(missing);
                         if (dependents == null) {
                             dependents = new HashSet<ServiceName>();
                             missingDeps.put(missing, dependents);
                         }
-                        dependents.add(controller.getName());
+                        for (ServiceName providedValue : controller.provides()) {
+                            dependents.add(providedValue);
+                            break; // it is sufficient to report just first provided value
+                        }
                     }
                 } // else it's no longer a problem
             }
@@ -188,7 +167,7 @@ final class ContainerStateMonitor {
             noLongerMissingServices = new TreeMap<ServiceName, Boolean>();
             for (ServiceName name : previousMissing) {
                 if (!missingDeps.containsKey(name)) {
-                    ServiceController<?> controller = serviceRegistry.getService(name);
+                    ServiceController<?> controller = container.getService(name);
                     noLongerMissingServices.put(name, controller != null);
                 }
             }
@@ -203,7 +182,7 @@ final class ContainerStateMonitor {
             for (Map.Entry<ServiceName, Set<ServiceName>> entry : missingDeps.entrySet()) {
                 final ServiceName name = entry.getKey();
                 if (!previousMissing.contains(name)) {
-                    ServiceController<?> controller = serviceRegistry.getService(name);
+                    ServiceController<?> controller = container.getService(name);
                     boolean unavailable = controller != null && controller.getMode() != ServiceController.Mode.NEVER;
                     missingServices.put(name, new MissingDependencyInfo(name, unavailable, entry.getValue()));
                 }
@@ -271,7 +250,10 @@ final class ContainerStateMonitor {
         if (!failedSet.isEmpty()) {
             msg.append(ControllerLogger.ROOT_LOGGER.serviceStatusReportFailed());
             for (ServiceController<?> controller : failedSet) {
-                msg.append("      ").append(controller.getName());
+                for (ServiceName providedValue : controller.provides()) {
+                    msg.append("      ").append(providedValue);
+                    break; // it is sufficient to report just first provided value
+                }
                 //noinspection ThrowableResultOfMethodCallIgnored
                 final StartException startException = controller.getStartException();
                 if (startException != null) {

@@ -1,20 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- *
- * Copyright 2018 Red Hat, Inc., and individual contributors
- * as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.logging.handlers;
@@ -35,6 +21,7 @@ import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
+import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.operations.validation.EnumValidator;
 import org.jboss.as.controller.operations.validation.IntRangeValidator;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
@@ -61,7 +48,7 @@ import org.jboss.logmanager.handlers.SyslogHandler.SyslogType;
 /**
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-public class SyslogHandlerResourceDefinition extends TransformerResourceDefinition {
+public class SyslogHandlerResourceDefinition extends SimpleResourceDefinition {
 
     public static final String NAME = "syslog-handler";
     private static final PathElement SYSLOG_HANDLER_PATH = PathElement.pathElement(NAME);
@@ -107,12 +94,15 @@ public class SyslogHandlerResourceDefinition extends TransformerResourceDefiniti
             .setAttributeMarshaller(new DefaultAttributeMarshaller() {
                 @Override
                 public void marshallAsElement(final AttributeDefinition attribute, final ModelNode resourceModel, final boolean marshallDefault, final XMLStreamWriter writer) throws XMLStreamException {
-                    if (isMarshallable(attribute, resourceModel, marshallDefault)) {
-                        writer.writeStartElement(attribute.getXmlName());
-                        final String content = resourceModel.get(attribute.getName()).asString();
-                        writer.writeAttribute(Attribute.SYSLOG_TYPE.getLocalName(), content);
-                        writer.writeEndElement();
+                    writer.writeStartElement(attribute.getXmlName());
+                    final String content;
+                    if (resourceModel.hasDefined(attribute.getName())) {
+                        content = resourceModel.get(attribute.getName()).asString();
+                    } else {
+                        content = attribute.getDefaultValue().asString();
                     }
+                    writer.writeAttribute(Attribute.SYSLOG_TYPE.getLocalName(), content);
+                    writer.writeEndElement();
                 }
             })
             .setDefaultValue(new ModelNode(SyslogType.RFC5424.name()))
@@ -161,21 +151,28 @@ public class SyslogHandlerResourceDefinition extends TransformerResourceDefiniti
         }
     }
 
-    @Override
-    public void registerTransformers(final KnownModelVersion modelVersion, final ResourceTransformationDescriptionBuilder rootResourceBuilder, final ResourceTransformationDescriptionBuilder loggingProfileBuilder) {
-        switch (modelVersion) {
-            case VERSION_7_0_0: {
-                final ResourceTransformationDescriptionBuilder resourceBuilder = rootResourceBuilder.addChildResource(SYSLOG_HANDLER_PATH);
-                final ResourceTransformationDescriptionBuilder loggingProfileResourceBuilder = loggingProfileBuilder.addChildResource(SYSLOG_HANDLER_PATH);
-                resourceBuilder.getAttributeBuilder()
-                        .setDiscard(DiscardAttributeChecker.UNDEFINED, NAMED_FORMATTER)
-                        .addRejectCheck(RejectAttributeChecker.DEFINED, NAMED_FORMATTER)
-                        .end();
-                loggingProfileResourceBuilder.getAttributeBuilder()
-                        .setDiscard(DiscardAttributeChecker.UNDEFINED, NAMED_FORMATTER)
-                        .addRejectCheck(RejectAttributeChecker.DEFINED, NAMED_FORMATTER)
-                        .end();
-                break;
+    public static final class TransformerDefinition extends TransformerResourceDefinition {
+
+        public TransformerDefinition() {
+            super(SYSLOG_HANDLER_PATH);
+        }
+
+        @Override
+        public void registerTransformers(final KnownModelVersion modelVersion, final ResourceTransformationDescriptionBuilder rootResourceBuilder, final ResourceTransformationDescriptionBuilder loggingProfileBuilder) {
+            switch (modelVersion) {
+                case VERSION_7_0_0: {
+                    final ResourceTransformationDescriptionBuilder resourceBuilder = rootResourceBuilder.addChildResource(SYSLOG_HANDLER_PATH);
+                    final ResourceTransformationDescriptionBuilder loggingProfileResourceBuilder = loggingProfileBuilder.addChildResource(SYSLOG_HANDLER_PATH);
+                    resourceBuilder.getAttributeBuilder()
+                            .setDiscard(DiscardAttributeChecker.UNDEFINED, NAMED_FORMATTER)
+                            .addRejectCheck(RejectAttributeChecker.DEFINED, NAMED_FORMATTER)
+                            .end();
+                    loggingProfileResourceBuilder.getAttributeBuilder()
+                            .setDiscard(DiscardAttributeChecker.UNDEFINED, NAMED_FORMATTER)
+                            .addRejectCheck(RejectAttributeChecker.DEFINED, NAMED_FORMATTER)
+                            .end();
+                    break;
+                }
             }
         }
     }

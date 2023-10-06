@@ -1,32 +1,22 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2018, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.host.controller.jvm;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStreamReader;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 import org.jboss.as.host.controller.logging.HostControllerLogger;
 import org.wildfly.security.manager.WildFlySecurityManager;
@@ -42,7 +32,10 @@ public final class JvmType {
     private static final String JAVA_HOME_SYS_PROP = "java.home";
     private static final String JAVA_HOME_ENV_VAR = "JAVA_HOME";
     private static final String OS_NAME_SYS_PROP = "os.name";
+    /** Packages being exported or opened are available on all JVMs */
     private static final Collection<String> DEFAULT_MODULAR_JVM_ARGUMENTS;
+    /** Packages being exported or opened may not be available on all JVMs */
+    private static final Collection<String> DEFAULT_OPTIONAL_MODULAR_JVM_ARGUMENTS;
     private static final String JAVA_EXECUTABLE;
     private static final String JAVA_UNIX_EXECUTABLE = "java";
     private static final String JAVA_WIN_EXECUTABLE = "java.exe";
@@ -67,12 +60,16 @@ public final class JvmType {
         modularJavaOpts.add("--add-opens=java.base/java.lang.invoke=ALL-UNNAMED");
         modularJavaOpts.add("--add-opens=java.base/java.lang.reflect=ALL-UNNAMED");
         modularJavaOpts.add("--add-opens=java.base/java.io=ALL-UNNAMED");
+        modularJavaOpts.add("--add-opens=java.base/java.net=ALL-UNNAMED");
         modularJavaOpts.add("--add-opens=java.base/java.security=ALL-UNNAMED");
         modularJavaOpts.add("--add-opens=java.base/java.util=ALL-UNNAMED");
         modularJavaOpts.add("--add-opens=java.base/java.util.concurrent=ALL-UNNAMED");
         modularJavaOpts.add("--add-opens=java.management/javax.management=ALL-UNNAMED");
         modularJavaOpts.add("--add-opens=java.naming/javax.naming=ALL-UNNAMED");
         DEFAULT_MODULAR_JVM_ARGUMENTS = Collections.unmodifiableList(modularJavaOpts);
+        final ArrayList<String> modularOptionalJavaOpts = new ArrayList<>();
+        modularOptionalJavaOpts.add("--add-opens=java.base/com.sun.net.ssl.internal.ssl=ALL-UNNAMED");
+        DEFAULT_OPTIONAL_MODULAR_JVM_ARGUMENTS = Collections.unmodifiableList(modularOptionalJavaOpts);
     }
 
     private JvmType(final boolean forLaunch, final boolean isModularJvm, final String javaExecutable) {
@@ -104,6 +101,27 @@ public final class JvmType {
 
     public Collection<String> getDefaultArguments() {
         return isModularJvm ? DEFAULT_MODULAR_JVM_ARGUMENTS : Collections.EMPTY_LIST;
+    }
+
+    /**
+     * The expectation is this method is called once per JvmType instance.
+     * In theory we could cache the result for reuse, but if we change how
+     * we use these instances it may not be the case that a cached value
+     * would be correct over multiple invocations.
+     * @return collection of optional (may not be available on all JDK versions) modular JVM arguments
+     */
+    public Collection<String> getOptionalDefaultArguments() {
+        if (isModularJvm) {
+            Collection<String> retVal = null;
+            for (final String optionalModularArgument : DEFAULT_OPTIONAL_MODULAR_JVM_ARGUMENTS) {
+                if (packageAvailableOnJvm(javaExecutable, true, optionalModularArgument)) {
+                    if (retVal == null) retVal = new ArrayList<>();
+                    retVal.add(optionalModularArgument);
+                }
+            }
+            if (retVal != null) return retVal;
+        }
+        return Collections.EMPTY_LIST;
     }
 
     /**
@@ -141,6 +159,54 @@ public final class JvmType {
                 return 0 == new ProcessBuilder(javaExecutable, "--add-modules=java.se", "-version").start().waitFor();
             } catch (Throwable t) {
                 throw HostControllerLogger.ROOT_LOGGER.cannotFindJavaExe(javaExecutable);
+            }
+        }
+        return false;
+    }
+
+    private static boolean packageAvailableOnJvm(final String javaExecutable, final boolean forLaunch, final String optionalModularArgument) {
+        if (!forLaunch) return false;
+        boolean result;
+        final ProcessBuilder builder = new ProcessBuilder(javaExecutable, optionalModularArgument, "-version");
+        Process process = null;
+        Path stdout = null;
+        try {
+            // Create a temporary file for stdout
+            stdout = Files.createTempFile("stdout", ".txt");
+            process = builder.redirectErrorStream(true)
+                    .redirectOutput(stdout.toFile()).start();
+
+            if (process.waitFor(30, TimeUnit.SECONDS)) {
+                result = process.exitValue() == 0;
+            } else {
+                result = false;
+            }
+        } catch (IOException | InterruptedException e) {
+            result = false;
+        } finally {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+            if (stdout != null) {
+                try {
+                    if (containsWarning(stdout)) {
+                        result = false;
+                    }
+                    Files.deleteIfExists(stdout);
+                } catch (IOException ignore) {
+                }
+            }
+        }
+        return result;
+    }
+
+    private static boolean containsWarning(final Path logFile)  throws IOException {
+        String line;
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(logFile.toFile())))) {
+            while ((line = br.readLine()) != null) {
+                if (line.startsWith("WARNING:")) {
+                    return true;
+                }
             }
         }
         return false;

@@ -1,26 +1,11 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2013, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.test.integration.domain.suites;
+
+import java.io.IOException;
 
 import org.jboss.as.test.integration.domain.extension.ExtensionSetup;
 import org.jboss.as.test.integration.domain.management.util.DomainTestSupport;
@@ -29,10 +14,13 @@ import org.jboss.as.test.integration.domain.rbac.AccessConstraintUtilizationTest
 import org.jboss.as.test.integration.domain.rbac.SimpleProviderHostScopedRolesTestCase;
 import org.jboss.as.test.integration.domain.rbac.SimpleProviderServerGroupScopedRolesTestCase;
 import org.jboss.as.test.integration.domain.rbac.SimpleProviderStandardRolesTestCase;
+import org.jboss.as.test.module.util.TestModule;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
+import org.wildfly.test.installationmanager.TestInstallationManager;
+import org.wildfly.test.installationmanager.TestInstallationManagerFactory;
 
 /**
  * Simple {@code Suite} test wrapper to start the domain only once for multiple
@@ -49,12 +37,17 @@ import org.junit.runners.Suite;
 })
 public class SimpleRbacProviderTestSuite {
 
+    private static final String MODULE_NAME = "org.jboss.prospero";
+    private static TestModule testModule;
+
+
     private static boolean initializedLocally = false;
     private static volatile DomainTestSupport support;
 
     /** This can only be called from tests as part of this suite */
-    public static synchronized DomainTestSupport createSupport(final String testName) {
+    public static synchronized DomainTestSupport createSupport(final String testName) throws IOException {
         if(support == null) {
+            createTestModule();
             start(testName);
         }
         return support;
@@ -63,7 +56,11 @@ public class SimpleRbacProviderTestSuite {
     /** This can only be called from tests as part of this suite */
     public static synchronized void stopSupport() {
         if(! initializedLocally) {
-            stop();
+            try {
+                stop();
+            } finally {
+                testModule.remove();
+            }
         }
     }
 
@@ -83,14 +80,19 @@ public class SimpleRbacProviderTestSuite {
     }
 
     @BeforeClass
-    public static synchronized void beforeClass() {
+    public static synchronized void beforeClass() throws IOException {
         initializedLocally = true;
+        createTestModule();
         start(SimpleRbacProviderTestSuite.class.getSimpleName());
     }
 
     @AfterClass
     public static synchronized void afterClass() {
-        stop();
+        try {
+            stop();
+        } finally {
+            testModule.remove();
+        }
     }
 
     /**
@@ -115,5 +117,19 @@ public class SimpleRbacProviderTestSuite {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    public static boolean isTestSuiteEnabled() {
+        return initializedLocally;
+    }
+
+    private static void createTestModule() throws IOException {
+        testModule = new TestModule(MODULE_NAME, "org.wildfly.installation-manager.api");
+        testModule.addResource("test-mock-installation-manager.jar")
+                .addClass(TestInstallationManager.class)
+                .addClass(TestInstallationManagerFactory.class)
+                .addAsManifestResource("META-INF/services/org.wildfly.installationmanager.spi.InstallationManagerFactory",
+                        "services/org.wildfly.installationmanager.spi.InstallationManagerFactory");
+        testModule.create(true);
     }
 }

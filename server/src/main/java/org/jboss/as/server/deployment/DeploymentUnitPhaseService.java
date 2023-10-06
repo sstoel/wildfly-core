@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2010, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server.deployment;
@@ -29,13 +12,19 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
+import org.jboss.as.controller.RequirementServiceBuilder;
+import org.jboss.as.controller.RequirementServiceTarget;
+import org.jboss.as.controller.capability.CapabilityServiceSupport;
 import org.jboss.as.server.deployment.module.ModuleSpecification;
 import org.jboss.as.server.logging.ServerLogger;
 import org.jboss.modules.ModuleIdentifier;
 import org.jboss.msc.service.LifecycleEvent;
 import org.jboss.msc.service.LifecycleListener;
+import org.jboss.msc.service.DelegatingServiceBuilder;
 import org.jboss.msc.service.DelegatingServiceRegistry;
+import org.jboss.msc.service.DelegatingServiceTarget;
 import org.jboss.msc.service.Service;
 import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceContainer;
@@ -119,7 +108,7 @@ final class DeploymentUnitPhaseService<T> implements Service<T> {
         final List<RegisteredDeploymentUnitProcessor> list = chains.getChain(phase);
         final ListIterator<RegisteredDeploymentUnitProcessor> iterator = list.listIterator();
         final ServiceContainer container = context.getController().getServiceContainer();
-        final ServiceTarget serviceTarget = context.getChildTarget().subTarget();
+        final RequirementServiceTarget serviceTarget = new DeploymentUnitServiceTarget(context.getChildTarget().subTarget(), deploymentUnit.getAttachment(Attachments.CAPABILITY_SERVICE_SUPPORT));
         final DeploymentUnit parent = deploymentUnit.getParent();
 
         final List<DeploymentUnitPhaseDependency> dependencies = new LinkedList<>();
@@ -201,7 +190,9 @@ final class DeploymentUnitPhaseService<T> implements Service<T> {
             }
 
             phaseServiceBuilder.addDependency(Services.JBOSS_DEPLOYMENT_CHAINS, DeployerChains.class, phaseService.getDeployerChainsInjector());
-            phaseServiceBuilder.requires(context.getController().getName());
+            for (ServiceName providedValue : context.getController().provides()) {
+                phaseServiceBuilder.requires(providedValue);
+            }
 
             final List<ServiceName> nextPhaseDeps = processorContext.getAttachment(Attachments.NEXT_PHASE_DEPS);
             if (nextPhaseDeps != null) {
@@ -274,5 +265,68 @@ final class DeploymentUnitPhaseService<T> implements Service<T> {
             }
         }
         return !shouldNotRun.contains(deployer.getSubsystemName());
+    }
+
+    static class DeploymentUnitServiceTarget extends DelegatingServiceTarget implements RequirementServiceTarget {
+        private final CapabilityServiceSupport support;
+
+        DeploymentUnitServiceTarget(ServiceTarget target, CapabilityServiceSupport support) {
+            super(target);
+            this.support = support;
+        }
+
+        @Override
+        public RequirementServiceTarget addListener(LifecycleListener listener) {
+            super.addListener(listener);
+            return this;
+        }
+
+        @Override
+        public RequirementServiceTarget removeListener(LifecycleListener listener) {
+            super.removeListener(listener);
+            return this;
+        }
+
+        @Override
+        public RequirementServiceTarget subTarget() {
+            return new DeploymentUnitServiceTarget(super.subTarget(), this.support);
+        }
+
+        @Override
+        public RequirementServiceBuilder<?> addService() {
+            return new DeploymentUnitServiceBuilder<>(super.addService(), this.support);
+        }
+    }
+
+    static class DeploymentUnitServiceBuilder<T> extends DelegatingServiceBuilder<T> implements RequirementServiceBuilder<T> {
+        private final CapabilityServiceSupport support;
+
+        DeploymentUnitServiceBuilder(ServiceBuilder<T> builder, CapabilityServiceSupport support) {
+            super(builder);
+            this.support = support;
+        }
+
+        @Override
+        public RequirementServiceBuilder<T> setInitialMode(Mode mode) {
+            super.setInitialMode(mode);
+            return this;
+        }
+
+        @Override
+        public RequirementServiceBuilder<T> setInstance(org.jboss.msc.Service service) {
+            super.setInstance(service);
+            return this;
+        }
+
+        @Override
+        public RequirementServiceBuilder<T> addListener(LifecycleListener listener) {
+            super.addListener(listener);
+            return this;
+        }
+
+        @Override
+        public <V> Supplier<V> requiresCapability(String capabilityName, Class<V> dependencyType, String... referenceNames) {
+            return super.requires(this.support.getCapabilityServiceName(capabilityName, referenceNames));
+        }
     }
 }

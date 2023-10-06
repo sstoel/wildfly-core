@@ -1,32 +1,12 @@
 /*
- *
- *  JBoss, Home of Professional Open Source.
- *  Copyright 2014, Red Hat, Inc., and individual contributors
- *  as indicated by the @author tags. See the copyright.txt file in the
- *  distribution for a full listing of individual contributors.
- *
- *  This is free software; you can redistribute it and/or modify it
- *  under the terms of the GNU Lesser General Public License as
- *  published by the Free Software Foundation; either version 2.1 of
- *  the License, or (at your option) any later version.
- *
- *  This software is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- *  Lesser General Public License for more details.
- *
- *  You should have received a copy of the GNU Lesser General Public
- *  License along with this software; if not, write to the Free
- *  Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- *  02110-1301 USA, or see the FSF site: http://www.fsf.org.
- * /
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.test.integration.mgmt.access.extension;
 
-
-import org.jboss.as.controller.AbstractAddStepHandler;
 import org.jboss.as.controller.AbstractWriteAttributeHandler;
 import org.jboss.as.controller.AttributeDefinition;
+import org.jboss.as.controller.ModelOnlyAddStepHandler;
 import org.jboss.as.controller.ModelOnlyRemoveStepHandler;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
@@ -59,7 +39,7 @@ public class ConstrainedResource extends SimpleResourceDefinition {
             .addAccessConstraint(DS_SECURITY_DEF)
             .build();
 
-    static SimpleAttributeDefinition SECURITY_DOMAIN = new SimpleAttributeDefinitionBuilder("security-domain", ModelType.STRING)
+    static final SimpleAttributeDefinition SECURITY_DOMAIN = new SimpleAttributeDefinitionBuilder("security-domain", ModelType.STRING)
             .setAllowExpression(true)
             .setAttributeGroup("security")
             .setRequired(false)
@@ -76,11 +56,11 @@ public class ConstrainedResource extends SimpleResourceDefinition {
             .build();
 
 
-    static SimpleAttributeDefinition NEW_CONNECTION_SQL = new SimpleAttributeDefinitionBuilder("new-connection-sql", ModelType.STRING, true)
+    static final SimpleAttributeDefinition NEW_CONNECTION_SQL = new SimpleAttributeDefinitionBuilder("new-connection-sql", ModelType.STRING, true)
             .setAllowExpression(true)
             .build();
 
-    static SimpleAttributeDefinition JNDI_NAME = new SimpleAttributeDefinitionBuilder("jndi-name", ModelType.STRING, true)
+    static final SimpleAttributeDefinition JNDI_NAME = new SimpleAttributeDefinitionBuilder("jndi-name", ModelType.STRING, true)
             .setAllowExpression(true)
             .setAttributeGroup("naming")
             .setValidator(new ParameterValidator() {
@@ -95,8 +75,6 @@ public class ConstrainedResource extends SimpleResourceDefinition {
                                 throw new OperationFailedException("Jndi name shouldn't include '//' or end with '/'");
                             }
                         }
-                    } else {
-                        throw new OperationFailedException("Jndi name is required");
                     }
                 }
             })
@@ -104,7 +82,7 @@ public class ConstrainedResource extends SimpleResourceDefinition {
 
     public ConstrainedResource(PathElement pathElement) {
         super(new Parameters(pathElement, NonResolvingResourceDescriptionResolver.INSTANCE)
-                .setAddHandler(new AbstractAddStepHandler(PASSWORD, SECURITY_DOMAIN, AUTHENTICATION_INFLOW))
+                .setAddHandler(ModelOnlyAddStepHandler.INSTANCE)
                 .setRemoveHandler(ModelOnlyRemoveStepHandler.INSTANCE)
                 .setAccessConstraints(new ApplicationTypeAccessConstraintDefinition(new ApplicationTypeConfig("rbac", "datasource"))));
     }

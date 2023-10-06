@@ -1,17 +1,6 @@
 /*
- * Copyright 2018 JBoss by Red Hat.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.server.controller.git;
 
@@ -35,7 +24,6 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Stream;
 
 import org.eclipse.jgit.api.AddCommand;
@@ -115,6 +103,7 @@ public class GitRepository implements Closeable {
                 try (Git git = Git.init().setDirectory(baseDir).setInitialBranch(branch).call()) {
                     StoredConfig config = git.getRepository().getConfig();
                     config.setBoolean(ConfigConstants.CONFIG_COMMIT_SECTION, null, ConfigConstants.CONFIG_KEY_GPGSIGN, gitConfig.isSign());
+                    config.setBoolean(ConfigConstants.CONFIG_TAG_SECTION, null, ConfigConstants.CONFIG_KEY_GPGSIGN, gitConfig.isSign());
                     config.save();
                     final AddCommand addCommand = git.add();
                     addCommand.addFilepattern("data/content/");
@@ -134,11 +123,12 @@ public class GitRepository implements Closeable {
                 Files.copy(basePath, atticPath, StandardCopyOption.REPLACE_EXISTING);
                 clearExistingFiles(basePath, gitConfig.getRepository());
                 try (Git git = Git.init().setDirectory(baseDir).setInitialBranch(branch).call()) {
-                    String remoteName = UUID.randomUUID().toString();
+                    String remoteName = DEFAULT_REMOTE_NAME;
                     StoredConfig config = git.getRepository().getConfig();
-                    config.setString("remote", remoteName, "url", gitConfig.getRepository());
-                    config.setString("remote", remoteName, "fetch", "+" + R_HEADS + "*:" + R_REMOTES + remoteName + "/*");
+                    config.setString(ConfigConstants.CONFIG_REMOTE_SECTION, remoteName, ConfigConstants.CONFIG_KEY_URL, gitConfig.getRepository());
+                    config.setString(ConfigConstants.CONFIG_REMOTE_SECTION, remoteName, ConfigConstants.CONFIG_FETCH_SECTION, "+" + R_HEADS + "*:" + R_REMOTES + remoteName + "/*");
                     config.setBoolean(ConfigConstants.CONFIG_COMMIT_SECTION, null, ConfigConstants.CONFIG_KEY_GPGSIGN, gitConfig.isSign());
+                    config.setBoolean(ConfigConstants.CONFIG_TAG_SECTION, null, ConfigConstants.CONFIG_KEY_GPGSIGN, gitConfig.isSign());
                     config.save();
                     git.clean().call();
                     git.pull().setRemote(remoteName).setRemoteBranchName(branch).setStrategy(MergeStrategy.RESOLVE).call();
@@ -298,7 +288,7 @@ public class GitRepository implements Closeable {
         }
         StoredConfig config = repository.getConfig();
         for (String remoteName : repository.getRemoteNames()) {
-            if (gitRepository.equals(config.getString("remote", remoteName, "url"))) {
+            if (gitRepository.equals(config.getString(ConfigConstants.CONFIG_REMOTE_SECTION, remoteName, ConfigConstants.CONFIG_KEY_URL))) {
                 return remoteName;
             }
         }

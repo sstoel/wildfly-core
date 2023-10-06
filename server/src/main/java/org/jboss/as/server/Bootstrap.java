@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server;
@@ -33,7 +16,6 @@ import org.jboss.as.controller.access.management.DelegatingConfigurableAuthorize
 import org.jboss.as.controller.access.management.ManagementSecurityIdentitySupplier;
 import org.jboss.as.controller.audit.ManagedAuditLogger;
 import org.jboss.as.controller.extension.ExtensionRegistry;
-import org.jboss.as.controller.extension.RuntimeHostControllerInfoAccessor;
 import org.jboss.as.controller.parsing.Namespace;
 import org.jboss.as.controller.persistence.BackupXmlConfigurationPersister;
 import org.jboss.as.controller.persistence.ConfigurationFile;
@@ -107,7 +89,12 @@ public interface Bootstrap {
             this.auditLogger = serverEnvironment.createAuditLogger();
             this.authorizer = new DelegatingConfigurableAuthorizer();
             this.securityIdentitySupplier = new ManagementSecurityIdentitySupplier();
-            this.extensionRegistry = new ExtensionRegistry(serverEnvironment.getLaunchType().getProcessType(), runningModeControl, this.auditLogger, authorizer, securityIdentitySupplier, RuntimeHostControllerInfoAccessor.SERVER);
+            this.extensionRegistry = ExtensionRegistry.builder(serverEnvironment.getLaunchType().getProcessType())
+                    .withRunningModeControl(this.runningModeControl)
+                    .withAuditLogger(this.auditLogger)
+                    .withAuthorizer(this.authorizer)
+                    .withSecurityIdentitySupplier(this.securityIdentitySupplier)
+                    .build();
             this.capabilityRegistry = new CapabilityRegistry(true);
             this.startTime = serverEnvironment.getStartTime();
         }

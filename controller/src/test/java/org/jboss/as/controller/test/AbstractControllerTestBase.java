@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller.test;
@@ -28,6 +11,8 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP_ADDR;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OUTCOME;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESULT;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ROLLED_BACK;
+import static org.junit.Assert.assertFalse;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +36,7 @@ import org.jboss.as.controller.RunningMode;
 import org.jboss.as.controller.RunningModeControl;
 import org.jboss.as.controller.TestModelControllerService;
 import org.jboss.as.controller.descriptions.NonResolvingResourceDescriptionResolver;
+import org.jboss.as.controller.notification.NotificationHandlerRegistry;
 import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.controller.persistence.AbstractConfigurationPersister;
 import org.jboss.as.controller.persistence.ConfigurationPersistenceException;
@@ -80,6 +66,7 @@ public abstract class AbstractControllerTestBase {
     protected ModelController controller;
     protected volatile ProcessType processType;
     protected CapabilityRegistry capabilityRegistry;
+    private NotificationHandlerRegistry notificationHandlerRegistry;
 
     protected AbstractControllerTestBase(ProcessType processType) {
         this.processType = processType;
@@ -145,6 +132,7 @@ public abstract class AbstractControllerTestBase {
 
     public ModelNode executeCheckNoFailure(ModelNode operation) throws OperationFailedException {
         ModelNode rsp = getController().execute(operation, null, null, null);
+        assertNoUndefinedRolledBackNode(rsp);
         if (FAILED.equals(rsp.get(OUTCOME).asString())) {
             ModelNode fd = rsp.get(FAILURE_DESCRIPTION);
             throw new OperationFailedException(fd.toString(), fd);
@@ -153,12 +141,13 @@ public abstract class AbstractControllerTestBase {
     }
 
     public ModelNode executeCheckForFailure(ModelNode operation) {
-            ModelNode rsp = getController().execute(operation, null, null, null);
-            if (!FAILED.equals(rsp.get(OUTCOME).asString())) {
-                Assert.fail("Should have failed!");
-            }
-            return rsp;
+        ModelNode rsp = getController().execute(operation, null, null, null);
+        assertNoUndefinedRolledBackNode(rsp);
+        if (!FAILED.equals(rsp.get(OUTCOME).asString())) {
+            Assert.fail("Should have failed!");
         }
+        return rsp;
+    }
 
     @Before
     public void setupController() throws InterruptedException {
@@ -169,6 +158,7 @@ public abstract class AbstractControllerTestBase {
         svc.awaitStartup(30, TimeUnit.SECONDS);
         controller = svc.getValue();
         capabilityRegistry = svc.getCapabilityRegistry();
+        notificationHandlerRegistry = svc.getNotificationHandlerRegistry();
         ModelNode setup = Util.getEmptyOperation("setup", new ModelNode());
         controller.execute(setup, null, null, null);
     }
@@ -193,6 +183,10 @@ public abstract class AbstractControllerTestBase {
 
     protected void addBootOperations(List<ModelNode> bootOperations) {
 
+    }
+
+    protected NotificationHandlerRegistry getNotificationHandlerRegistry() {
+        return notificationHandlerRegistry;
     }
 
     public class ModelControllerService extends TestModelControllerService {
@@ -300,6 +294,10 @@ public abstract class AbstractControllerTestBase {
                 }
             }
         }
+    }
+
+    static void assertNoUndefinedRolledBackNode(ModelNode response) {
+        assertFalse("Response has undefined rolled-back node", response.has(ROLLED_BACK) && !response.hasDefined(ROLLED_BACK));
     }
 
 }

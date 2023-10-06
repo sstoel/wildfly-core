@@ -1,19 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2015 Red Hat, Inc., and individual contributors
- * as indicated by the @author tags.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.wildfly.extension.elytron;
 
@@ -33,7 +20,6 @@ import static org.wildfly.extension.elytron.ElytronDescriptionConstants.PRINCIPA
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.REALM_MAPPING;
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.ROLE_DECODER;
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.ROLE_MAPPER;
-import static org.wildfly.extension.elytron.ElytronDescriptionConstants.ROLE_MAPPING;
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.TO;
 
 import javax.xml.stream.XMLStreamException;
@@ -48,8 +34,6 @@ import org.jboss.as.controller.PersistentResourceXMLDescription;
 import org.jboss.as.controller.parsing.ParseUtils;
 import org.jboss.dmr.ModelNode;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
-
-import java.util.Iterator;
 
 /**
  * XML handling for the <mappers /> element.
@@ -194,32 +178,7 @@ class MapperParser {
     private PersistentResourceXMLDescription mappedRoleMapperParser = PersistentResourceXMLDescription.builder(RoleMapperDefinitions.getMappedRoleMapperDefinition().getPathElement())
             .addAttribute(RoleMapperDefinitions.KEEP_MAPPED)
             .addAttribute(RoleMapperDefinitions.KEEP_NON_MAPPED)
-            .addAttribute(RoleMapperDefinitions.ROLE_MAPPING_MAP, new AttributeParsers.MapParser(null, ROLE_MAPPING, false) {
-                @Override
-                public void parseSingleElement(MapAttributeDefinition attribute, XMLExtendedStreamReader reader, ModelNode operation) throws XMLStreamException {
-                    final String[] array = requireAttributes(reader, FROM, TO);
-                    ModelNode paramVal = operation.get(attribute.getName()).get(array[0]).setEmptyList();
-                    for (String role : array[1].split("\\s+")) {
-                        paramVal.add(role);
-                    }
-                    ParseUtils.requireNoContent(reader);
-                }
-
-            }
-            , new AttributeMarshallers.MapAttributeMarshaller(null, null, false) {
-                @Override
-                public void marshallSingleElement(AttributeDefinition attribute, ModelNode property, boolean marshallDefault, XMLStreamWriter writer) throws XMLStreamException {
-                    writer.writeEmptyElement(ROLE_MAPPING);
-                    writer.writeAttribute(FROM, property.asProperty().getName());
-                    StringBuilder sb = new StringBuilder();
-                    Iterator<ModelNode> iter = property.asProperty().getValue().asList().iterator();
-                    while (iter.hasNext()) {
-                        sb.append(iter.next().asString());
-                        if (iter.hasNext()) sb.append(' ');
-                    }
-                    writer.writeAttribute(TO, sb.toString());
-                }
-            })
+            .addAttribute(RoleMapperDefinitions.ROLE_MAPPING_MAP)
             .build();
 
     private PersistentResourceXMLDescription regexRoleMapperParser = PersistentResourceXMLDescription.builder(RoleMapperDefinitions.getRegexRoleMapperDefinition().getPathElement())

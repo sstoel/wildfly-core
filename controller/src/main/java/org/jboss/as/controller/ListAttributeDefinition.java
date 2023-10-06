@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller;
@@ -71,35 +54,6 @@ public abstract class ListAttributeDefinition extends AttributeDefinition {
     }
 
     /**
-     * Creates and returns a {@link org.jboss.dmr.ModelNode} using the given {@code value} after first validating the node
-     * against {@link #getElementValidator() this object's element validator}.
-     * <p>
-     * If {@code value} is {@code null} an {@link ModelType#UNDEFINED undefined} node will be returned.
-     * </p>
-     *
-     * @param value the value. Will be {@link String#trim() trimmed} before use if not {@code null}.
-     * @param reader {@link XMLStreamReader} from which the {@link XMLStreamReader#getLocation() location} from which
-     *               the attribute value was read can be obtained and used in any {@code XMLStreamException}, in case
-     *               the given value is invalid.
-     *
-     * @return {@code ModelNode} representing the parsed value
-     *
-     * @throws javax.xml.stream.XMLStreamException if {@code value} is not valid
-     *
-     * @see #parseAndAddParameterElement(String, ModelNode, XMLStreamReader)
-     * @deprecated use {@link #getParser()}
-     */
-    @Deprecated
-    public ModelNode parse(final String value, final XMLStreamReader reader) throws XMLStreamException {
-
-        try {
-            return SimpleAttributeDefinition.parse(this, elementValidator, value);
-        } catch (OperationFailedException e) {
-            throw new XMLStreamException(e.getFailureDescription().toString(), reader.getLocation());
-        }
-    }
-
-    /**
      * Creates a {@link ModelNode} using the given {@code value} after first validating the node
      * against {@link #getElementValidator() this object's element validator}, and then stores it in the given {@code operation}
      * model node as an element in a {@link ModelType#LIST} value in a key/value pair whose key is this attribute's
@@ -123,7 +77,7 @@ public abstract class ListAttributeDefinition extends AttributeDefinition {
      */
     @Deprecated
     public void parseAndAddParameterElement(final String value, final ModelNode operation, final XMLStreamReader reader) throws XMLStreamException {
-        ModelNode paramVal = parse(value, reader);
+        ModelNode paramVal = AttributeParser.SIMPLE.parse(this, value, reader);
         operation.get(getName()).add(paramVal);
     }
 
@@ -236,24 +190,6 @@ public abstract class ListAttributeDefinition extends AttributeDefinition {
      */
     protected ModelNode convertParameterElementExpressions(ModelNode parameterElement) {
         return isAllowExpression() ? convertStringExpression(parameterElement) : parameterElement;
-    }
-
-    /**
-     * Parses whole value as list attribute
-     * @deprecated in favour of using  {@link AttributeParser attribute parser}
-     * @param value String with "," separated string elements
-     * @param operation operation to with this list elements are added
-     * @param reader xml reader from where reading is be done
-     * @throws XMLStreamException if {@code value} is not valid
-     */
-    @Deprecated
-    public void parseAndSetParameter(String value, ModelNode operation, XMLStreamReader reader) throws XMLStreamException {
-        //we use manual parsing here, and not #getParser().. to preserve backward compatibility.
-        if (value != null) {
-            for (String element : value.split(",")) {
-                parseAndAddParameterElement(element.trim(), operation, reader);
-            }
-        }
     }
 
     public abstract static class Builder<BUILDER extends Builder, ATTRIBUTE extends ListAttributeDefinition>

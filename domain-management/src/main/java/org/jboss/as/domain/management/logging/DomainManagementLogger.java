@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.domain.management.logging;
@@ -443,28 +426,12 @@ public interface DomainManagementLogger extends BasicLogger {
     String errorHeader();
 
     /**
-     * A message to check if this user is going to be used by a host controller to connect to the domain controller.
-     *
-     * @return a {@link String} for the message.
-     */
-    @Message(id = Message.NONE, value = "Is this new user going to be used for one AS process to connect to another AS process? %ne.g. for a secondary host controller connecting to the primary or for a Remoting connection for server to server Jakarta Enterprise Beans calls.")
-    String serverUser();
-
-    /**
      * Simple yes/no prompt.
      *
      * @return a {@link String} for the message.
      */
     @Message(id = Message.NONE, value = "yes/no?")
     String yesNo();
-
-    /**
-     * To represent this user use the following secret entry in the server-identities.
-     *
-     * @return a {@link String} for the message.
-     */
-    @Message(id = Message.NONE, value = "To represent the user add the following to the server-identities definition <secret value=\"%s\" />")
-    String secretElement(String base64);
 
     /**
      * Error message if more than one username/password authentication mechanism is defined.
@@ -1149,14 +1116,14 @@ public interface DomainManagementLogger extends BasicLogger {
     @Message(id = 110, value = "Unable to load a simple name for group '%s'")
     NamingException unableToLoadSimpleNameForGroup(String distinguishedName);
 
-    @Message(id = 111, value = "Keystore %s not found, it will be auto generated on first use with a self signed certificate for host %s")
+    @Message(id = 111, value = "Keystore %s not found, it will be auto-generated on first use with a self-signed certificate for host %s")
     @LogMessage(level = WARN)
     void keystoreWillBeCreated(String file, String host);
 
-    @Message(id = 112, value = "Failed to generate self signed certificate")
+    @Message(id = 112, value = "Failed to generate self-signed certificate")
     RuntimeException failedToGenerateSelfSignedCertificate(@Cause Exception e);
 
-    @Message(id = 113, value = "Generated self signed certificate at %s. Please note that self signed certificates are not secure, and should only be used for testing purposes. Do not use this self signed certificate in production.%nSHA-1 fingerprint of the generated key is %s%nSHA-256 fingerprint of the generated key is %s")
+    @Message(id = 113, value = "Generated self-signed certificate at %s. Please note that self-signed certificates are not secure, and should only be used for testing purposes. Do not use this self-signed certificate in production.%nSHA-1 fingerprint of the generated key is %s%nSHA-256 fingerprint of the generated key is %s")
     @LogMessage(level = WARN)
     void keystoreHasBeenCreated(String file, String sha1, String sha256);
 
@@ -1483,13 +1450,6 @@ public interface DomainManagementLogger extends BasicLogger {
      */
     @Message(id = Message.NONE, value = "Automatically confirm warning in interactive mode")
     String argConfirmWarning();
-
-    /**
-     * Instructions for the {@link org.jboss.as.domain.management.security.adduser.AddUser.CommandLineArgument#DISPLAY_SECRET} command line argument.
-     * @return the message.
-     */
-    @Message(id = Message.NONE, value = "If set the secret value will be printed.")
-    String argDisplaySecret();
 
     /**
      * Instructions for the {@link org.jboss.as.domain.management.security.adduser.AddUser.CommandLineArgument#HELP} command line argument.

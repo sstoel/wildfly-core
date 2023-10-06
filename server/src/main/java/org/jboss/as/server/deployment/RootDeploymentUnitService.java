@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2010, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server.deployment;
@@ -46,7 +29,6 @@ final class RootDeploymentUnitService extends AbstractDeploymentUnitService {
     private final Supplier<DeploymentMountProvider> serverDeploymentRepositorySupplier;
     private final Supplier<PathManager> pathManagerSupplier;
     private final Supplier<VirtualFile> contentsSupplier;
-    private final String name;
     private final String managementName;
     private final DeploymentUnit parent;
     private final DeploymentOverlayIndex deploymentOverlays;
@@ -55,7 +37,6 @@ final class RootDeploymentUnitService extends AbstractDeploymentUnitService {
 
     /**
      * Construct a new instance.
-     *  @param name the deployment unit simple name
      * @param managementName the deployment's domain-wide unique name
      * @param parent the parent deployment unit
      * @param registration the registration
@@ -76,12 +57,11 @@ final class RootDeploymentUnitService extends AbstractDeploymentUnitService {
                                      final DeploymentOverlayIndex deploymentOverlays,
                                      final AnnotationIndexSupport annotationIndexSupport,
                                      final boolean exploded) {
-        super(deploymentUnitConsumer, registration, mutableRegistration, resource, capabilityServiceSupport);
+        super(deploymentUnitConsumer, registration, mutableRegistration, resource, capabilityServiceSupport, name);
         assert name != null : "name is null";
         this.serverDeploymentRepositorySupplier = serverDeploymentRepositorySupplier;
         this.pathManagerSupplier = pathManagerSupplier;
         this.contentsSupplier = contentsSupplier;
-        this.name = name;
         this.managementName = managementName;
         this.parent = parent;
         this.deploymentOverlays = deploymentOverlays;

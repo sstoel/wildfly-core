@@ -1,17 +1,6 @@
 /*
- * Copyright 2019 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.server.parsing;
@@ -27,10 +16,7 @@ import javax.xml.stream.XMLStreamReader;
 
 import org.jboss.as.controller.ExpressionResolver;
 import org.jboss.as.controller.ProcessType;
-import org.jboss.as.controller.RunningMode;
-import org.jboss.as.controller.RunningModeControl;
 import org.jboss.as.controller.extension.ExtensionRegistry;
-import org.jboss.as.controller.extension.RuntimeHostControllerInfoAccessor;
 import org.jboss.as.controller.logging.ControllerLogger;
 import org.jboss.as.controller.parsing.Namespace;
 import org.jboss.dmr.ModelNode;
@@ -54,9 +40,7 @@ public class SystemPropertiesParsingTestCase {
 
     @BeforeClass
     public static void workAroundWFLY5637() {
-        String versionString = System.getProperty("java.specification.version");
-        versionString = versionString.startsWith("1.") ? versionString.substring(2) : versionString;
-        Assume.assumeTrue("WFCORE-5637 Tests failing if the JDK in use is after 16.", Integer.parseInt(versionString) < 17);
+        Assume.assumeTrue("WFCORE-5637 Tests failing if the JDK in use is after 16.", Runtime.version().compareTo(Runtime.Version.parse("17")) < 0);
     }
 
     @Before
@@ -99,8 +83,7 @@ public class SystemPropertiesParsingTestCase {
                     + "    </system-properties>\n"
                     + "</server>";
             final XMLStreamReader reader = XMLInputFactory.newInstance().createXMLStreamReader(new StringReader(xml));
-            final ExtensionRegistry extensionRegistry = new ExtensionRegistry(ProcessType.STANDALONE_SERVER,
-                    new RunningModeControl(RunningMode.NORMAL), null, null, null, RuntimeHostControllerInfoAccessor.SERVER);
+            final ExtensionRegistry extensionRegistry = ExtensionRegistry.builder(ProcessType.STANDALONE_SERVER).build();
             final StandaloneXml parser = new StandaloneXml(null, null, extensionRegistry);
             final List<ModelNode> operationList = new ArrayList<>();
             final XMLMapper mapper = XMLMapper.Factory.create();

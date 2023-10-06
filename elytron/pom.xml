@@ -1,20 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ~ JBoss, Home of Professional Open Source.
-  ~ Copyright 2014 Red Hat, Inc., and individual contributors
-  ~ as indicated by the @author tags.
-  ~
-  ~ Licensed under the Apache License, Version 2.0 (the "License");
-  ~ you may not use this file except in compliance with the License.
-  ~ You may obtain a copy of the License at
-  ~
-  ~     http://www.apache.org/licenses/LICENSE-2.0
-  ~
-  ~ Unless required by applicable law or agreed to in writing, software
-  ~ distributed under the License is distributed on an "AS IS" BASIS,
-  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  ~ See the License for the specific language governing permissions and
-  ~ limitations under the License.
+  ~ Copyright The WildFly Authors
+  ~ SPDX-License-Identifier: Apache-2.0
   -->
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
@@ -22,7 +9,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>20.0.0.Beta3-SNAPSHOT</version>
+        <version>22.0.0.Final-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-elytron-integration</artifactId>
@@ -149,7 +136,7 @@
         <dependency>
             <groupId>org.apache.directory.api</groupId>
             <artifactId>api-ldap-codec-standalone</artifactId>
-            <version>1.0.0</version>
+            <version>1.0.3</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
@@ -162,7 +149,7 @@
         <dependency>
             <groupId>org.apache.directory.api</groupId>
             <artifactId>api-ldap-net-mina</artifactId>
-            <version>1.0.0</version>
+            <version>1.0.3</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
@@ -328,6 +315,36 @@
             <artifactId>wildfly-elytron-sasl-plain</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.wildfly.openssl</groupId>
+            <artifactId>wildfly-openssl-java</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.wildfly.openssl</groupId>
+            <artifactId>wildfly-openssl-linux-x86_64</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.wildfly.openssl</groupId>
+            <artifactId>wildfly-openssl-linux-s390x</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.wildfly.openssl</groupId>
+            <artifactId>wildfly-openssl-macosx-x86_64</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.wildfly.openssl</groupId>
+            <artifactId>wildfly-openssl-windows-x86_64</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -351,10 +368,7 @@
                                 <exclude>jacc-with-providers.xml</exclude>
                                 <exclude>legacy*.xml</exclude>
                             </excludes>
-                            <systemId>src/main/resources/schema/wildfly-elytron_16_0.xsd</systemId>
-                        </validationSet>
-                        <validationSet>
-                            <dir>src/main/resources/subsystem-templates</dir>
+                            <systemId>src/main/resources/schema/wildfly-elytron_18_0.xsd</systemId>
                         </validationSet>
                         <validationSet>
                             <dir>src/main/resources/schema</dir>

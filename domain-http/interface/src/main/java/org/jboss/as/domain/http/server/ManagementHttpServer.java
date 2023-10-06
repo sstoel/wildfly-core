@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.jboss.as.domain.http.server;
 
@@ -42,7 +25,6 @@ import java.util.stream.Collectors;
 import javax.net.ssl.SSLContext;
 
 import org.jboss.as.controller.ModelController;
-import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.management.HttpInterfaceCommonPolicy.Header;
 import org.jboss.as.domain.http.server.cors.CorsHttpHandler;
 import org.jboss.as.domain.http.server.logging.HttpServerLogger;
@@ -464,7 +446,6 @@ public class ManagementHttpServer {
         private SSLContext sslContext;
         private SslClientAuthMode sslClientAuthMode;
         private HttpAuthenticationFactory httpAuthenticationFactory;
-        private ProcessStateNotifier processStateNotifier;
         private ConsoleMode consoleMode;
         private String consoleSlot;
         private ChannelUpgradeHandler upgradeHandler;
@@ -511,25 +492,6 @@ public class ManagementHttpServer {
             this.httpAuthenticationFactory = httpAuthenticationFactory;
 
             return this;
-        }
-
-        /**
-         * @deprecated The management Http Server no longer needs the processStateNotifier. This class was used to see if it was possible
-         * to process an Http Request to the server. If the process status was starting or stopping, those requests were rejected.
-         * Now its use has been replaced by using {@link ConsoleAvailability} which maintains this behavior.
-         */
-        @Deprecated
-        public Builder setControlledProcessStateNotifier(ProcessStateNotifier processStateNotifier) {
-            assertNotBuilt();
-            this.processStateNotifier = processStateNotifier;
-
-            return this;
-        }
-
-        /** @deprecated use {@link #setControlledProcessStateNotifier(ProcessStateNotifier)} */
-        @Deprecated
-        public Builder setControlledProcessStateService(ProcessStateNotifier processStateNotifier) {
-            return setControlledProcessStateNotifier(processStateNotifier);
         }
 
         public Builder setConsoleMode(ConsoleMode consoleMode) {

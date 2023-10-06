@@ -1,44 +1,30 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller;
 
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 import org.jboss.as.controller.access.management.AccessConstraintDefinition;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.descriptions.DefaultResourceAddDescriptionProvider;
 import org.jboss.as.controller.descriptions.DefaultResourceDescriptionProvider;
+import org.jboss.as.controller.descriptions.DefaultResourceRemoveDescriptionProvider;
 import org.jboss.as.controller.descriptions.DescriptionProvider;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.descriptions.ResourceDescriptionResolver;
 import org.jboss.as.controller.logging.ControllerLogger;
+import org.jboss.as.controller.registry.AttributeAccess;
 import org.jboss.as.controller.registry.ImmutableManagementResourceRegistration;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.OperationEntry;
@@ -77,38 +63,6 @@ public class SimpleResourceDefinition implements ResourceDefinition {
     private final RuntimePackageDependency[] additionalPackages;
 
     /**
-     * {@link ResourceDefinition} that uses the given {code descriptionProvider} to describe the resource.
-     *
-     * @param pathElement         the path. Can be {@code null}.
-     * @param descriptionProvider the description provider. Cannot be {@code null}
-     * @throws IllegalArgumentException if {@code descriptionProvider} is {@code null}.
-     * @deprecated Use {@link #SimpleResourceDefinition(Parameters)}
-     */
-    @Deprecated
-    public SimpleResourceDefinition(final PathElement pathElement, final DescriptionProvider descriptionProvider) {
-        //Can be removed when we get to 3.0.0
-        Assert.checkNotNullParam("descriptionProvider", descriptionProvider);
-        this.pathElement = pathElement;
-        this.descriptionResolver = null;
-        this.descriptionProvider = descriptionProvider;
-        this.addHandler = null;
-        this.removeHandler = null;
-        this.addRestartLevel = null;
-        this.removeRestartLevel = null;
-        this.deprecationData = null;
-        this.runtime = false;
-        this.orderedChild = false;
-        this.capabilities = NO_CAPABILITIES;
-        this.incorporatingCapabilities = null;
-        this.accessConstraints = Collections.emptyList();
-        this.requirements = Collections.emptySet();
-        this.minOccurs = 0;
-        this.maxOccurs = Integer.MAX_VALUE;
-        this.feature = true;
-        this.additionalPackages = null;
-    }
-
-    /**
      * {@link ResourceDefinition} that uses the given {code descriptionResolver} to configure a
      * {@link DefaultResourceDescriptionProvider} to describe the resource.
      *
@@ -117,24 +71,9 @@ public class SimpleResourceDefinition implements ResourceDefinition {
      * @throws IllegalArgumentException if any parameter is {@code null}.
      */
     public SimpleResourceDefinition(final PathElement pathElement, final ResourceDescriptionResolver descriptionResolver) {
-        this(pathElement, descriptionResolver, null, null, null, null, null);
-    }
-
-    /**
-     * {@link ResourceDefinition} that uses the given {code descriptionResolver} to configure a
-     * {@link DefaultResourceDescriptionProvider} to describe the resource.
-     *
-     * @param pathElement         the path. Cannot be {@code null}.
-     * @param descriptionResolver the description resolver to use in the description provider. Cannot be {@code null}
-     * @param isRuntime tells if resource is runtime
-     * @throws IllegalArgumentException if any parameter is {@code null}.
-     * @deprecated Use {@link #SimpleResourceDefinition(Parameters)}
-     */
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public SimpleResourceDefinition(final PathElement pathElement, final ResourceDescriptionResolver descriptionResolver, boolean isRuntime) {
-        //Can be removed when we get to 3.0.0
-        this(pathElement, descriptionResolver, null, null, null, null, null, isRuntime);
+        this(new Parameters(pathElement, descriptionResolver)
+                .setAddRestartLevel(OperationEntry.Flag.RESTART_NONE)
+                .setRemoveRestartLevel(OperationEntry.Flag.RESTART_RESOURCE_SERVICES));
     }
 
     /**
@@ -151,136 +90,11 @@ public class SimpleResourceDefinition implements ResourceDefinition {
      */
     public SimpleResourceDefinition(final PathElement pathElement, final ResourceDescriptionResolver descriptionResolver,
                                     final OperationStepHandler addHandler, final OperationStepHandler removeHandler) {
-        this(pathElement, descriptionResolver, addHandler, removeHandler, null, null, null);
-    }
-
-    /**
-     * {@link ResourceDefinition} that uses the given {code descriptionResolver} to configure a
-     * {@link DefaultResourceDescriptionProvider} to describe the resource.
-     *
-     * @param pathElement         the path. Cannot be {@code null}.
-     * @param descriptionResolver the description resolver to use in the description provider. Cannot be {@code null}      *
-     * @param addHandler          a handler to {@link #registerOperations(ManagementResourceRegistration) register} for the resource "add" operation.
-     *                            Can be {null}
-     * @param removeHandler       a handler to {@link #registerOperations(ManagementResourceRegistration) register} for the resource "remove" operation.
-     *                            Can be {null}
-     * @param isRuntime tells is resources is runtime or not
-     * @throws IllegalArgumentException if any parameter is {@code null}
-     * @deprecated Use {@link #SimpleResourceDefinition(Parameters)}
-     */
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public SimpleResourceDefinition(final PathElement pathElement, final ResourceDescriptionResolver descriptionResolver,
-                                    final OperationStepHandler addHandler, final OperationStepHandler removeHandler, boolean isRuntime) {
-        //Can be removed when we get to 3.0.0
-        this(pathElement, descriptionResolver, addHandler, removeHandler, null, null, null, isRuntime);
-    }
-
-    /**
-     * {@link ResourceDefinition} that uses the given {code descriptionResolver} to configure a
-     * {@link DefaultResourceDescriptionProvider} to describe the resource.
-     *
-     * @param pathElement         the path. Cannot be {@code null}.
-     * @param descriptionResolver the description resolver to use in the description provider. Cannot be {@code null}      *
-     * @param addHandler          a handler to {@link #registerOperations(ManagementResourceRegistration) register} for the resource "add" operation.
-     *                            Can be {null}
-     * @param removeHandler       a handler to {@link #registerOperations(ManagementResourceRegistration) register} for the resource "remove" operation.
-     *                            Can be {null}
-     * @param deprecationData     Information describing deprecation of this resource. Can be {@code null} if the resource isn't deprecated.
-     * @throws IllegalArgumentException if any parameter is {@code null}
-     * @deprecated Use {@link #SimpleResourceDefinition(Parameters)}
-     */
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public SimpleResourceDefinition(final PathElement pathElement, final ResourceDescriptionResolver descriptionResolver,
-                                    final OperationStepHandler addHandler, final OperationStepHandler removeHandler,
-                                    final DeprecationData deprecationData) {
-        //Can be removed when we get to 3.0.0
-        this(pathElement, descriptionResolver, addHandler, removeHandler, null, null, deprecationData);
-    }
-
-
-    /**
-     * {@link ResourceDefinition} that uses the given {code descriptionResolver} to configure a
-     * {@link DefaultResourceDescriptionProvider} to describe the resource.
-     *
-     * @param pathElement         the path. Can be {@code null}.
-     * @param descriptionResolver the description resolver to use in the description provider. Cannot be {@code null}      *
-     * @param addHandler          a handler to {@link #registerOperations(ManagementResourceRegistration) register} for the resource "add" operation.
-     *                            Can be {null}
-     * @param removeHandler       a handler to {@link #registerOperations(ManagementResourceRegistration) register} for the resource "remove" operation.
-     *                            Can be {null}
-     * @throws IllegalArgumentException if {@code descriptionResolver} is {@code null}.
-     * @deprecated Use {@link #SimpleResourceDefinition(Parameters)}
-     */
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public SimpleResourceDefinition(final PathElement pathElement, final ResourceDescriptionResolver descriptionResolver,
-                                    final OperationStepHandler addHandler, final OperationStepHandler removeHandler,
-                                    final OperationEntry.Flag addRestartLevel, final OperationEntry.Flag removeRestartLevel) {
-        //Can be removed when we get to 3.0.0
-        this(pathElement, descriptionResolver, addHandler, removeHandler, addRestartLevel, removeRestartLevel, null);
-    }
-
-
-    /**
-     * {@link ResourceDefinition} that uses the given {code descriptionResolver} to configure a
-     * {@link DefaultResourceDescriptionProvider} to describe the resource.
-     *
-     * @param pathElement         the path. Can be {@code null}.
-     * @param descriptionResolver the description resolver to use in the description provider. Cannot be {@code null}      *
-     * @param addHandler          a handler to {@link #registerOperations(ManagementResourceRegistration) register} for the resource "add" operation.
-     *                            Can be {null}
-     * @param removeHandler       a handler to {@link #registerOperations(ManagementResourceRegistration) register} for the resource "remove" operation.
-     *                            Can be {null}
-     * @param deprecationData     Information describing deprecation of this resource. Can be {@code null} if the resource isn't deprecated.
-     * @throws IllegalArgumentException if {@code descriptionResolver} is {@code null}.
-     * @deprecated Use {@link #SimpleResourceDefinition(Parameters)}
-     */
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public SimpleResourceDefinition(final PathElement pathElement, final ResourceDescriptionResolver descriptionResolver,
-                                    final OperationStepHandler addHandler, final OperationStepHandler removeHandler,
-                                    final OperationEntry.Flag addRestartLevel, final OperationEntry.Flag removeRestartLevel,
-                                    final DeprecationData deprecationData) {
-        //Can be removed when we get to 3.0.0
-        this(pathElement, descriptionResolver, addHandler, removeHandler, addRestartLevel, removeRestartLevel, deprecationData, false);
-    }
-
-
-
-    /**
-     * {@link ResourceDefinition} that uses the given {code descriptionResolver} to configure a
-     * {@link DefaultResourceDescriptionProvider} to describe the resource.
-     *
-     * @param pathElement         the path. Can be {@code null}.
-     * @param descriptionResolver the description resolver to use in the description provider. Cannot be {@code null}      *
-     * @param addHandler          a handler to {@link #registerOperations(ManagementResourceRegistration) register} for the resource "add" operation.
-     *                            Can be {null}
-     * @param removeHandler       a handler to {@link #registerOperations(ManagementResourceRegistration) register} for the resource "remove" operation.
-     *                            Can be {null}
-     * @param deprecationData     Information describing deprecation of this resource. Can be {@code null} if the resource isn't deprecated.
-     * @param runtime             Whether this is a runtime resource
-     * @throws IllegalArgumentException if {@code descriptionResolver} is {@code null}.
-     * @deprecated Use {@link #SimpleResourceDefinition(Parameters)}
-     */
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public SimpleResourceDefinition(final PathElement pathElement, final ResourceDescriptionResolver descriptionResolver,
-                                    final OperationStepHandler addHandler, final OperationStepHandler removeHandler,
-                                    final OperationEntry.Flag addRestartLevel, final OperationEntry.Flag removeRestartLevel,
-                                    final DeprecationData deprecationData, final boolean runtime) {
-        //Don't add new constructor variants!
-        //Use the Parameters variety
-
-        //Can be removed when we get to 3.0.0
         this(new Parameters(pathElement, descriptionResolver)
                 .setAddHandler(addHandler)
-                .setAddRestartLevel(addRestartLevel == null ? restartLevelForAdd(addHandler) : addRestartLevel)
                 .setRemoveHandler(removeHandler)
-                .setRemoveRestartLevel(removeRestartLevel == null ? restartLevelForRemove(removeHandler) : removeRestartLevel)
-                .setDeprecationData(deprecationData)
-                .setRuntime(runtime));
+                .setAddRestartLevel(restartLevelForAdd(addHandler))
+                .setRemoveRestartLevel(restartLevelForRemove(removeHandler)));
     }
 
     /**
@@ -299,7 +113,7 @@ public class SimpleResourceDefinition implements ResourceDefinition {
         this.deprecationData = parameters.deprecationData;
         this.runtime = parameters.runtime;
         this.orderedChild = parameters.orderedChildResource;
-        this.descriptionProvider = null;
+        this.descriptionProvider = parameters.descriptionProvider;
         this.capabilities = parameters.capabilities != null ? parameters.capabilities : NO_CAPABILITIES ;
         this.incorporatingCapabilities = parameters.incorporatingCapabilities;
         if (parameters.accessConstraints != null) {
@@ -342,7 +156,6 @@ public class SimpleResourceDefinition implements ResourceDefinition {
      * Registers an add operation handler or a remove operation handler if one was provided to the constructor.
      */
     @Override
-    @SuppressWarnings("deprecation")
     public void registerOperations(ManagementResourceRegistration resourceRegistration) {
         if (addHandler != null) {
             registerAddOperation(resourceRegistration, addHandler, addRestartLevel);
@@ -406,77 +219,81 @@ public class SimpleResourceDefinition implements ResourceDefinition {
     }
 
     /**
-     * Registers add operation
+     * Returns the parameters of the {@value ModelDescriptionConstants#ADD} resource operation.
+     * The default implementation returns all registered attributes, excluding runtime-only and resource-only.
+     * @param registration the registration of this resource definition
+     * @return an array of attribute definitions
+     */
+    protected AttributeDefinition[] getAddOperationParameters(ManagementResourceRegistration registration) {
+        Stream<AttributeDefinition> attributes = registration.getAttributes(PathAddress.EMPTY_ADDRESS).values().stream()
+                .filter(AttributeAccess.Storage.CONFIGURATION) // Ignore runtime attributes
+                .map(AttributeAccess::getAttributeDefinition)
+                .filter(Predicate.not(AttributeDefinition::isResourceOnly)) // Ignore resource-only attributes
+                ;
+        if (registration.isOrderedChildResource()) {
+            attributes = Stream.concat(Stream.of(DefaultResourceAddDescriptionProvider.INDEX), attributes);
+        }
+        return attributes.toArray(AttributeDefinition[]::new);
+    }
+
+    /**
+     * Registers the {@value ModelDescriptionConstants#ADD} resource operation.
      *
      * @param registration resource on which to register
      * @param handler      operation handler to register
      * @param flags        with flags
-     * @deprecated use {@link #registerAddOperation(org.jboss.as.controller.registry.ManagementResourceRegistration, AbstractAddStepHandler, org.jboss.as.controller.registry.OperationEntry.Flag...)}
      */
-    @Deprecated
-    @SuppressWarnings("deprecation")
     protected void registerAddOperation(final ManagementResourceRegistration registration, final OperationStepHandler handler, OperationEntry.Flag... flags) {
-        Collection<? extends AttributeDefinition> parameters = (handler instanceof OperationDescriptor) ? ((OperationDescriptor) handler).getAttributes() : Collections.emptyList();
-        if (handler instanceof DescriptionProvider) {
-            registration.registerOperationHandler(getOperationDefinition(ModelDescriptionConstants.ADD,
-                                (DescriptionProvider) handler, parameters, OperationEntry.EntryType.PUBLIC,flags)
-                               , handler);
-
-        } else {
-            registration.registerOperationHandler(getOperationDefinition(ModelDescriptionConstants.ADD,
-                    new DefaultResourceAddDescriptionProvider(registration, descriptionResolver, orderedChild),
-                    parameters,
-                    OperationEntry.EntryType.PUBLIC,
-                    flags)
-                    , handler);
-        }
+        DescriptionProvider descriptionProvider = (handler instanceof DescriptionProvider) ? (DescriptionProvider) handler : new DefaultResourceAddDescriptionProvider(registration, this.descriptionResolver, this.orderedChild);
+        OperationDefinition definition = new SimpleOperationDefinitionBuilder(ModelDescriptionConstants.ADD, this.descriptionResolver)
+                .setParameters(this.getAddOperationParameters(registration))
+                .setDescriptionProvider(descriptionProvider)
+                .setEntryType(OperationEntry.EntryType.PUBLIC)
+                .withFlags(flags)
+                .build();
+        registration.registerOperationHandler(definition, handler);
     }
 
-    private OperationDefinition getOperationDefinition(String operationName, DescriptionProvider descriptionProvider, Collection<? extends AttributeDefinition> parameters, OperationEntry.EntryType entryType, OperationEntry.Flag... flags){
-        return new SimpleOperationDefinitionBuilder(operationName, descriptionResolver)
-                .setParameters(parameters.toArray(new AttributeDefinition[parameters.size()]))
-                .withFlags(flags)
-                .setEntryType(entryType)
+    /**
+     * Registers the {@value ModelDescriptionConstants#REMOVE} resource operation.
+     *
+     * @param registration resource on which to register
+     * @param handler      operation handler to register
+     * @param flags        with flags
+     */
+    protected void registerRemoveOperation(final ManagementResourceRegistration registration, final OperationStepHandler handler, OperationEntry.Flag... flags) {
+        DescriptionProvider descriptionProvider = (handler instanceof DescriptionProvider) ? (DescriptionProvider) handler : new DefaultResourceRemoveDescriptionProvider(this.descriptionResolver);
+        OperationDefinition definition = new SimpleOperationDefinitionBuilder(ModelDescriptionConstants.REMOVE, this.descriptionResolver)
                 .setDescriptionProvider(descriptionProvider)
+                .setEntryType(OperationEntry.EntryType.PUBLIC)
+                .withFlags(flags)
                 .build();
-
+        registration.registerOperationHandler(definition, handler);
     }
 
     /**
      * Registers add operation
-     * <p/>
-     * Registers add operation
      *
      * @param registration resource on which to register
      * @param handler      operation handler to register
      * @param flags        with flags
+     * @deprecated Redundant with {@link #registerAddOperation(ManagementResourceRegistration, OperationStepHandler, org.jboss.as.controller.registry.OperationEntry.Flag...)
      */
-    protected void registerAddOperation(final ManagementResourceRegistration registration, final AbstractAddStepHandler handler,
-                                        OperationEntry.Flag... flags) {
-        registration.registerOperationHandler(getOperationDefinition(ModelDescriptionConstants.ADD,
-                new DefaultResourceAddDescriptionProvider(registration, descriptionResolver, orderedChild), handler.getAttributes(), OperationEntry.EntryType.PUBLIC, flags)
-                , handler);
-    }
-
     @Deprecated
-    @SuppressWarnings("deprecation")
-    protected void registerRemoveOperation(final ManagementResourceRegistration registration, final OperationStepHandler handler,
-                                           OperationEntry.Flag... flags) {
-        if (handler instanceof DescriptionProvider) {
-            registration.registerOperationHandler(getOperationDefinition(ModelDescriptionConstants.REMOVE,
-                                            (DescriptionProvider) handler, Collections.emptyList(), OperationEntry.EntryType.PUBLIC,flags)
-                                           , handler);
-        } else {
-            OperationDefinition opDef = new SimpleOperationDefinitionBuilder(ModelDescriptionConstants.REMOVE, descriptionResolver)
-                    .withFlags(flags)
-                    .build();
-            registration.registerOperationHandler(opDef, handler);
-        }
+    protected void registerAddOperation(final ManagementResourceRegistration registration, final AbstractAddStepHandler handler, OperationEntry.Flag... flags) {
+        this.registerAddOperation(registration, (OperationStepHandler) handler, flags);
     }
 
-    @SuppressWarnings("deprecation")
-    protected void registerRemoveOperation(final ManagementResourceRegistration registration, final AbstractRemoveStepHandler handler,
-                                           OperationEntry.Flag... flags) {
+    /**
+     * Registers remove operation
+     *
+     * @param registration resource on which to register
+     * @param handler      operation handler to register
+     * @param flags        with flags
+     * @deprecated Redundant with {@link #registerRemoveOperation(ManagementResourceRegistration, OperationStepHandler, org.jboss.as.controller.registry.OperationEntry.Flag...)
+     */
+    @Deprecated
+    protected void registerRemoveOperation(final ManagementResourceRegistration registration, final AbstractRemoveStepHandler handler, OperationEntry.Flag... flags) {
         registerRemoveOperation(registration, (OperationStepHandler) handler, flags);
     }
 
@@ -559,6 +376,7 @@ public class SimpleResourceDefinition implements ResourceDefinition {
     public static class Parameters{
         private final PathElement pathElement;
         private ResourceDescriptionResolver descriptionResolver;
+        private DescriptionProvider descriptionProvider;
         private OperationStepHandler addHandler;
         private OperationStepHandler removeHandler;
         private OperationEntry.Flag addRestartLevel = OperationEntry.Flag.RESTART_NONE;
@@ -583,6 +401,18 @@ public class SimpleResourceDefinition implements ResourceDefinition {
             Assert.checkNotNullParam("descriptionResolver", descriptionResolver);
             this.pathElement = pathElement;
             this.descriptionResolver = descriptionResolver;
+        }
+
+        /**
+         * Creates a Parameters object
+         *
+         * @param pathElement         the path element of the created ResourceDefinition. Cannot be {@code null}
+         * @param descriptionProvider the description provider. Cannot be {@code null}
+         */
+        public Parameters(PathElement pathElement, DescriptionProvider descriptionProvider) {
+            Assert.checkNotNullParam("descriptionProvider", descriptionProvider);
+            this.pathElement = pathElement;
+            this.descriptionProvider = descriptionProvider;
         }
 
         /**

@@ -1,27 +1,11 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.host.controller.operations;
 
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HTTP_INTERFACE;
 import static org.jboss.as.host.controller.logging.HostControllerLogger.ROOT_LOGGER;
 import static org.jboss.as.host.controller.resources.HttpManagementResourceDefinition.ATTRIBUTE_DEFINITIONS;
 import static org.jboss.as.remoting.RemotingHttpUpgradeService.HTTP_UPGRADE_REGISTRY;
@@ -41,7 +25,6 @@ import org.jboss.as.controller.CapabilityServiceTarget;
 import org.jboss.as.controller.ModelController;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
-import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.ProcessType;
 import org.jboss.as.controller.RunningMode;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
@@ -55,6 +38,7 @@ import org.jboss.as.host.controller.DomainModelControllerService;
 import org.jboss.as.host.controller.HostControllerEnvironment;
 import org.jboss.as.host.controller.HostControllerService;
 import org.jboss.as.host.controller.resources.HttpManagementResourceDefinition;
+import org.jboss.as.host.controller.security.SaslWrappingService;
 import org.jboss.as.network.NetworkInterfaceBinding;
 import org.jboss.as.remoting.RemotingHttpUpgradeService;
 import org.jboss.as.remoting.RemotingServices;
@@ -70,7 +54,9 @@ import org.jboss.dmr.ModelNode;
 import org.jboss.msc.service.ServiceBuilder;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
+import org.wildfly.common.function.Functions;
 import org.wildfly.security.auth.server.HttpAuthenticationFactory;
+import org.wildfly.security.auth.server.SaslAuthenticationFactory;
 import org.xnio.XnioWorker;
 
 import io.undertow.server.ListenerRegistry;
@@ -84,8 +70,6 @@ import io.undertow.server.ListenerRegistry;
  * @author <a href="mailto:ropalka@redhat.com">Richard Opalka</a>
  */
 public class HttpManagementAddHandler extends BaseHttpInterfaceAddStepHandler {
-
-    private static final String HTTP_AUTHENTICATION_FACTORY_CAPABILITY = "org.wildfly.security.http-authentication-factory";
 
     public static final String OPERATION_NAME = ModelDescriptionConstants.ADD;
 
@@ -155,7 +139,6 @@ public class HttpManagementAddHandler extends BaseHttpInterfaceAddStepHandler {
         final Supplier<ModelController> mcSupplier = builder.requires(DomainModelControllerService.SERVICE_NAME);
         final Supplier<NetworkInterfaceBinding> ibSupplier = builder.requiresCapability("org.wildfly.network.interface", NetworkInterfaceBinding.class, interfaceName);
         final Supplier<NetworkInterfaceBinding> sibSupplier = builder.requiresCapability("org.wildfly.network.interface", NetworkInterfaceBinding.class, secureInterfaceName);
-        final Supplier<ProcessStateNotifier> cpsnSupplier = builder.requiresCapability("org.wildfly.management.process-state-notifier", ProcessStateNotifier.class);
         final Supplier<ConsoleAvailability> caSupplier = builder.requiresCapability("org.wildfly.management.console-availability", ConsoleAvailability.class);
         final Supplier<ManagementHttpRequestProcessor> rpSupplier = builder.requires(requestProcessorName);
         final Supplier<XnioWorker> xwSupplier = builder.requires(ManagementWorkerService.SERVICE_NAME);
@@ -163,8 +146,8 @@ public class HttpManagementAddHandler extends BaseHttpInterfaceAddStepHandler {
         final Supplier<HttpAuthenticationFactory> hafSupplier = httpAuthenticationFactory != null ? builder.requiresCapability(HTTP_AUTHENTICATION_FACTORY_CAPABILITY, HttpAuthenticationFactory.class, httpAuthenticationFactory) : null;
         final Supplier<SSLContext> scSupplier = sslContext != null ? builder.requiresCapability(SSL_CONTEXT_CAPABILITY, SSLContext.class, sslContext) : null;
         final UndertowHttpManagementService service = new UndertowHttpManagementService(hmConsumer, lrSupplier, mcSupplier, null, null, null, ibSupplier, sibSupplier,
-                cpsnSupplier, rpSupplier, xwSupplier, eSupplier, hafSupplier, scSupplier, port, securePort, commonPolicy.getAllowedOrigins(), consoleMode,
-                environment.getProductConfig().getConsoleSlot(), commonPolicy.getConstantHeaders(), caSupplier);
+                rpSupplier, xwSupplier, eSupplier, hafSupplier, scSupplier, port, securePort, commonPolicy.getAllowedOrigins(), consoleMode,
+                Functions.constantSupplier(environment.getProductConfig().getConsoleSlot()), commonPolicy.getConstantHeaders(), caSupplier);
         builder.setInstance(service);
         builder.setInitialMode(onDemand ? ServiceController.Mode.ON_DEMAND : ServiceController.Mode.ACTIVE).install();
 
@@ -187,8 +170,13 @@ public class HttpManagementAddHandler extends BaseHttpInterfaceAddStepHandler {
                 httpConnectorName = ManagementRemotingServices.HTTPS_CONNECTOR;
             }
 
+            String saslAuthFactoryName = commonPolicy.getSaslAuthenticationFactory();
+            ServiceName saslAuthenticationFactory = saslAuthFactoryName != null ? context.getCapabilityServiceName(
+                    SASL_AUTHENTICATION_FACTORY_CAPABILITY, saslAuthFactoryName, SaslAuthenticationFactory.class) : null;
+            saslAuthenticationFactory = SaslWrappingService.install(serviceTarget, saslAuthenticationFactory, HTTP_INTERFACE);
+
             RemotingHttpUpgradeService.installServices(context, ManagementRemotingServices.HTTP_CONNECTOR, httpConnectorName,
-                    ManagementRemotingServices.MANAGEMENT_ENDPOINT, commonPolicy.getConnectorOptions(), commonPolicy.getSaslAuthenticationFactory());
+                    ManagementRemotingServices.MANAGEMENT_ENDPOINT, commonPolicy.getConnectorOptions(), saslAuthenticationFactory);
             return Arrays.asList(UndertowHttpManagementService.SERVICE_NAME, HTTP_UPGRADE_REGISTRY.append(httpConnectorName));
         }
         return Collections.singletonList(UndertowHttpManagementService.SERVICE_NAME);

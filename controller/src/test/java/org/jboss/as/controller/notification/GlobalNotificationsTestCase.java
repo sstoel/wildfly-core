@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2014, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller.notification;
@@ -165,19 +148,19 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
     public void test_RESOURCE_ADDED_NOTIFICATION() throws Exception {
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
         NotificationFilter filter = new TestNotificationHandler(resourceAddress, RESOURCE_ADDED_NOTIFICATION);
-        getController().getNotificationRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
 
         executeForResult(createOperation(ADD, resourceAddress));
         assertEquals("the notification handler did not receive the " + RESOURCE_ADDED_NOTIFICATION, 1, handler.getNotifications().size());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
     }
 
     @Test
     public void test_RESOURCE_ADDED_NOTIFICATION_isNotSentWhenAddOperationFails() throws Exception {
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
         NotificationFilter filter = new TestNotificationHandler(resourceAddress, RESOURCE_ADDED_NOTIFICATION);
-        getController().getNotificationRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
 
         ModelNode addOperation = createOperation(ADD, resourceAddress);
         addOperation.get(FAIL_ADD_OPERATION.getName()).set(true);
@@ -185,7 +168,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
 
         assertTrue("the notification handler unexpectedly receives the " + RESOURCE_ADDED_NOTIFICATION, handler.getNotifications().isEmpty());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
     }
 
     @Test
@@ -194,12 +177,12 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
 
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
         NotificationFilter filter = new TestNotificationHandler(resourceAddress, RESOURCE_REMOVED_NOTIFICATION);
-        getController().getNotificationRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
 
         executeForResult(createOperation(REMOVE, resourceAddress));
         assertEquals("the notification handler did not receive the " + RESOURCE_REMOVED_NOTIFICATION, 1, handler.getNotifications().size());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
     }
 
     @Test
@@ -210,12 +193,12 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
 
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
         NotificationFilter filter = new TestNotificationHandler(resourceAddress, RESOURCE_REMOVED_NOTIFICATION);
-        getController().getNotificationRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
 
         executeForFailure(createOperation(REMOVE, resourceAddress));
         assertTrue("the notification handler unexpectedly receives the " + RESOURCE_REMOVED_NOTIFICATION, handler.getNotifications().isEmpty());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
     }
 
     @Test
@@ -230,7 +213,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
 
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
         NotificationFilter filter = new TestNotificationHandler(resourceAddress, ATTRIBUTE_VALUE_WRITTEN_NOTIFICATION);
-        getController().getNotificationRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
 
         long newValue = System.currentTimeMillis();
         ModelNode writeAttribute = createOperation(WRITE_ATTRIBUTE_OPERATION, resourceAddress);
@@ -245,7 +228,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
         assertFalse(notification.getData().require(OLD_VALUE).isDefined());
         assertEquals(newValue, notification.getData().require(NEW_VALUE).asLong());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
     }
 
     @Test
@@ -255,7 +238,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
 
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
         NotificationFilter filter = new TestNotificationHandler(resourceAddress, ATTRIBUTE_VALUE_WRITTEN_NOTIFICATION);
-        getController().getNotificationRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
 
         String incorrectValue = UUID.randomUUID().toString();
         ModelNode writeAttribute = createOperation(WRITE_ATTRIBUTE_OPERATION, resourceAddress);
@@ -264,7 +247,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
         executeForFailure(writeAttribute);
         assertTrue("the notification handler unexpectedly receives the " + ATTRIBUTE_VALUE_WRITTEN_NOTIFICATION, handler.getNotifications().isEmpty());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
     }
 
     @Test
@@ -276,7 +259,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
 
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
         NotificationFilter filter = new TestNotificationHandler(resourceAddress, ATTRIBUTE_VALUE_WRITTEN_NOTIFICATION);
-        getController().getNotificationRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
 
         ModelNode writeAttribute = createOperation(WRITE_ATTRIBUTE_OPERATION, resourceAddress);
         writeAttribute.get(NAME).set(MY_ATTRIBUTE.getName());
@@ -284,7 +267,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
         executeForResult(writeAttribute);
         assertEquals("the notification handler unexpectedly receives the " + ATTRIBUTE_VALUE_WRITTEN_NOTIFICATION, 0, handler.getNotifications().size());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
     }
 
     @Test
@@ -296,7 +279,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
 
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
         NotificationFilter filter = new TestNotificationHandler(resourceAddress, ATTRIBUTE_VALUE_WRITTEN_NOTIFICATION);
-        getController().getNotificationRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
 
         ModelNode undefineAttribute = createOperation(UNDEFINE_ATTRIBUTE_OPERATION, resourceAddress);
         undefineAttribute.get(NAME).set(MY_ATTRIBUTE.getName());
@@ -308,7 +291,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
         assertEquals(initialValue, notification.getData().require(OLD_VALUE).asLong());
         assertFalse(notification.getData().require(NEW_VALUE).isDefined());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
     }
 
     @Test
@@ -319,7 +302,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
 
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
         NotificationFilter filter = new TestNotificationHandler(resourceAddress, ATTRIBUTE_VALUE_WRITTEN_NOTIFICATION);
-        getController().getNotificationRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
 
         ModelNode undefineAttribute = createOperation(UNDEFINE_ATTRIBUTE_OPERATION, resourceAddress);
         undefineAttribute.get(NAME).set(MY_ATTRIBUTE.getName());
@@ -327,7 +310,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
 
         assertTrue("the notification handler unexpectedly receives the " + ATTRIBUTE_VALUE_WRITTEN_NOTIFICATION, handler.getNotifications().isEmpty());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
     }
 
     @Test
@@ -338,7 +321,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
 
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
         NotificationFilter filter = new TestNotificationHandler(resourceAddress, ATTRIBUTE_VALUE_WRITTEN_NOTIFICATION);
-        getController().getNotificationRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
 
 
         long newValue = System.currentTimeMillis();
@@ -354,7 +337,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
         assertEquals(MY_RUNTIME_ATTRIBUTE.getDefaultValue().asLong(), notification.getData().require(OLD_VALUE).asLong());
         assertEquals(newValue, notification.getData().require(NEW_VALUE).asLong());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
     }
 
     @Test
@@ -366,7 +349,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
 
         ListBackedNotificationHandler handler = new ListBackedNotificationHandler();
         NotificationFilter filter = new TestNotificationHandler(resourceAddress, ATTRIBUTE_VALUE_WRITTEN_NOTIFICATION);
-        getController().getNotificationRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().registerNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
 
 
         long newValue = System.currentTimeMillis();
@@ -381,7 +364,7 @@ public class GlobalNotificationsTestCase extends AbstractControllerTestBase {
         assertEquals(initialValue, notification.getData().require(OLD_VALUE).asLong());
         assertEquals(newValue, notification.getData().require(NEW_VALUE).asLong());
 
-        getController().getNotificationRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
+        getNotificationHandlerRegistry().unregisterNotificationHandler(RESOURCE_ADDRESS_PATTERN, handler, filter);
     }
 
     private static class TestNotificationHandler implements NotificationFilter {

@@ -1,23 +1,6 @@
 /*
- * JBoss, Home of Professional Open Source.
- * Copyright 2011, Red Hat, Inc., and individual contributors
- * as indicated by the @author tags. See the copyright.txt file in the
- * distribution for a full listing of individual contributors.
- *
- * This is free software; you can redistribute it and/or modify it
- * under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation; either version 2.1 of
- * the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this software; if not, write to the Free
- * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ * Copyright The WildFly Authors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.jboss.as.controller.registry;
@@ -34,6 +17,7 @@ import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.ProcessType;
 import org.jboss.as.controller.SimpleAttributeDefinition;
+import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.descriptions.NonResolvingResourceDescriptionResolver;
 import org.jboss.dmr.ModelNode;
@@ -83,10 +67,10 @@ public class ExtendWildCardRegistrationUnitTestCase {
     private static ManagementResourceRegistration childWildExtReg;
     private static ManagementResourceRegistration childExtReg;
 
-    private static final SimpleAttributeDefinition wildAttr = new SimpleAttributeDefinition("wildAttr", ModelType.STRING, true);
-    private static final SimpleAttributeDefinition overrideAttr = new SimpleAttributeDefinition("overrideAttr", ModelType.STRING, true);
-    private static final SimpleAttributeDefinition extAttr = new SimpleAttributeDefinition("extAttr", ModelType.STRING, true);
-    private static final SimpleAttributeDefinition wildExtAttr = new SimpleAttributeDefinition("wildExtAttr", ModelType.STRING, true);
+    private static final SimpleAttributeDefinition wildAttr = new SimpleAttributeDefinitionBuilder("wildAttr", ModelType.STRING, true).build();
+    private static final SimpleAttributeDefinition overrideAttr = new SimpleAttributeDefinitionBuilder("overrideAttr", ModelType.STRING, true).build();
+    private static final SimpleAttributeDefinition extAttr = new SimpleAttributeDefinitionBuilder("extAttr", ModelType.STRING, true).build();
+    private static final SimpleAttributeDefinition wildExtAttr = new SimpleAttributeDefinitionBuilder("wildExtAttr", ModelType.STRING, true).build();
 
     @BeforeClass
     public static void setup() {
