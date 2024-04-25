@@ -22,9 +22,10 @@ import org.wildfly.core.launcher.Arguments.Argument;
  *
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  */
-@SuppressWarnings("unused")
+@SuppressWarnings({"unused", "UnusedReturnValue"})
 public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBuilder> implements CommandBuilder {
 
+    private static final String MODULE_NAME = "org.jboss.as.process-controller";
     private static final String DOMAIN_BASE_DIR = "jboss.domain.base.dir";
     private static final String DOMAIN_CONFIG_DIR = "jboss.domain.config.dir";
     private static final String DOMAIN_LOG_DIR = "jboss.domain.log.dir";
@@ -45,7 +46,7 @@ public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBu
      * @param jvm         the default JVM
      */
     private DomainCommandBuilder(final Path wildflyHome, final Jvm jvm) {
-        super(wildflyHome, jvm);
+        super(wildflyHome, jvm, MODULE_NAME);
         hostControllerJavaOpts = new Arguments();
         hostControllerJavaOpts.addAll(DEFAULT_VM_ARGUMENTS);
         processControllerJavaOpts = new Arguments();
@@ -287,7 +288,7 @@ public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBu
      * @return the builder
      */
     public DomainCommandBuilder setBaseDirectory(final String baseDir) {
-        this.baseDir = validateAndNormalizeDir(baseDir, true);
+        this.baseDir = Environment.validateAndNormalizeDir(baseDir, true);
         return this;
     }
 
@@ -301,7 +302,7 @@ public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBu
      * @return the builder
      */
     public DomainCommandBuilder setBaseDirectory(final Path baseDir) {
-        this.baseDir = validateAndNormalizeDir(baseDir, true);
+        this.baseDir = Environment.validateAndNormalizeDir(baseDir, true);
         return this;
     }
 
@@ -678,6 +679,18 @@ public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBu
     }
 
     /**
+     * Sets the stability level of the standalone server process.
+     * @param stability a stability level
+     * @return a reference to this builder
+     */
+    public DomainCommandBuilder setStability(String stability) {
+        if (stability != null) {
+            this.setSingleServerArg("--stability", stability);
+        }
+        return this;
+    }
+
+    /**
      * Returns the Java home path the servers will use.
      *
      * @return the path to the Java home for the servers
@@ -699,7 +712,7 @@ public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBu
         if (environment.getJvm().isModular()) {
             cmd.addAll(DEFAULT_MODULAR_VM_ARGUMENTS);
             for (final String optionalModularArgument : OPTIONAL_DEFAULT_MODULAR_VM_ARGUMENTS) {
-                if (environment.getJvm().isPackageAvailable(environment.getJvm().getPath(), optionalModularArgument)) {
+                if (Jvm.isPackageAvailable(environment.getJvm().getPath(), optionalModularArgument)) {
                     cmd.add(optionalModularArgument);
                 }
             }
@@ -717,7 +730,7 @@ public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBu
         }
         cmd.add("-mp");
         cmd.add(getModulePaths());
-        cmd.add("org.jboss.as.process-controller");
+        cmd.add(MODULE_NAME);
         cmd.add("-jboss-home");
         cmd.add(getWildFlyHome().toString());
         cmd.add("-jvm");
@@ -735,7 +748,7 @@ public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBu
         if (hostControllerJvm.isModular()) {
             cmd.addAll(DEFAULT_MODULAR_VM_ARGUMENTS);
             for (final String optionalModularArgument : OPTIONAL_DEFAULT_MODULAR_VM_ARGUMENTS) {
-                if (environment.getJvm().isPackageAvailable(environment.getJvm().getPath(), optionalModularArgument)) {
+                if (Jvm.isPackageAvailable(environment.getJvm().getPath(), optionalModularArgument)) {
                     cmd.add(optionalModularArgument);
                 }
             }
@@ -752,14 +765,6 @@ public class DomainCommandBuilder extends AbstractCommandBuilder<DomainCommandBu
         addSystemPropertyArg(cmd, DOMAIN_CONFIG_DIR, getConfigurationDirectory());
 
         cmd.addAll(getServerArguments());
-        return cmd;
-    }
-
-    @Override
-    public List<String> build() {
-        final List<String> cmd = new ArrayList<>();
-        cmd.add(environment.getJvm().getCommand());
-        cmd.addAll(buildArguments());
         return cmd;
     }
 

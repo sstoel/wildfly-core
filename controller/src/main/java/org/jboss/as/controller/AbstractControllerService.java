@@ -47,9 +47,7 @@ import org.jboss.as.controller.client.OperationMessageHandler;
 import org.jboss.as.controller.client.OperationResponse;
 import org.jboss.as.controller.client.impl.AdditionalBootCliScriptInvoker;
 import org.jboss.as.controller.descriptions.DescriptionProvider;
-import org.jboss.as.controller.extension.ExpressionResolverExtension;
 import org.jboss.as.controller.extension.MutableRootResourceRegistrationProvider;
-import org.jboss.as.controller.extension.ResolverExtensionRegistry;
 import org.jboss.as.controller.logging.ControllerLogger;
 import org.jboss.as.controller.notification.NotificationHandlerRegistry;
 import org.jboss.as.controller.notification.NotificationSupport;
@@ -60,6 +58,7 @@ import org.jboss.as.controller.persistence.ConfigurationPersister;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.controller.services.path.PathManager;
+import org.jboss.as.version.Stability;
 import org.jboss.dmr.ModelNode;
 import org.jboss.modules.Module;
 import org.jboss.modules.ModuleLoadException;
@@ -141,9 +140,7 @@ public abstract class AbstractControllerService implements Service<ModelControll
      * This capability isn't necessarily directly related to this class but we declare it
      * here as it's as good a place as any at this time.
      */
-    public static final RuntimeCapability<Void> PATH_MANAGER_CAPABILITY =
-            RuntimeCapability.Builder.of("org.wildfly.management.path-manager", PathManager.class)
-                    .build();
+    public static final RuntimeCapability<Void> PATH_MANAGER_CAPABILITY = RuntimeCapability.Builder.of(PathManager.SERVICE_DESCRIPTOR).build();
 
     /**
      * Capability users of the controller use to perform asynchronous management tasks.
@@ -163,18 +160,12 @@ public abstract class AbstractControllerService implements Service<ModelControll
             RuntimeCapability.Builder.of("org.wildfly.management.process-state-notifier", ProcessStateNotifier.class)
                     .build();
 
-    /**
-     * Name of a capability that extensions that provide {@link ExpressionResolverExtension} implementations
-     * can use to register their extensions with the core {@link ExpressionResolver}.
-     */
-    private static final String EXPRESSION_RESOLVER_EXTENSION_REGISTRY_CAPABILITY_NAME =
-            "org.wildfly.management.expression-resolver-extension-registry";
-
     private static final OperationDefinition INIT_CONTROLLER_OP = new SimpleOperationDefinitionBuilder("boottime-controller-initializer-step", null)
         .setPrivateEntry()
         .build();
 
     protected final ProcessType processType;
+    protected final Stability stability;
     protected final DelegatingConfigurableAuthorizer authorizer;
     protected final ManagementSecurityIdentitySupplier securityIdentitySupplier;
     private final RunningModeControl runningModeControl;
@@ -190,7 +181,6 @@ public abstract class AbstractControllerService implements Service<ModelControll
     private final BootErrorCollector bootErrorCollector;
     private final CapabilityRegistry capabilityRegistry;
     private final ConfigurationExtension configExtension;
-    private final RuntimeCapability<ResolverExtensionRegistry> extensionRegistryCapability;
     private volatile ModelControllerClientFactory clientFactory;
 
     /**
@@ -214,7 +204,7 @@ public abstract class AbstractControllerService implements Service<ModelControll
                                         final OperationStepHandler prepareStep, final ExpressionResolver expressionResolver,
                                         final ManagedAuditLogger auditLogger, final DelegatingConfigurableAuthorizer authorizer,
                                         final ManagementSecurityIdentitySupplier securityIdentitySupplier, final CapabilityRegistry capabilityRegistry) {
-        this(null, null, processType, runningModeControl, configurationPersister, processState, rootResourceDefinition, null,
+        this(null, null, processType, Stability.DEFAULT, runningModeControl, configurationPersister, processState, rootResourceDefinition, null,
                 prepareStep, expressionResolver, auditLogger, authorizer, securityIdentitySupplier, capabilityRegistry, null);
     }
 
@@ -231,7 +221,9 @@ public abstract class AbstractControllerService implements Service<ModelControll
      * @param auditLogger             the audit logger
      * @param authorizer              handles authorization
      * @param capabilityRegistry      the capability registry
+     * @deprecated For use by legacy versions
      */
+    @Deprecated
     protected AbstractControllerService(final Supplier<ExecutorService> executorService,
                                         final Supplier<ControllerInstabilityListener> instabilityListener,
                                         final ProcessType processType, final RunningModeControl runningModeControl,
@@ -241,13 +233,41 @@ public abstract class AbstractControllerService implements Service<ModelControll
                                         final ManagedAuditLogger auditLogger, final DelegatingConfigurableAuthorizer authorizer,
                                         final ManagementSecurityIdentitySupplier securityIdentitySupplier,
                                         final CapabilityRegistry capabilityRegistry, final ConfigurationExtension configExtension) {
-        this(executorService, instabilityListener, processType, runningModeControl, configurationPersister, processState, rootResourceDefinition, null,
+        this(executorService, instabilityListener, processType, Stability.DEFAULT, runningModeControl, configurationPersister, processState, rootResourceDefinition, null,
+                prepareStep, expressionResolver, auditLogger, authorizer, securityIdentitySupplier, capabilityRegistry, configExtension);
+    }
+
+    /**
+     * Construct a new instance.
+     *
+     * @param processType             the type of process being controlled
+     * @param stability               the stability level of the controlled process
+     * @param runningModeControl      the controller of the process' running mode
+     * @param configurationPersister  the configuration persister
+     * @param processState            the controlled process state
+     * @param rootResourceDefinition  the root resource definition
+     * @param prepareStep             the prepare step to prepend to operation execution
+     * @param expressionResolver      the expression resolver
+     * @param auditLogger             the audit logger
+     * @param authorizer              handles authorization
+     * @param capabilityRegistry      the capability registry
+     */
+    protected AbstractControllerService(final Supplier<ExecutorService> executorService,
+                                        final Supplier<ControllerInstabilityListener> instabilityListener,
+                                        final ProcessType processType, Stability stability, final RunningModeControl runningModeControl,
+                                        final ConfigurationPersister configurationPersister,
+                                        final ControlledProcessState processState, final ResourceDefinition rootResourceDefinition,
+                                        final OperationStepHandler prepareStep, final ExpressionResolver expressionResolver,
+                                        final ManagedAuditLogger auditLogger, final DelegatingConfigurableAuthorizer authorizer,
+                                        final ManagementSecurityIdentitySupplier securityIdentitySupplier,
+                                        final CapabilityRegistry capabilityRegistry, final ConfigurationExtension configExtension) {
+        this(executorService, instabilityListener, processType, stability, runningModeControl, configurationPersister, processState, rootResourceDefinition, null,
                 prepareStep, expressionResolver, auditLogger, authorizer, securityIdentitySupplier, capabilityRegistry, configExtension);
     }
 
     private AbstractControllerService(final Supplier<ExecutorService> executorService,
                                       final Supplier<ControllerInstabilityListener> instabilityListener,
-                                      final ProcessType processType, final RunningModeControl runningModeControl,
+                                      final ProcessType processType, Stability stability, final RunningModeControl runningModeControl,
                                       final ConfigurationPersister configurationPersister, final ControlledProcessState processState,
                                       final ResourceDefinition rootResourceDefinition, final DescriptionProvider rootDescriptionProvider,
                                       final OperationStepHandler prepareStep, final ExpressionResolver expressionResolver, final ManagedAuditLogger auditLogger,
@@ -263,19 +283,13 @@ public abstract class AbstractControllerService implements Service<ModelControll
         this.executorService = executorService;
         this.instabilityListener = instabilityListener;
         this.processType = processType;
+        this.stability = stability;
         this.runningModeControl = runningModeControl;
         this.configurationPersister = configurationPersister;
         this.rootResourceDefinition = rootResourceDefinition;
         this.processState = processState;
         this.prepareStep = prepareStep;
         this.expressionResolver = expressionResolver;
-        if (expressionResolver instanceof ResolverExtensionRegistry) {
-            this.extensionRegistryCapability =
-                    RuntimeCapability.Builder.of(EXPRESSION_RESOLVER_EXTENSION_REGISTRY_CAPABILITY_NAME,
-                            (ResolverExtensionRegistry) expressionResolver).build();
-        } else {
-            this.extensionRegistryCapability = null;
-        }
         this.auditLogger = auditLogger;
         this.authorizer = authorizer;
         this.securityIdentitySupplier = securityIdentitySupplier;
@@ -299,11 +313,11 @@ public abstract class AbstractControllerService implements Service<ModelControll
         final NotificationSupport notificationSupport = NotificationSupport.Factory.create(executorService);
         WritableAuthorizerConfiguration authorizerConfig = authorizer.getWritableAuthorizerConfiguration();
         authorizerConfig.reset();
-        ManagementResourceRegistration rootResourceRegistration = ManagementResourceRegistration.Factory.forProcessType(processType).createRegistration(rootResourceDefinition, authorizerConfig, capabilityRegistry);
+        ManagementResourceRegistration rootResourceRegistration = ManagementResourceRegistration.Factory.forProcessType(processType, this.stability).createRegistration(rootResourceDefinition, authorizerConfig, capabilityRegistry);
         final ModelControllerImpl controller = new ModelControllerImpl(container, target,
                 rootResourceRegistration,
                 new ContainerStateMonitor(container),
-                configurationPersister, processType, runningModeControl, prepareStep,
+                configurationPersister, processType, stability, runningModeControl, prepareStep,
                 processState, executorService, expressionResolver, authorizer, securityIdentitySupplier, auditLogger, notificationSupport,
                 bootErrorCollector, createExtraValidationStepHandler(), capabilityRegistry, getPartialModelIndicator(),
                 instabilityListener != null ? instabilityListener.get() : null);
@@ -332,11 +346,6 @@ public abstract class AbstractControllerService implements Service<ModelControll
             final ServiceBuilder<?> notifyRegistrySB = target.addService(notifyRegistrySN);
             notifyRegistrySB.setInstance(new SimpleService(notifyRegistrySB.provides(notifyRegistrySN), controller.getNotificationRegistry()));
             notifyRegistrySB.install();
-        }
-        if (extensionRegistryCapability != null) {
-            capabilityRegistry.registerCapability(
-                    new RuntimeCapabilityRegistration(extensionRegistryCapability, CapabilityScope.GLOBAL, new RegistrationPoint(PathAddress.EMPTY_ADDRESS, null)));
-            rootResourceRegistration.registerCapability(extensionRegistryCapability);
         }
         capabilityRegistry.publish();  // These are visible immediately; no waiting for finishBoot
                                        // We publish even if we didn't register anything in case parent services did

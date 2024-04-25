@@ -11,6 +11,7 @@ import java.util.Set;
 
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.CapabilityReferenceRecorder;
+import org.jboss.as.controller.Feature;
 import org.jboss.as.controller.NotificationDefinition;
 import org.jboss.as.controller.OperationDefinition;
 import org.jboss.as.controller.OperationStepHandler;
@@ -23,6 +24,7 @@ import org.jboss.as.controller.access.management.AccessConstraintDefinition;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.descriptions.DescriptionProvider;
 import org.jboss.as.controller.descriptions.OverrideDescriptionProvider;
+import org.jboss.as.version.Stability;
 
 /**
  * {@link ManagementResourceRegistration} implementation that simply delegates to another
@@ -82,6 +84,16 @@ public class DelegatingManagementResourceRegistration implements ManagementResou
     @Override
     public ProcessType getProcessType() {
         return getDelegate().getProcessType();
+    }
+
+    @Override
+    public Stability getStability() {
+        return this.getDelegate().getStability();
+    }
+
+    @Override
+    public <F extends Feature> boolean enables(F feature) {
+        return this.getDelegate().enables(feature);
     }
 
     @Override
@@ -330,7 +342,7 @@ public class DelegatingManagementResourceRegistration implements ManagementResou
     }
 
     @Override
-    public void registerRequirements(Set<CapabilityReferenceRecorder> requirements) {
+    public void registerRequirements(Set<? extends CapabilityReferenceRecorder> requirements) {
         getDelegate().registerRequirements(requirements);
     }
 

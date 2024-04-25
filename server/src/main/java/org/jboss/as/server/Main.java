@@ -19,6 +19,7 @@ import java.util.Properties;
 import java.util.StringTokenizer;
 
 import org.jboss.as.controller.RunningMode;
+import org.jboss.as.controller.operations.common.ProcessEnvironment;
 import org.jboss.as.controller.persistence.ConfigurationExtensionFactory;
 import org.jboss.as.controller.persistence.ConfigurationFile;
 import org.jboss.as.process.CommandLineConstants;
@@ -45,8 +46,8 @@ public final class Main {
     private static final PrintStream STDOUT = System.out;
     private static final PrintStream STDERR = System.err;
 
-    private static void usage() {
-        CommandLineArgumentUsageImpl.printUsage(STDOUT);
+    private static void usage(ProductConfig productConfig) {
+        CommandLineArgumentUsageImpl.printUsage(productConfig, STDOUT);
     }
 
     private Main() {
@@ -124,7 +125,7 @@ public final class Main {
         String gitAuthConfiguration = null;
         String supplementalConfiguration = null;
         RunningMode runningMode = RunningMode.NORMAL;
-        ProductConfig productConfig;
+        ProductConfig productConfig = ProductConfig.fromFilesystemSlot(Module.getBootModuleLoader(), WildFlySecurityManager.getPropertyPrivileged(ServerEnvironment.HOME_DIR, null), null);
         ConfigurationFile.InteractionPolicy configInteractionPolicy = ConfigurationFile.InteractionPolicy.STANDARD;
         boolean startSuspended = false;
         boolean startGracefully = true;
@@ -135,11 +136,10 @@ public final class Main {
             try {
                 if (CommandLineConstants.VERSION.equals(arg) || CommandLineConstants.SHORT_VERSION.equals(arg)
                         || CommandLineConstants.OLD_VERSION.equals(arg) || CommandLineConstants.OLD_SHORT_VERSION.equals(arg)) {
-                    productConfig = ProductConfig.fromFilesystemSlot(Module.getBootModuleLoader(), WildFlySecurityManager.getPropertyPrivileged(ServerEnvironment.HOME_DIR, null), null);
                     STDOUT.println(productConfig.getPrettyVersionString());
                     return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.NORMAL);
                 } else if (CommandLineConstants.HELP.equals(arg) || CommandLineConstants.SHORT_HELP.equals(arg) || CommandLineConstants.OLD_HELP.equals(arg)) {
-                    usage();
+                    usage(productConfig);
                     return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.NORMAL);
                 } else if (CommandLineConstants.SERVER_CONFIG.equals(arg) || CommandLineConstants.SHORT_SERVER_CONFIG.equals(arg)
                         || CommandLineConstants.OLD_SERVER_CONFIG.equals(arg)) {
@@ -147,25 +147,25 @@ public final class Main {
                     serverConfig = args[++i];
                 } else if (arg.startsWith(CommandLineConstants.SERVER_CONFIG)) {
                     assertSingleConfig(serverConfig);
-                    serverConfig = parseValue(arg, CommandLineConstants.SERVER_CONFIG);
+                    serverConfig = parseValue(productConfig, arg, CommandLineConstants.SERVER_CONFIG);
                     if (serverConfig == null) {
                         return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                 } else if (arg.startsWith(CommandLineConstants.SHORT_SERVER_CONFIG)) {
                     assertSingleConfig(serverConfig);
-                    serverConfig = parseValue(arg, CommandLineConstants.SHORT_SERVER_CONFIG);
+                    serverConfig = parseValue(productConfig, arg, CommandLineConstants.SHORT_SERVER_CONFIG);
                     if (serverConfig == null) {
                         return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                 } else if (arg.startsWith(CommandLineConstants.READ_ONLY_SERVER_CONFIG)) {
                     assertSingleConfig(serverConfig);
-                    serverConfig = parseValue(arg, CommandLineConstants.READ_ONLY_SERVER_CONFIG);
+                    serverConfig = parseValue(productConfig, arg, CommandLineConstants.READ_ONLY_SERVER_CONFIG);
                     if (serverConfig == null) {
                         return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                     configInteractionPolicy = ConfigurationFile.InteractionPolicy.READ_ONLY;
                 } else if (arg.startsWith(CommandLineConstants.OLD_SERVER_CONFIG)) {
-                    serverConfig = parseValue(arg, CommandLineConstants.OLD_SERVER_CONFIG);
+                    serverConfig = parseValue(productConfig, arg, CommandLineConstants.OLD_SERVER_CONFIG);
                     if (serverConfig == null) {
                         return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
@@ -181,22 +181,22 @@ public final class Main {
                 } else if (CommandLineConstants.PROPERTIES.equals(arg) || CommandLineConstants.OLD_PROPERTIES.equals(arg)
                         || CommandLineConstants.SHORT_PROPERTIES.equals(arg)) {
                     // Set system properties from url/file
-                    if (!processProperties(arg, args[++i],systemProperties)) {
+                    if (!processProperties(productConfig, arg, args[++i],systemProperties)) {
                         return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                 } else if (arg.startsWith(CommandLineConstants.PROPERTIES)) {
-                    String urlSpec = parseValue(arg, CommandLineConstants.PROPERTIES);
-                    if (urlSpec == null || !processProperties(arg, urlSpec,systemProperties)) {
+                    String urlSpec = parseValue(productConfig, arg, CommandLineConstants.PROPERTIES);
+                    if (urlSpec == null || !processProperties(productConfig, arg, urlSpec,systemProperties)) {
                         return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                 } else if (arg.startsWith(CommandLineConstants.SHORT_PROPERTIES)) {
-                    String urlSpec = parseValue(arg, CommandLineConstants.SHORT_PROPERTIES);
-                    if (urlSpec == null || !processProperties(arg, urlSpec,systemProperties)) {
+                    String urlSpec = parseValue(productConfig, arg, CommandLineConstants.SHORT_PROPERTIES);
+                    if (urlSpec == null || !processProperties(productConfig, arg, urlSpec,systemProperties)) {
                         return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                 }  else if (arg.startsWith(CommandLineConstants.OLD_PROPERTIES)) {
-                    String urlSpec = parseValue(arg, CommandLineConstants.OLD_PROPERTIES);
-                    if (urlSpec == null || !processProperties(arg, urlSpec,systemProperties)) {
+                    String urlSpec = parseValue(productConfig, arg, CommandLineConstants.OLD_PROPERTIES);
+                    if (urlSpec == null || !processProperties(productConfig, arg, urlSpec,systemProperties)) {
                         return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                 } else if (arg.startsWith(CommandLineConstants.SYS_PROP)) {
@@ -212,12 +212,16 @@ public final class Main {
                         value = arg.substring(idx + 1);
                     }
                     systemProperties.setProperty(name, value);
+                    if (ServerEnvironment.HOME_DIR.equals(name)) {
+                        // Re-create using updated properties
+                        productConfig = ProductConfig.fromFilesystemSlot(Module.getBootModuleLoader(), value, systemProperties);
+                    }
                 } else if (arg.startsWith(CommandLineConstants.PUBLIC_BIND_ADDRESS)) {
 
                     int idx = arg.indexOf('=');
                     if (idx == arg.length() - 1) {
                         STDERR.println(ServerLogger.ROOT_LOGGER.noArgValue(arg));
-                        usage();
+                        usage(productConfig);
                         return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                     String value = idx > -1 ? arg.substring(idx + 1) : args[++i];
@@ -239,7 +243,7 @@ public final class Main {
                     int idx = arg.indexOf('=');
                     if (idx == arg.length() - 1) {
                         STDERR.println(ServerLogger.ROOT_LOGGER.valueExpectedForCommandLineOption(arg));
-                        usage();
+                        usage(productConfig);
                         return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                     String value = idx > -1 ? arg.substring(idx + 1) : args[++i];
@@ -249,7 +253,7 @@ public final class Main {
                 } else if (CommandLineConstants.ADMIN_ONLY.equals(arg)) {
                     if(startModeSet) {
                         STDERR.println(ServerLogger.ROOT_LOGGER.cannotSetBothAdminOnlyAndStartMode());
-                        usage();
+                        usage(productConfig);
                         return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                     startModeSet = true;
@@ -258,18 +262,18 @@ public final class Main {
                     //Value can be a comma separated key value pair
                     //Drop the first 2 characters
                     String token = arg.substring(2);
-                    processSecurityProperties(token,systemProperties);
+                    processSecurityProperties(productConfig, token,systemProperties);
                 } else if (arg.startsWith(CommandLineConstants.START_MODE)) {
                     if (startModeSet) {
                         STDERR.println(ServerLogger.ROOT_LOGGER.cannotSetBothAdminOnlyAndStartMode());
-                        usage();
+                        usage(productConfig);
                         return new ServerEnvironmentWrapper(ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                     startModeSet = true;
                     int idx = arg.indexOf('=');
                     if (idx == arg.length() - 1) {
                         STDERR.println(ServerLogger.ROOT_LOGGER.noArgValue(arg));
-                        usage();
+                        usage(productConfig);
                         return new ServerEnvironmentWrapper(ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                     String value = idx > -1 ? arg.substring(idx + 1) : args[++i];
@@ -285,14 +289,14 @@ public final class Main {
                             break;
                         default:
                             STDERR.println(ServerLogger.ROOT_LOGGER.unknownStartMode(value));
-                            usage();
+                            usage(productConfig);
                             return new ServerEnvironmentWrapper(ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                 } else if (arg.startsWith(CommandLineConstants.GRACEFUL_STARTUP)) {
                     int idx = arg.indexOf('=');
                     if (idx == arg.length() - 1) {
                         STDERR.println(ServerLogger.ROOT_LOGGER.noArgValue(arg));
-                        usage();
+                        usage(productConfig);
                         return new ServerEnvironmentWrapper(ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                     String value = (idx > -1 ? arg.substring(idx + 1) : args[++i])
@@ -303,7 +307,7 @@ public final class Main {
                         startGracefully = false;
                     } else {
                         STDERR.println(ServerLogger.ROOT_LOGGER.invalidCommandLineOption(arg));
-                        usage();
+                        usage(productConfig);
                         return new ServerEnvironmentWrapper(ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                     }
                 } else if (arg.equals(CommandLineConstants.DEBUG)) { // Need to process the debug options as they cannot be filtered out in Windows
@@ -323,82 +327,99 @@ public final class Main {
                     // do nothing, just need to filter out as Windows batch scripts cannot filter it out
                 } else if(arg.startsWith(CommandLineConstants.GIT_REPO)) {
                     int idx = arg.indexOf("=");
+                    if (idx == arg.length() - 1) {
+                        return requireValue(arg, productConfig);
+                    }
                     if (idx == -1) {
                         final int next = i + 1;
                         if (next < argsLength) {
                             gitRepository = args[next];
                             i++;
                         } else {
-                            STDERR.println(ServerLogger.ROOT_LOGGER.valueExpectedForCommandLineOption(arg));
-                            usage();
-                            return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
+                            return requireValue(arg, productConfig);
                         }
                     } else {
                         gitRepository = arg.substring(idx + 1);
                     }
                 } else if(arg.startsWith(CommandLineConstants.GIT_AUTH)) {
                     int idx = arg.indexOf("=");
+                    if (idx == arg.length() - 1) {
+                        return requireValue(arg, productConfig);
+                    }
                     if (idx == -1) {
                        final int next = i + 1;
                         if (next < argsLength) {
                             gitAuthConfiguration = args[next];
                             i++;
                         } else {
-                            STDERR.println(ServerLogger.ROOT_LOGGER.valueExpectedForCommandLineOption(arg));
-                            usage();
-                            return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
+                            return requireValue(arg, productConfig);
                         }
                     } else {
                         gitAuthConfiguration = arg.substring(idx + 1);
                     }
                 } else if(arg.startsWith(CommandLineConstants.GIT_BRANCH)) {
                     int idx = arg.indexOf("=");
+                    if (idx == arg.length() - 1) {
+                        return requireValue(arg, productConfig);
+                    }
                     if (idx == -1) {
                        final int next = i + 1;
                         if (next < argsLength) {
                             gitBranch = args[next];
                             i++;
                         } else {
-                            STDERR.println(ServerLogger.ROOT_LOGGER.valueExpectedForCommandLineOption(arg));
-                            usage();
-                            return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
+                            return requireValue(arg, productConfig);
                         }
                     } else {
                         gitBranch = arg.substring(idx + 1);
                     }
+                } else if (arg.startsWith(CommandLineConstants.STABILITY)) {
+                    if (productConfig.getStabilitySet().size() > 1) {
+                        String stability = (arg.length() == CommandLineConstants.STABILITY.length()) ? args[++i] : parseValue(productConfig, arg, CommandLineConstants.STABILITY);
+                        if (stability == null) {
+                            return new ServerEnvironmentWrapper(ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
+                        }
+                        systemProperties.setProperty(ProcessEnvironment.STABILITY, stability);
+                    }
                 } else if(ConfigurationExtensionFactory.isConfigurationExtensionSupported()
                         && ConfigurationExtensionFactory.commandLineContainsArgument(arg)) {
                     int idx = arg.indexOf("=");
+                    if (idx == arg.length() - 1) {
+                        return requireValue(arg, productConfig);
+                    }
                     if (idx == -1) {
                        final int next = i + 1;
                         if (next < argsLength) {
                             supplementalConfiguration = args[next];
                             i++;
                         } else {
-                            STDERR.println(ServerLogger.ROOT_LOGGER.valueExpectedForCommandLineOption(arg));
-                            usage();
-                            return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
+                            return requireValue(arg, productConfig);
                         }
                     } else {
                         supplementalConfiguration = arg.substring(idx + 1);
                     }
                 } else {
                     STDERR.println(ServerLogger.ROOT_LOGGER.invalidCommandLineOption(arg));
-                    usage();
+                    usage(productConfig);
                     return new ServerEnvironmentWrapper (ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
                 }
             } catch (IndexOutOfBoundsException e) {
-                STDERR.println(ServerLogger.ROOT_LOGGER.valueExpectedForCommandLineOption(arg));
-                usage();
-                return new ServerEnvironmentWrapper(ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
+                return requireValue(arg, productConfig);
             }
         }
 
         String hostControllerName = null; // No host controller unless in domain mode.
+        // Re-create using updated properties
         productConfig = ProductConfig.fromFilesystemSlot(Module.getBootModuleLoader(), WildFlySecurityManager.getPropertyPrivileged(ServerEnvironment.HOME_DIR, null), systemProperties);
         return new ServerEnvironmentWrapper(new ServerEnvironment(hostControllerName, systemProperties, systemEnvironment,
                 serverConfig, configInteractionPolicy, launchType, runningMode, productConfig, startTime, startSuspended,
                 startGracefully, gitRepository, gitBranch, gitAuthConfiguration, supplementalConfiguration));
+    }
+
+    private static ServerEnvironmentWrapper requireValue(String arg, ProductConfig productConfig) {
+        STDERR.println(ServerLogger.ROOT_LOGGER.valueExpectedForCommandLineOption(arg));
+        usage(productConfig);
+        return new ServerEnvironmentWrapper(ServerEnvironmentWrapper.ServerEnvironmentStatus.ERROR);
     }
 
     private static void assertSingleConfig(String serverConfig) {
@@ -407,11 +428,11 @@ public final class Main {
         }
     }
 
-    private static String parseValue(final String arg, final String key) {
+    private static String parseValue(ProductConfig productConfig, final String arg, final String key) {
         String value = null;
         int splitPos = key.length();
         if (arg.length() <= splitPos + 1 || arg.charAt(splitPos) != '=') {
-            usage();
+            usage(productConfig);
         } else {
             value = arg.substring(splitPos + 1);
         }
@@ -428,19 +449,23 @@ public final class Main {
         return result;
     }
 
-    private static boolean processProperties(final String arg, final String urlSpec, Properties systemProperties) {
+    private static boolean processProperties(ProductConfig productConfig, final String arg, final String urlSpec, Properties systemProperties) {
          URL url = null;
          try {
              url = makeURL(urlSpec);
              systemProperties.load(url.openConnection().getInputStream());
+             if (systemProperties.getProperty(ServerEnvironment.HOME_DIR) != null) {
+                 // Re-create using updated properties
+                 productConfig = ProductConfig.fromFilesystemSlot(Module.getBootModuleLoader(), systemProperties.getProperty(ServerEnvironment.HOME_DIR), systemProperties);
+             }
              return true;
          } catch (MalformedURLException e) {
              STDERR.println(ServerLogger.ROOT_LOGGER.malformedCommandLineURL(urlSpec, arg));
-             usage();
+             usage(productConfig);
              return false;
          } catch (IOException e) {
              STDERR.println(ServerLogger.ROOT_LOGGER.unableToLoadProperties(url));
-             usage();
+             usage(productConfig);
              return false;
          }
     }
@@ -470,7 +495,7 @@ public final class Main {
         return url;
     }
 
-    private static void processSecurityProperties(String secProperties, Properties systemProperties){
+    private static void processSecurityProperties(ProductConfig productConfig, String secProperties, Properties systemProperties){
         StringTokenizer tokens = new StringTokenizer(secProperties, ",");
         while(tokens.hasMoreTokens()){
             String token = tokens.nextToken();
@@ -478,7 +503,7 @@ public final class Main {
             int idx = token.indexOf('=');
             if (idx == token.length() - 1) {
                 STDERR.println(ServerLogger.ROOT_LOGGER.valueExpectedForCommandLineOption(secProperties));
-                usage();
+                usage(productConfig);
                 return;
             }
             String value = token.substring(idx + 1);

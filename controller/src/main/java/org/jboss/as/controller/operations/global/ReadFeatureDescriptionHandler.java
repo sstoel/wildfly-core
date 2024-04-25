@@ -37,6 +37,7 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REA
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REFS;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.REQUIRES;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESULT;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.STABILITY;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.TYPE;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.VALUE_TYPE;
@@ -81,6 +82,7 @@ import org.jboss.as.controller.descriptions.DescriptionProvider;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.controller.descriptions.common.ControllerResolver;
 import org.jboss.as.controller.registry.RuntimePackageDependency;
+import org.jboss.as.controller.resource.AbstractSocketBindingResourceDefinition;
 import org.jboss.as.controller.registry.AliasEntry;
 import org.jboss.as.controller.registry.AliasStepHandler;
 import org.jboss.as.controller.registry.AttributeAccess;
@@ -396,6 +398,7 @@ public class ReadFeatureDescriptionHandler extends GlobalOperationHandlers.Abstr
                 packages.add(pkgNode);
             }
         }
+        feature.get(STABILITY).set(registration.getStability().toString());
         return result;
     }
 
@@ -638,6 +641,9 @@ public class ReadFeatureDescriptionHandler extends GlobalOperationHandlers.Abstr
                     //value_type is an object
                 }
             }
+            if (attDescription.hasDefined(STABILITY)) {
+                param.get(STABILITY).set(attDescription.get(STABILITY).asString());
+            }
             params.add(param);
         }
         final ModelNode annotationNode = feature.get(ANNOTATION);
@@ -843,7 +849,7 @@ public class ReadFeatureDescriptionHandler extends GlobalOperationHandlers.Abstr
         }
         capability.get(OPTIONAL).set(attrDescription.hasDefined(NILLABLE) && attrDescription.get(NILLABLE).asBoolean());
         if (isProfile) {
-            if (!capabilityName.startsWith("org.wildfly.network.socket-binding")) {
+            if (!capabilityName.startsWith(AbstractSocketBindingResourceDefinition.SOCKET_BINDING_CAPABILITY_NAME)) {
                 capabilityName = PROFILE_PREFIX + capabilityName;
             }
         }

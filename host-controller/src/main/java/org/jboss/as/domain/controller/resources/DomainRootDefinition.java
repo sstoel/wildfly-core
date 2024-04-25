@@ -23,6 +23,7 @@ import java.util.Set;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.ModelOnlyRemoveStepHandler;
 import org.jboss.as.controller.ModelOnlyWriteAttributeHandler;
+import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
@@ -31,8 +32,10 @@ import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.ProcessType;
 import org.jboss.as.controller.PropertiesAttributeDefinition;
 import org.jboss.as.controller.ResourceDefinition;
+import org.jboss.as.controller.ResourceRegistration;
 import org.jboss.as.controller.SimpleAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
+import org.jboss.as.controller.SimpleOperationDefinitionBuilder;
 import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.access.management.DelegatingConfigurableAuthorizer;
 import org.jboss.as.controller.access.management.ManagementSecurityIdentitySupplier;
@@ -51,6 +54,7 @@ import org.jboss.as.controller.operations.common.SnapshotDeleteHandler;
 import org.jboss.as.controller.operations.common.SnapshotListHandler;
 import org.jboss.as.controller.operations.common.SnapshotTakeHandler;
 import org.jboss.as.controller.operations.common.ValidateAddressOperationHandler;
+import org.jboss.as.controller.operations.common.XmlFileMarshallingHandler;
 import org.jboss.as.controller.operations.common.XmlMarshallingHandler;
 import org.jboss.as.controller.operations.global.GlobalInstallationReportHandler;
 import org.jboss.as.controller.operations.global.ReadConfigAsFeaturesOperationHandler;
@@ -189,7 +193,7 @@ public class DomainRootDefinition extends SimpleResourceDefinition {
             final HostRegistrations hostRegistrations,
             final DomainHostExcludeRegistry domainHostExcludeRegistry,
             final MutableRootResourceRegistrationProvider rootResourceRegistrationProvider) {
-        super(new Parameters(null, DomainResolver.getResolver(DOMAIN, false)).setFeature(false));
+        super(new Parameters(ResourceRegistration.root(), DomainResolver.getResolver(DOMAIN, false)).setFeature(false));
         this.domainController = domainController;
         this.isMaster = isMaster;
         this.environment = environment;
@@ -246,8 +250,12 @@ public class DomainRootDefinition extends SimpleResourceDefinition {
         super.registerOperations(resourceRegistration);
 
         // Other root resource operations
-        XmlMarshallingHandler xmh = new XmlMarshallingHandler(configurationPersister);
-        resourceRegistration.registerOperationHandler(XmlMarshallingHandler.DEFINITION, xmh);
+        SimpleOperationDefinitionBuilder xmlMarshallingHandlerBuilder = XmlMarshallingHandler.createOperationDefinitionBuilder();
+        if(resourceRegistration.enables(XmlFileMarshallingHandler.DEFINITION)) {
+            xmlMarshallingHandlerBuilder.setDeprecated(ModelVersion.create(24, 0, 0 ));
+        }
+        resourceRegistration.registerOperationHandler(xmlMarshallingHandlerBuilder.build(), new XmlMarshallingHandler(configurationPersister));
+        resourceRegistration.registerOperationHandler(XmlFileMarshallingHandler.DEFINITION, new XmlFileMarshallingHandler(configurationPersister));
 
         resourceRegistration.registerOperationHandler(NamespaceAddHandler.DEFINITION, NamespaceAddHandler.INSTANCE);
         resourceRegistration.registerOperationHandler(NamespaceRemoveHandler.DEFINITION, NamespaceRemoveHandler.INSTANCE);

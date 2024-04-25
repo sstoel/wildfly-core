@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.jboss.as.controller.CapabilityReferenceRecorder;
-
+import org.jboss.as.controller.Feature;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
@@ -18,6 +18,7 @@ import org.jboss.as.controller.ProxyController;
 import org.jboss.as.controller.access.management.AccessConstraintDefinition;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.descriptions.DescriptionProvider;
+import org.jboss.as.version.Stability;
 
 /**
  * {@link ImmutableManagementResourceRegistration} implementation that simply delegates to another
@@ -47,6 +48,16 @@ public class DelegatingImmutableManagementResourceRegistration implements Immuta
     @Override
     public ProcessType getProcessType() {
         return delegate.getProcessType();
+    }
+
+    @Override
+    public Stability getStability() {
+        return this.delegate.getStability();
+    }
+
+    @Override
+    public <F extends Feature> boolean enables(F feature) {
+        return this.delegate.enables(feature);
     }
 
     @Override

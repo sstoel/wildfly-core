@@ -28,14 +28,12 @@ import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.subsystem.test.AdditionalInitialization;
 import org.jboss.as.subsystem.test.ControllerInitializer;
 import org.jboss.as.subsystem.test.KernelServices;
+import org.jboss.as.version.Stability;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
 import org.wildfly.security.x500.cert.BasicConstraintsExtension;
 import org.wildfly.security.x500.cert.SelfSignedX509CertificateAndSigningKey;
 import org.wildfly.security.x500.cert.X509CertificateBuilder;
-
-import mockit.Mock;
-import mockit.MockUp;
 
 class TestEnvironment extends AdditionalInitialization {
 
@@ -46,6 +44,8 @@ class TestEnvironment extends AdditionalInitialization {
     private static final char[] GENERATED_KEYSTORE_PASSWORD = "Elytron".toCharArray();
     private static final X500Principal ISSUER_DN = new X500Principal("O=Root Certificate Authority, EMAILADDRESS=elytron@wildfly.org, C=UK, ST=Elytron, CN=Elytron CA");
     private static final X500Principal LOCALHOST_DN = new X500Principal("OU=Elytron, O=Elytron, C=CZ, ST=Elytron, CN=localhost");
+
+    private Stability stability;
 
     private static KeyStore loadKeyStore() throws Exception{
         KeyStore ks = KeyStore.getInstance("JKS");
@@ -80,7 +80,6 @@ class TestEnvironment extends AdditionalInitialization {
         KeyStore localhostKeyStore = loadKeyStore();
 
         X509Certificate issuerCertificate = issuerSelfSignedX509CertificateAndSigningKey.getSelfSignedCertificate();
-        localhostKeyStore.setCertificateEntry("ca", issuerCertificate);
 
         X509Certificate localhostCertificate = new X509CertificateBuilder()
                 .setIssuerDn(ISSUER_DN)
@@ -121,11 +120,25 @@ class TestEnvironment extends AdditionalInitialization {
     private final RunningMode runningMode;
 
     TestEnvironment() {
-        this(RunningMode.NORMAL);
+        this(RunningMode.NORMAL, Stability.DEFAULT);
     }
 
     TestEnvironment(RunningMode runningMode) {
+        this(runningMode, Stability.DEFAULT);
+    }
+
+    TestEnvironment(Stability stability) {
+        this(RunningMode.NORMAL, stability);
+    }
+
+    TestEnvironment(RunningMode runningMode, Stability stability) {
         this.runningMode = runningMode;
+        this.stability = stability;
+    }
+
+    @Override
+    public Stability getStability() {
+        return stability;
     }
 
     @Override
@@ -192,18 +205,6 @@ class TestEnvironment extends AdditionalInitialization {
                 return FileVisitResult.CONTINUE;
             }
         });
-    }
-
-    // classloader obtaining mock to load classes from testsuite
-    private static class ClassLoadingAttributeDefinitionsMock extends MockUp<ClassLoadingAttributeDefinitions> {
-        @Mock
-        static ClassLoader resolveClassLoader(String module) {
-            return SaslTestCase.class.getClassLoader();
-        }
-    }
-
-    static void mockCallerModuleClassloader() {
-        new ClassLoadingAttributeDefinitionsMock();
     }
 
     static void activateService(KernelServices services, RuntimeCapability capability, String... dynamicNameElements) throws InterruptedException {

@@ -13,7 +13,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-feature-pack-parent</artifactId>
-        <version>22.0.1.Final</version>
+        <version>24.0.0.Final</version>
     </parent>
 
     <artifactId>wildfly-core-galleon-pack</artifactId>
@@ -78,6 +78,43 @@
     <build>
         <finalName>${server.output.dir.prefix}-galleon-pack-${project.version}</finalName>
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>unpack</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>unpack</goal>
+                        </goals>
+                        <configuration>
+                            <artifactItems>
+                                <artifactItem>
+                                    <groupId>commons-daemon</groupId>
+                                    <artifactId>commons-daemon</artifactId>
+                                    <version>${version.commons-daemon}</version>
+                                    <classifier>bin-windows</classifier>
+                                    <type>zip</type>
+                                    <overWrite>true</overWrite>
+                                    <outputDirectory>${project.build.directory}/resources/content/docs/contrib/scripts/service/</outputDirectory>
+                                    <includes>**/*.exe</includes>
+                                    <fileMappers>
+                                        <org.codehaus.plexus.components.io.filemappers.RegExpFileMapper>
+                                          <pattern>prunsrv</pattern>
+                                          <replacement>wildfly-service</replacement>
+                                        </org.codehaus.plexus.components.io.filemappers.RegExpFileMapper>
+                                        <org.codehaus.plexus.components.io.filemappers.RegExpFileMapper>
+                                          <pattern>prunmgr</pattern>
+                                          <replacement>wildfly-mgr</replacement>
+                                        </org.codehaus.plexus.components.io.filemappers.RegExpFileMapper>
+                                      </fileMappers>
+                                </artifactItem>
+                            </artifactItems>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>            
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-resources-plugin</artifactId>
@@ -194,6 +231,10 @@
                         <configuration>
                             <release-name>WildFly Core</release-name>
                             <fork-embedded>${galleon.fork.embedded}</fork-embedded>
+                            <generate-channel-manifest>true</generate-channel-manifest>
+                            <minimum-stability-level>experimental</minimum-stability-level>
+                            <config-stability-level>community</config-stability-level>
+                            <package-stability-level>experimental</package-stability-level>
                         </configuration>
                     </execution>
                 </executions>

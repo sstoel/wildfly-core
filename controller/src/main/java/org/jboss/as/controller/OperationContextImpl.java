@@ -92,6 +92,7 @@ import org.jboss.as.controller.registry.PlaceholderResource;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.controller.transform.ContextAttachments;
 import org.jboss.as.core.security.AccessMechanism;
+import org.jboss.as.version.Stability;
 import org.jboss.dmr.ModelNode;
 import org.jboss.msc.service.LifecycleEvent;
 import org.jboss.msc.service.LifecycleListener;
@@ -106,6 +107,7 @@ import org.jboss.msc.service.ServiceNotFoundException;
 import org.jboss.msc.service.ServiceRegistry;
 import org.jboss.msc.service.ServiceRegistryException;
 import org.jboss.msc.service.ServiceTarget;
+import org.wildfly.common.Assert;
 import org.wildfly.security.auth.server.SecurityIdentity;
 
 /**
@@ -189,7 +191,7 @@ final class OperationContextImpl extends AbstractOperationContext {
     OperationContextImpl(final Integer operationId,
                          final String operationName, final ModelNode operationAddress,
                          final ModelControllerImpl modelController, final ProcessType processType,
-                         final RunningMode runningMode,
+                         final Stability stability, final RunningMode runningMode,
                          final OperationHeaders operationHeaders,
                          final OperationMessageHandler messageHandler, final OperationAttachments attachments,
                          final ModelControllerImpl.ManagementModelImpl managementModel, final ModelController.OperationTransactionControl transactionControl,
@@ -204,7 +206,7 @@ final class OperationContextImpl extends AbstractOperationContext {
                          final OperationStepHandler extraValidationStepHandler,
                          final boolean partialModel,
                          final Supplier<SecurityIdentity> securityIdentitySupplier) {
-        super(processType, runningMode, transactionControl, processState, booting, auditLogger, notificationSupport,
+        super(processType, stability, runningMode, transactionControl, processState, booting, auditLogger, notificationSupport,
                 modelController, skipModelValidation, extraValidationStepHandler, operationHeaders, securityIdentitySupplier);
         this.operationId = operationId;
         this.operationName = operationName;
@@ -1563,6 +1565,8 @@ final class OperationContextImpl extends AbstractOperationContext {
 
     @Override
     public boolean hasOptionalCapability(String required, String dependent, String attribute) {
+        Assert.checkNotNullParam("required", required);
+        Assert.checkNotNullParam("dependent", dependent);
         return requestOptionalCapability(required, dependent, true, activeStep, attribute);
     }
 
@@ -1571,12 +1575,6 @@ final class OperationContextImpl extends AbstractOperationContext {
         assertCapabilitiesAvailable(currentStage);
         ensureLocalCapabilityRegistry();
         RuntimeCapabilityRegistry registry = managementModel.getCapabilityRegistry();
-        if (dependent == null) {
-            // WFCORE-900 we're currently forgiving of this, but only for runtime-only requirements
-            assert runtimeOnly;
-            CapabilityScope context = createCapabilityContext(step.address);
-            return registry.hasCapability(required, context);
-        }
         RuntimeRequirementRegistration registration = createRequirementRegistration(required, dependent, runtimeOnly, step, attribute);
         CapabilityScope context = registration.getDependentContext();
         if (registry.hasCapability(required, context)) {
@@ -1589,6 +1587,8 @@ final class OperationContextImpl extends AbstractOperationContext {
 
     @Override
     public void requireOptionalCapability(String required, String dependent, String attribute) throws OperationFailedException {
+        Assert.checkNotNullParam("required", required);
+        Assert.checkNotNullParam("dependent", dependent);
         requireOptionalCapability(required, dependent, activeStep, attribute);
     }
 
@@ -1683,7 +1683,8 @@ final class OperationContextImpl extends AbstractOperationContext {
 
     @Override
     public ServiceName getCapabilityServiceName(String capabilityBaseName, Class<?> serviceType, String ... dynamicParts) {
-        return getCapabilityServiceName(capabilityBaseName, serviceType).append(dynamicParts);
+        ServiceName name = getCapabilityServiceName(capabilityBaseName, serviceType);
+        return (dynamicParts.length > 0) ? name.append(dynamicParts) : name;
     }
 
     ServiceName getCapabilityServiceName(String capabilityName, Class<?> serviceType, final PathAddress address) {
@@ -2664,7 +2665,8 @@ final class OperationContextImpl extends AbstractOperationContext {
 
         @Override
         public ServiceName getCapabilityServiceName(String capabilityBaseName, String ... dynamicPart) {
-            return getCapabilityServiceName(capabilityBaseName).append(dynamicPart);
+            ServiceName name = getCapabilityServiceName(capabilityBaseName);
+            return (dynamicPart.length > 0) ? name.append(dynamicPart) : name;
         }
     }
 

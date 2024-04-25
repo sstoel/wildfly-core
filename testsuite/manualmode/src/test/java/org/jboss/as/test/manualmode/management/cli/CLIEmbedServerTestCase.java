@@ -32,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import org.codehaus.plexus.util.FileUtils;
 import org.jboss.as.controller.client.ModelControllerClient;
@@ -100,6 +101,9 @@ public class CLIEmbedServerTestCase extends AbstractCliTestBase {
 
     @BeforeClass
     public static void beforeClass() throws Exception {
+        if (Runtime.version().feature() > 21) {
+            System.setProperty("jdk.console", "java.base"); // WFCORE-6167 workaround on JDK22+
+        }
         Assume.assumeFalse("This test does not work with the IBM J9 JVM. There seems to be an issue with stdout" +
                 " logging.", TestSuiteEnvironment.isIbmJvm());
 
@@ -136,6 +140,9 @@ public class CLIEmbedServerTestCase extends AbstractCliTestBase {
 
     @AfterClass
     public static void afterClass() throws IOException {
+        if (Runtime.version().feature() > 21) {
+            System.setProperty("jdk.console", "jdk.internal.le"); // WFCORE-6167 workaround on JDK22+
+        }
         if (!TestSuiteEnvironment.isIbmJvm()) {
             CLIEmbedUtil.copyConfig(ROOT, "standalone", "logging.properties.backup", "logging.properties", false);
             try {
@@ -215,7 +222,7 @@ public class CLIEmbedServerTestCase extends AbstractCliTestBase {
         String line = "embed-server --admin-only=false --server-config=standalone-cli.xml " + stdoutParam + JBOSS_HOME;
         cli.sendLine(line);
         if (expectServerLogging) {
-            checkLogging("WFLYSRV0025");
+            checkLogging("WFLYSRV0025", TimeoutUtil.adjust(30000));
         } else {
             checkNoLogging("WFLYSRV0025");
         }
@@ -249,7 +256,7 @@ public class CLIEmbedServerTestCase extends AbstractCliTestBase {
 
     }
 
-    private void checkClientSideLogging() throws IOException {
+    private void checkClientSideLogging() throws IOException, InterruptedException {
         String text = "test." + System.nanoTime();
         Logger.getLogger(text).error(text);
         checkLogging(text);
@@ -525,7 +532,7 @@ public class CLIEmbedServerTestCase extends AbstractCliTestBase {
      * Tests the --help param works.
      */
     @Test
-    public void testHelp() throws IOException {
+    public void testHelp() throws IOException, InterruptedException {
         cli.sendLine("embed-server --help");
         checkLogging("embed-server");
 
@@ -725,8 +732,19 @@ public class CLIEmbedServerTestCase extends AbstractCliTestBase {
         return null;
     }
 
-    private void checkLogging(String line) throws IOException {
+    private void checkLogging(String line) throws IOException, InterruptedException {
+        checkLogging(line, 0);
+    }
+
+    private void checkLogging(String line, int timeout) throws IOException, InterruptedException {
         String logOutput = readLogOut();
+        long done = System.currentTimeMillis() + timeout;
+        while (timeout > 0 && System.currentTimeMillis() < done) {
+            if (checkLogging(logOutput, line)) {
+                break;
+            }
+            TimeUnit.MILLISECONDS.sleep(500);
+        }
         assertTrue(logOutput, checkLogging(logOutput, line));
     }
 

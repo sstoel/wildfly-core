@@ -40,6 +40,41 @@ public class CommandBuilderTest {
     }
 
     @Test
+    public void testJBossModulesBuilder() {
+        // Set up a standalone command builder
+        final JBossModulesCommandBuilder commandBuilder = JBossModulesCommandBuilder.of(WILDFLY_HOME, "org.jboss.as.launcher.test")
+                .addJavaOption("-Djava.security.manager")
+                .addJavaOption("-Djava.net.preferIPv4Stack=true")
+                .addJavaOption("-Djava.net.preferIPv4Stack=false")
+                .addModuleOption("-javaagent:test-agent1.jar")
+                .addServerArgument("--server=test");
+
+        // Get all the commands
+        List<String> commands = commandBuilder.buildArguments();
+
+        Assert.assertTrue("Missing -secmgr option", commands.contains("-secmgr"));
+
+        Assert.assertTrue("Missing jboss-modules.jar", commands.stream().anyMatch(entry -> entry.matches("-javaagent:.*jboss-modules.jar$")));
+        Assert.assertTrue("Missing test-agent1.jar", commands.contains("-javaagent:test-agent1.jar"));
+        Assert.assertTrue("Missing --server=test", commands.contains("--server=test"));
+
+        // If we're using Java 9+ ensure the modular JDK options were added
+        testModularJvmArguments(commands, 1);
+
+        // A system property should only be added ones
+        long count = 0L;
+        for (String s : commandBuilder.getJavaOptions()) {
+            if (s.contains("java.net.preferIPv4Stack")) {
+                count++;
+            }
+        }
+        Assert.assertEquals("There should be only one java.net.preferIPv4Stack system property", 1, count);
+
+        // The value saved should be the last value added
+        Assert.assertTrue("java.net.preferIPv4Stack should be set to false", commandBuilder.getJavaOptions().contains("-Djava.net.preferIPv4Stack=false"));
+    }
+
+    @Test
     public void testStandaloneBuilder() {
         // Set up a standalone command builder
         final StandaloneCommandBuilder commandBuilder = StandaloneCommandBuilder.of(WILDFLY_HOME)
@@ -103,7 +138,9 @@ public class CommandBuilderTest {
                 .addJavaOption("-Djava.security.manager")
                 .addJavaOption("-Djava.net.preferIPv4Stack=true")
                 .addJavaOption("-Djava.net.preferIPv4Stack=false")
-                .setBindAddressHint("management", "0.0.0.0");
+                .setBindAddressHint("management", "0.0.0.0")
+                .setYamlFiles(Path.of("bad.yml"))
+                .setYamlFiles(Path.of("dummy.yml"));
 
         // Get all the commands
         List<String> commands = commandBuilder.buildArguments();
@@ -115,6 +152,8 @@ public class CommandBuilderTest {
         Assert.assertTrue("Missing -b=0.0.0.0", commands.contains("-bmanagement=0.0.0.0"));
 
         Assert.assertTrue("Missing debug argument", commands.contains(String.format(StandaloneCommandBuilder.DEBUG_FORMAT, "y", 5005)));
+
+        Assert.assertTrue("--yaml is missing", commands.contains("--yaml=" + Path.of("dummy.yml").toFile().getAbsolutePath()));
 
         // If we're using Java 12+. the enhanced security manager option must be set.
         testEnhancedSecurityManager(commands, 1);
@@ -137,6 +176,15 @@ public class CommandBuilderTest {
             }
         }
         Assert.assertEquals("There should be only one --install-dir", 1, count);
+
+        // Install dir should be added once.
+        count = 0L;
+        for (String s : commandBuilder.getServerArguments()) {
+            if (s.contains("--yaml")) {
+                count++;
+            }
+        }
+        Assert.assertEquals("There should be only one --yaml", 1, count);
 
         // Rename the binding address
         commandBuilder.setBindAddressHint(null);

@@ -13,6 +13,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.lang.management.ManagementFactory;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,6 +53,7 @@ import static org.jboss.as.controller.client.helpers.ClientConstants.RESULT;
 import static org.jboss.as.controller.client.helpers.ClientConstants.RUNTIME_NAME;
 import org.jboss.as.process.CommandLineConstants;
 import org.jboss.as.process.ExitCodes;
+import org.jboss.as.version.ProductConfig;
 import org.jboss.dmr.ModelNode;
 import org.jboss.logmanager.Configurator;
 import org.jboss.logmanager.LogContext;
@@ -62,6 +65,7 @@ import static org.wildfly.core.jar.runtime.Constants.LOG_MANAGER_CLASS;
 import static org.wildfly.core.jar.runtime.Constants.LOG_MANAGER_PROP;
 import static org.wildfly.core.jar.runtime.Constants.STANDALONE_CONFIG;
 
+import org.jboss.modules.ModuleLoggerFinder;
 import org.jboss.stdio.LoggingOutputStream;
 import org.jboss.stdio.NullInputStream;
 import org.jboss.stdio.SimpleStdioContextSelector;
@@ -310,21 +314,25 @@ public final class BootableJar implements ShutdownHandler {
         setTccl(moduleClassLoader);
         // Initialize the environment
         final BootableEnvironment environment = BootableEnvironment.of(jbossHome);
+        ProductConfig productConfig = ProductConfig.fromFilesystemSlot(moduleLoader, jbossHome.toString(), null);
         Arguments arguments;
         try {
             arguments = Arguments.parseArguments(args, environment);
         } catch (Throwable ex) {
             System.err.println(ex);
-            CmdUsage.printUsage(System.out);
+            CmdUsage.printUsage(productConfig, System.out);
             return;
         }
         if (arguments.isHelp()) {
-            CmdUsage.printUsage(System.out);
+            CmdUsage.printUsage(productConfig, System.out);
             return;
         }
 
         // Side effect is to initialise Log Manager
         BootableJar bootableJar = new BootableJar(environment, arguments, moduleLoader, unzipTime);
+
+        // First, activate the ModuleLoggerFinder
+        configureModuleFinder(moduleClassLoader);
 
         // At this point we can configure JMX
         configureJMX(moduleClassLoader, bootableJar.log);
@@ -359,6 +367,39 @@ public final class BootableJar implements ShutdownHandler {
         }
 
         ModuleLoader.installMBeanServer();
+    }
+
+    /**
+     * This is a temporary workaround for WFCORE-6712 until MODULES-447 is resolved
+     *
+     * @param classLoader the class loader to pass to the activation of the {@link ModuleLoggerFinder}
+     */
+    private static void configureModuleFinder(final ClassLoader classLoader) {
+        // Please note, once MODULES-447 is resolved, this method can be removed and replaced with the public call.
+        final Method method;
+        if (System.getSecurityManager() == null) {
+            try {
+                method = ModuleLoggerFinder.class.getDeclaredMethod("activate", ClassLoader.class);
+                method.trySetAccessible();
+            } catch (NoSuchMethodException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            method = doPrivileged((PrivilegedAction<Method>) () -> {
+                try {
+                    final Method result = ModuleLoggerFinder.class.getDeclaredMethod("activate", ClassLoader.class);
+                    result.trySetAccessible();
+                    return result;
+                } catch (NoSuchMethodException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        }
+        try {
+            method.invoke(null, classLoader);
+        } catch (IllegalAccessException | InvocationTargetException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static String getServiceName(ClassLoader classLoader, String className) throws IOException {

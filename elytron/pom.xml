@@ -9,7 +9,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>22.0.1.Final</version>
+        <version>24.0.0.Final</version>
     </parent>
 
     <artifactId>wildfly-elytron-integration</artifactId>
@@ -19,9 +19,12 @@
     <properties>
         <!-- TlsTestCase specifies use of sun.security.ssl.SunJSSE in the server config,
              so make it available. -->
-        <modular.jdk.args>${standard.client.modular.jdk.args}
+        <modular.jdk11.args/>
+        <modular.jdk.args>${standard.client.modular.jdk.args} ${modular.jdk11.args}
             --add-opens=java.base/sun.security.ssl=ALL-UNNAMED
         </modular.jdk.args>
+        <version.com.nimbus.jose-jwt>9.37.3</version.com.nimbus.jose-jwt>
+        <version.com.squareup.okhttp3.mockwebserver>3.8.1</version.com.squareup.okhttp3.mockwebserver>
     </properties>
 
     <dependencyManagement>
@@ -65,6 +68,11 @@
 
         <dependency>
             <groupId>org.wildfly.security</groupId>
+            <artifactId>wildfly-elytron-dynamic-ssl</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.wildfly.security</groupId>
             <artifactId>wildfly-elytron-realm-jdbc</artifactId>
         </dependency>
 
@@ -102,6 +110,32 @@
         </dependency>
 
         <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>nimbus-jose-jwt</artifactId>
+            <version>${version.com.nimbus.jose-jwt}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>mockwebserver</artifactId>
+            <version>${version.com.squareup.okhttp3.mockwebserver}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcprov-jdk15on</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
             <groupId>commons-collections</groupId>
             <artifactId>commons-collections</artifactId>
             <scope>test</scope>
@@ -123,7 +157,7 @@
         <dependency>
             <groupId>org.apache.directory.api</groupId>
             <artifactId>api-ldap-codec-core</artifactId>
-            <version>1.0.0</version>
+            <version>${version.org.apache.directory.api}</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
@@ -136,7 +170,7 @@
         <dependency>
             <groupId>org.apache.directory.api</groupId>
             <artifactId>api-ldap-codec-standalone</artifactId>
-            <version>1.0.3</version>
+            <version>${version.org.apache.directory.api}</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
@@ -149,7 +183,7 @@
         <dependency>
             <groupId>org.apache.directory.api</groupId>
             <artifactId>api-ldap-net-mina</artifactId>
-            <version>1.0.3</version>
+            <version>${version.org.apache.directory.api}</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
@@ -162,7 +196,7 @@
         <dependency>
             <groupId>org.apache.directory.server</groupId>
             <artifactId>apacheds-core-annotations</artifactId>
-            <version>2.0.0-M24</version>
+            <version>${version.org.apache.ds}</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
@@ -177,13 +211,17 @@
                     <groupId>org.bouncycastle</groupId>
                     <artifactId>bcprov-jdk15on</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>org.bouncycastle</groupId>
+                    <artifactId>bcpkix-jdk15on</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
 
         <dependency>
             <groupId>org.apache.directory.server</groupId>
             <artifactId>apacheds-core-api</artifactId>
-            <version>2.0.0-M24</version>
+            <version>${version.org.apache.ds}</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
@@ -196,7 +234,7 @@
         <dependency>
             <groupId>org.apache.directory.server</groupId>
             <artifactId>apacheds-protocol-ldap</artifactId>
-            <version>2.0.0-M24</version>
+            <version>${version.org.apache.ds}</version>
             <scope>test</scope>
             <exclusions>
                 <exclusion>
@@ -286,12 +324,6 @@
         </dependency>
 
         <dependency>
-            <groupId>org.jmockit</groupId>
-            <artifactId>jmockit</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
             <groupId>org.mock-server</groupId>
             <artifactId>mockserver-netty</artifactId>
             <scope>test</scope>
@@ -313,6 +345,13 @@
         <dependency>
             <groupId>org.wildfly.security</groupId>
             <artifactId>wildfly-elytron-sasl-plain</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.wildfly.security</groupId>
+            <artifactId>wildfly-elytron-tests-common</artifactId>
+            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
 
@@ -345,6 +384,13 @@
             <artifactId>wildfly-openssl-windows-x86_64</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>org.jmockit</groupId>
+            <artifactId>jmockit</artifactId>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <build>
@@ -367,6 +413,7 @@
                                 <exclude>custom-policies.xml</exclude>
                                 <exclude>jacc-with-providers.xml</exclude>
                                 <exclude>legacy*.xml</exclude>
+                                <exclude>elytron-subsystem-community*.xml</exclude>
                             </excludes>
                             <systemId>src/main/resources/schema/wildfly-elytron_18_0.xsd</systemId>
                         </validationSet>
@@ -386,27 +433,34 @@
                 </executions>
             </plugin>
 
-            <plugin><!-- to obtain jmockit jar path -->
-                <artifactId>maven-dependency-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>getClasspathFilenames</id>
-                        <goals>
-                            <goal>properties</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <reuseForks>false</reuseForks>
-                    <argLine>-javaagent:${org.jmockit:jmockit:jar} ${surefire.jacoco.args} ${modular.jdk.args} -Dorg.wildfly.extension.elytron.restore-default-ssl-context=true -Dauthconfigprovider.factory=org.wildfly.security.auth.jaspi.ElytronAuthConfigFactory</argLine>
+                    <argLine>-javaagent:${settings.localRepository}/org/jmockit/jmockit/${version.org.jmockit}/jmockit-${version.org.jmockit}.jar ${surefire.jacoco.args} ${modular.jdk.args} -Dorg.wildfly.extension.elytron.restore-default-ssl-context=true -Dauthconfigprovider.factory=org.wildfly.security.auth.jaspi.ElytronAuthConfigFactory</argLine>
                 </configuration>
             </plugin>
         </plugins>
     </build>
+
+    <!-- Profiles -->
+    <profiles>
+        <!--
+          Name: JDK11
+          Descr: JDK11 specific settings
+        -->
+        <profile>
+            <id>jdk11</id>
+            <activation>
+                <jdk>11</jdk>
+            </activation>
+            <properties>
+                <modular.jdk11.args>
+                    --add-opens=java.base/com.sun.net.ssl.internal.ssl=ALL-UNNAMED
+                </modular.jdk11.args>
+            </properties>
+        </profile>
+    </profiles>
 
 </project>

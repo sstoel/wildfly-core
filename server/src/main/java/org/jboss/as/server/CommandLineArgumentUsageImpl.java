@@ -6,15 +6,17 @@
 package org.jboss.as.server;
 
 import java.io.PrintStream;
+
 import org.jboss.as.controller.persistence.ConfigurationExtensionFactory;
 
 import org.jboss.as.process.CommandLineArgumentUsage;
 import org.jboss.as.process.CommandLineConstants;
 import org.jboss.as.server.logging.ServerLogger;
+import org.jboss.as.version.ProductConfig;
 
 public class CommandLineArgumentUsageImpl extends CommandLineArgumentUsage {
 
-    public static void init(){
+    public static void init(ProductConfig productConfig){
 
         addArguments(CommandLineConstants.ADMIN_ONLY);
         instructions.add(ServerLogger.ROOT_LOGGER.argAdminOnly());
@@ -78,10 +80,14 @@ public class CommandLineArgumentUsageImpl extends CommandLineArgumentUsage {
             instructions.add(ConfigurationExtensionFactory.getCommandLineInstructions());
         }
 
+        if (productConfig.getStabilitySet().size() > 1) {
+            addArguments(CommandLineConstants.STABILITY + "=<value>");
+            instructions.add(ServerLogger.ROOT_LOGGER.argStability(productConfig.getStabilitySet(), productConfig.getDefaultStability()));
+        }
     }
 
-    public static void printUsage(final PrintStream out) {
-        init();
+    public static void printUsage(ProductConfig productConfig, PrintStream out) {
+        init(productConfig);
         out.print(usage("standalone"));
     }
 

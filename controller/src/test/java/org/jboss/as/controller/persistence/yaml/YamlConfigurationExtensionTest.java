@@ -31,6 +31,7 @@ import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.PrimitiveListAttributeDefinition;
 import org.jboss.as.controller.ProcessType;
 import org.jboss.as.controller.PropertiesAttributeDefinition;
+import org.jboss.as.controller.ResourceRegistration;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleOperationDefinitionBuilder;
 import org.jboss.as.controller.SimpleResourceDefinition;
@@ -63,7 +64,7 @@ public class YamlConfigurationExtensionTest {
     @BeforeClass
     public static void setUp() {
         StandardResourceDescriptionResolver descriptionResolver = new StandardResourceDescriptionResolver(MY_RESOURCE, YamlConfigurationExtensionTest.class.getName(), Thread.currentThread().getContextClassLoader());
-        SimpleResourceDefinition rootResource = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(null, descriptionResolver));
+        SimpleResourceDefinition rootResource = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(ResourceRegistration.root(), descriptionResolver));
         AttributeDefinition valueAtt = SimpleAttributeDefinitionBuilder.create(VALUE, STRING, true)
                 .setAllowExpression(true)
                 .setValidator(new StringLengthValidator(0, true, true))
@@ -263,7 +264,7 @@ public class YamlConfigurationExtensionTest {
             instance.processOperations(rootRegistration, postExtensionOps);
             fail("Unknown resource should make the yaml extension fail");
         } catch (java.lang.IllegalArgumentException ex) {
-            assertEquals("WFLYCTL0502: No child resource called system-propety could be found at address /'.", ex.getMessage());
+            assertEquals("WFLYCTL0502: No child resource called 'system-propety' could be found at address '/'.", ex.getMessage());
         }
     }
 
@@ -298,7 +299,7 @@ public class YamlConfigurationExtensionTest {
         try {
         instance.processOperations(rootRegistration, postExtensionOps);fail("Unknown resource should make the yaml extension fail");
         } catch (java.lang.IllegalArgumentException ex) {
-            assertEquals("WFLYCTL0502: No child resource called children could be found at address /parent=homer'.", ex.getMessage());
+            assertEquals("WFLYCTL0502: No child resource called 'children' could be found at address '/parent=homer'.", ex.getMessage());
         }
     }
 
@@ -323,6 +324,33 @@ public class YamlConfigurationExtensionTest {
         assertEquals(PathAddress.pathAddress("system-property", "bbb"), postExtensionOps.get(1).address);
         assertTrue(postExtensionOps.get(1).operation.hasDefined("value"));
         assertEquals("test", postExtensionOps.get(1).operation.get("value").asString());
+    }
+
+     /**
+     * Verify that resource creation will be updated with the YAML definition.
+     *
+     * @throws URISyntaxException
+     */
+    @Test
+    public void testAddResourceOverride() throws URISyntaxException {
+        List<ParsedBootOp> postExtensionOps = new ArrayList<>();
+        ConfigurationExtension instance = new YamlConfigurationExtension();
+        instance.load(Paths.get(this.getClass().getResource("simple_overwrite.yml").toURI()), Paths.get(this.getClass().getResource("simple_override.yml").toURI()));
+        instance.processOperations(rootRegistration, postExtensionOps);
+        assertFalse(postExtensionOps.isEmpty());
+        assertEquals(3, postExtensionOps.size());
+        assertEquals(ADD, postExtensionOps.get(0).operationName);
+        assertEquals(PathAddress.pathAddress("system-property", "aaa"), postExtensionOps.get(0).address);
+        assertTrue(postExtensionOps.get(0).operation.hasDefined("value"));
+        assertEquals("foo", postExtensionOps.get(0).operation.get("value").asString());
+        assertEquals(ADD, postExtensionOps.get(1).operationName);
+        assertEquals(PathAddress.pathAddress("system-property", "bbb"), postExtensionOps.get(1).address);
+        assertTrue(postExtensionOps.get(1).operation.hasDefined("value"));
+        assertEquals("test", postExtensionOps.get(1).operation.get("value").asString());
+        assertEquals(WRITE_ATTRIBUTE_OPERATION, postExtensionOps.get(2).operationName);
+        assertEquals(PathAddress.pathAddress("system-property", "bbb"), postExtensionOps.get(2).address);
+        assertTrue(postExtensionOps.get(2).operation.hasDefined("value"));
+        assertEquals("test-override", postExtensionOps.get(2).operation.get("value").asString());
     }
 
     /**

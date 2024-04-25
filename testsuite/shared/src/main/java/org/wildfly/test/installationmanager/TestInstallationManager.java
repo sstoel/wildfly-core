@@ -26,6 +26,7 @@ import org.wildfly.installationmanager.Channel;
 import org.wildfly.installationmanager.ChannelChange;
 import org.wildfly.installationmanager.HistoryResult;
 import org.wildfly.installationmanager.InstallationChanges;
+import org.wildfly.installationmanager.ManifestVersion;
 import org.wildfly.installationmanager.MavenOptions;
 import org.wildfly.installationmanager.OperationNotAvailableException;
 import org.wildfly.installationmanager.Repository;
@@ -39,6 +40,7 @@ public class TestInstallationManager implements InstallationManager {
     public static MavenOptions mavenOptions;
     public static Path installationDir;
     public static List<Channel> lstChannels;
+    public static List<ManifestVersion> installedVersions;
     public static List<Repository> findUpdatesRepositories;
     public static List<ArtifactChange> findUpdatesChanges;
     public static List<Repository> prepareUpdatesRepositories;
@@ -140,6 +142,20 @@ public class TestInstallationManager implements InstallationManager {
             // prepare Revert sample data
             prepareRevertRepositories = new ArrayList<>();
             prepareRevertTargetDir = null;
+
+            installedVersions = new ArrayList<>();
+            int i = 0;
+            for (Channel channel : lstChannels) {
+                String name = channel.getName();
+                String description = "Manifest " + i++;
+                if (channel.getManifestCoordinate().isPresent()) {
+                    // NOTE: we're not using a proper value for the version param here, we're passing in the whole GAV.
+                    installedVersions.add(new ManifestVersion(name, description, channel.getManifestCoordinate().get(), ManifestVersion.Type.MAVEN));
+                } else if (channel.getManifestUrl().isPresent()) {
+                    // NOTE: we're not using a proper value for the version param here, we're passing in a URL, not a hash.
+                    installedVersions.add(new ManifestVersion(name, description, channel.getManifestUrl().get().toString(), ManifestVersion.Type.URL));
+                }
+            }
 
             initialized = true;
         }
@@ -248,6 +264,11 @@ public class TestInstallationManager implements InstallationManager {
     @Override
     public String generateApplyRevertCommand(Path scriptHome, Path candidatePath, OsShell shell) throws OperationNotAvailableException {
         return scriptHome + APPLY_REVERT_BASE_GENERATED_COMMAND + candidatePath.toString();
+    }
+
+    @Override
+    public Collection<ManifestVersion> getInstalledVersions() throws Exception {
+        return installedVersions;
     }
 
     public static void zipDir(Path inputFile, Path target) throws IOException {

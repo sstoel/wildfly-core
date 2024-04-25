@@ -12,9 +12,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -37,11 +39,13 @@ import org.jboss.as.network.NetworkUtils;
 import org.jboss.as.server.controller.git.GitRepository;
 import org.jboss.as.server.controller.git.GitRepositoryConfiguration;
 import org.jboss.as.server.logging.ServerLogger;
+import org.jboss.as.version.Stability;
 import org.jboss.as.version.ProductConfig;
 import org.jboss.modules.Module;
 import org.jboss.modules.ModuleLoader;
 import org.wildfly.common.cpu.ProcessorInfo;
 import org.wildfly.security.manager.WildFlySecurityManager;
+import org.wildfly.service.descriptor.NullaryServiceDescriptor;
 
 /**
  * Encapsulates the runtime environment for a server.
@@ -51,6 +55,8 @@ import org.wildfly.security.manager.WildFlySecurityManager;
  * @author Mike M. Clark
  */
 public class ServerEnvironment extends ProcessEnvironment implements Serializable {
+
+    public static final NullaryServiceDescriptor<ServerEnvironment> SERVICE_DESCRIPTOR = NullaryServiceDescriptor.of("org.wildfly.server.environment", ServerEnvironment.class);
 
     private static final long serialVersionUID = 1725061010357265545L;
 
@@ -245,12 +251,12 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
     private static final Set<String> ILLEGAL_PROPERTIES = new HashSet<>(Arrays.asList(DOMAIN_BASE_DIR,
             DOMAIN_CONFIG_DIR, JAVA_EXT_DIRS, HOME_DIR, "modules.path", SERVER_BASE_DIR, SERVER_CONFIG_DIR,
             SERVER_DATA_DIR, SERVER_LOG_DIR, BOOTSTRAP_MAX_THREADS, CONTROLLER_TEMP_DIR,
-            JBOSS_SERVER_DEFAULT_CONFIG, JBOSS_PERSIST_SERVER_CONFIG, JBOSS_SERVER_MANAGEMENT_UUID));
+            JBOSS_SERVER_DEFAULT_CONFIG, JBOSS_PERSIST_SERVER_CONFIG, JBOSS_SERVER_MANAGEMENT_UUID, STABILITY));
     /**
      * Properties that can only be set via {@link #systemPropertyUpdated(String, String)} during server boot.
      */
     private static final Set<String> BOOT_PROPERTIES = new HashSet<>(Arrays.asList(SERVER_TEMP_DIR,
-            NODE_NAME, SERVER_NAME, HOST_NAME, QUALIFIED_HOST_NAME));
+            NODE_NAME, SERVER_NAME, HOST_NAME, QUALIFIED_HOST_NAME, STABILITY));
 
     /**
      * Properties that we care about that were provided to the constructor (i.e. by the user via cmd line)
@@ -297,6 +303,7 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
     private final boolean startSuspended;
     private final boolean startGracefully;
     private final GitRepository repository;
+    private volatile Stability stability;
 
     public ServerEnvironment(final String hostControllerName, final Properties props, final Map<String, String> env, final String serverConfig,
             final ConfigurationFile.InteractionPolicy configInteractionPolicy, final LaunchType launchType,
@@ -311,12 +318,15 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
             final boolean startGracefully, final String gitRepository, final String gitBranch, final String gitAuthConfiguration,
             final String supplementalConfiguration) {
         assert props != null;
+        assert productConfig != null;
         ConfigurationFile.InteractionPolicy configInteractionPolicy = configurationInteractionPolicy;
         this.startSuspended = startSuspended;
         this.startGracefully = startGracefully;
 
         this.launchType = launchType;
         this.standalone = launchType != LaunchType.DOMAIN;
+
+        this.productConfig = productConfig;
 
         this.initialRunningMode = initialRunningMode == null ? RunningMode.NORMAL : initialRunningMode;
         this.runningModeControl = new RunningModeControl(this.initialRunningMode);
@@ -340,7 +350,7 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
             Path[] supplementalConfigurationFiles = findSupplementalConfigurationFiles(null, supplementalConfiguration);
             ConfigurationExtension configurationExtension = ConfigurationExtensionFactory.createConfigurationExtension(supplementalConfigurationFiles);
             if (configurationExtension != null) {
-                configInteractionPolicy = configurationExtension.shouldProcessOperations(initialRunningMode) ? ConfigurationFile.InteractionPolicy.READ_ONLY : configInteractionPolicy;
+                configInteractionPolicy = configurationExtension.shouldProcessOperations(runningModeControl) ? ConfigurationFile.InteractionPolicy.READ_ONLY : configInteractionPolicy;
             }
             homeDir = new File(WildFlySecurityManager.getPropertyPrivileged("user.dir", "."));
             serverBaseDir = new File(WildFlySecurityManager.getPropertyPrivileged("user.dir", "."));
@@ -359,6 +369,7 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
             domainBaseDir = null;
             domainConfigurationDir = null;
             repository = null;
+            this.stability = this.productConfig.getDefaultStability();
             WildFlySecurityManager.setPropertyPrivileged(ServerEnvironment.JBOSS_PERSIST_SERVER_CONFIG, "false");
         } else {
 
@@ -404,7 +415,7 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
             Path[] supplementalConfigurationFiles = findSupplementalConfigurationFiles(serverConfigurationDir.toPath(), supplementalConfiguration);
             ConfigurationExtension configurationExtension = ConfigurationExtensionFactory.createConfigurationExtension(supplementalConfigurationFiles);
             if (configurationExtension != null) {
-                configInteractionPolicy = configurationExtension.shouldProcessOperations(initialRunningMode) ? ConfigurationFile.InteractionPolicy.READ_ONLY : configInteractionPolicy;
+                configInteractionPolicy = configurationExtension.shouldProcessOperations(runningModeControl) ? ConfigurationFile.InteractionPolicy.READ_ONLY : configInteractionPolicy;
             }
 
             tmp = getFileFromProperty(SERVER_DATA_DIR, props);
@@ -488,7 +499,10 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
             } else {
                 repository = null;
             }
-            serverConfigurationFile = standalone ? new ConfigurationFile(serverConfigurationDir, defaultServerConfig, serverConfig, configInteractionPolicy, repository != null, serverTempDir, configurationExtension) : null;
+
+            this.stability = getEnumProperty(props, ProcessEnvironment.STABILITY, productConfig.getDefaultStability());
+            final String translatedConfig = translateFileAlias(serverConfig, stability);
+            serverConfigurationFile = standalone ? new ConfigurationFile(serverConfigurationDir, defaultServerConfig, translatedConfig, configInteractionPolicy, repository != null, serverTempDir, configurationExtension) : null;
             // Adds a system property to indicate whether or not the server configuration should be persisted
             @SuppressWarnings("deprecation")
             final String propertyKey = JBOSS_PERSIST_SERVER_CONFIG;
@@ -513,10 +527,14 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
             } else {
                 this.domainConfigurationDir = null;
             }
+
+            if (!productConfig.getStabilitySet().contains(this.stability)) {
+                throw ServerLogger.ROOT_LOGGER.unsupportedStability(this.stability, productConfig.getProductName());
+            }
         }
         boolean allowExecutor = true;
         String maxThreads = WildFlySecurityManager.getPropertyPrivileged(BOOTSTRAP_MAX_THREADS, null);
-        if (maxThreads != null && maxThreads.length() > 0) {
+        if (maxThreads != null && !maxThreads.isEmpty()) {
             try {
                 //noinspection ResultOfMethodCallIgnored
                 Integer.decode(maxThreads);
@@ -536,7 +554,6 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
             throw ServerLogger.ROOT_LOGGER.couldNotObtainServerUuidFile(ex, filePath);
         }
         this.serverUUID = uuid;
-        this.productConfig = productConfig;
 
         // Keep a copy of the original properties
         this.primordialProperties = new Properties();
@@ -664,7 +681,7 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
         if (error) {
             throw ServerLogger.ROOT_LOGGER.unableToFindYaml(joiner.toString());
         }
-        return yamlPaths.toArray(new Path[yamlPaths.size()]);
+        return yamlPaths.toArray(new Path[0]);
     }
 
     void resetProvidedProperties() {
@@ -754,7 +771,7 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
                 // Give up
                 qualifiedHostName = "unknown-host.unknown-domain";
             } else {
-                qualifiedHostName = qualifiedHostName.trim().toLowerCase();
+                qualifiedHostName = qualifiedHostName.trim().toLowerCase(Locale.getDefault());
             }
         } else {
             providedProperties.setProperty(QUALIFIED_HOST_NAME, qualifiedHostName);
@@ -999,6 +1016,16 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
         return launchType;
     }
 
+    @Override
+    public Stability getStability() {
+        return this.stability;
+    }
+
+    @Override
+    public Set<Stability> getStabilities() {
+        return this.productConfig.getStabilitySet();
+    }
+
     /**
      * Gets whether this server is an independently managed server, not managed as part of a managed domain.
      *
@@ -1088,7 +1115,7 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
         int cpuCount = ProcessorInfo.availableProcessors();
         int defaultThreads = cpuCount * 2;
         String maxThreads = WildFlySecurityManager.getPropertyPrivileged(BOOTSTRAP_MAX_THREADS, null);
-        if (maxThreads != null && maxThreads.length() > 0) {
+        if (maxThreads != null && !maxThreads.isEmpty()) {
             try {
                 int max = Integer.decode(maxThreads);
                 defaultThreads = Math.max(max, 1);
@@ -1152,6 +1179,22 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
         }
     }
 
+
+    public void checkStabilityIsValidForInstallation(Stability stability) {
+        checkStabilityIsValidForInstallation(productConfig, stability);
+    }
+
+    private void checkStabilityIsValidForInstallation(ProductConfig productConfig, Stability stability) {
+        if (!productConfig.getStabilitySet().contains(stability)) {
+            throw ServerLogger.ROOT_LOGGER.unsupportedStability(this.stability, productConfig.getProductName());
+        }
+    }
+
+    void setStability(Stability stability) {
+        WildFlySecurityManager.setPropertyPrivileged(ProcessEnvironment.STABILITY, stability.toString());
+        this.stability = stability;
+    }
+
     /**
      * Get a File from configuration.
      *
@@ -1162,6 +1205,19 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
      */
     private File getFileFromProperty(final String name, final Properties props) {
         return getFileFromPath(props.getProperty(name));
+    }
+
+    private static <E extends Enum<E>> E getEnumProperty(Properties properties, String key, E defaultValue) {
+        String value = properties.getProperty(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        Class<E> enumClass = defaultValue.getDeclaringClass();
+        try {
+            return Enum.valueOf(enumClass, value.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw ServerLogger.ROOT_LOGGER.failedToParseEnumProperty(key, value, EnumSet.allOf(enumClass));
+        }
     }
 
     /**
@@ -1210,5 +1266,26 @@ public class ServerEnvironment extends ProcessEnvironment implements Serializabl
 
     ManagedAuditLogger createAuditLogger() {
         return new ManagedAuditLoggerImpl(getProductConfig().resolveVersion(), true);
+    }
+
+    public static String translateFileAlias(String alias, Stability stability) {
+        if (!stability.enables(Stability.COMMUNITY) || alias == null) {
+            return alias;
+        }
+        switch (alias) {
+            case "full":
+            case "ha":
+            case "full-ha":
+            case "load-balancer":
+            case "microprofile":
+            case "microprofile-ha":
+                break;
+            case "fha":   alias = "full-ha"; break;
+            case "lb":    alias = "load-balancer"; break;
+            case "mp":    alias = "microprofile"; break;
+            case "mpha":  alias = "microprofile-ha"; break;
+            default:      return alias;
+        }
+        return "standalone-" + alias + ".xml";
     }
 }

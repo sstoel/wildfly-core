@@ -10,7 +10,7 @@
     <parent>
         <artifactId>wildfly-core-parent</artifactId>
         <groupId>org.wildfly.core</groupId>
-        <version>22.0.1.Final</version>
+        <version>24.0.0.Final</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -20,9 +20,9 @@
     <name>WildFly: IO aggregator</name>
 
     <modules>
+        <module>spi</module>
         <module>subsystem</module>
         <module>tests</module>
     </modules>
-
 
 </project>

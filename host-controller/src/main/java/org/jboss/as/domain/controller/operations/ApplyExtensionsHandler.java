@@ -35,6 +35,7 @@ import org.jboss.as.controller.client.OperationBuilder;
 import org.jboss.as.controller.extension.ExtensionRegistry;
 import org.jboss.as.controller.extension.ExtensionRegistryType;
 import org.jboss.as.controller.extension.ExtensionResource;
+import org.jboss.as.controller.logging.ControllerLogger;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.domain.controller.LocalHostControllerInfo;
@@ -195,12 +196,16 @@ public class ApplyExtensionsHandler implements OperationStepHandler {
     protected void initializeExtension(String module, ManagementResourceRegistration rootRegistration) throws OperationFailedException {
         try {
             for (final Extension extension : Module.loadServiceFromCallerModuleLoader(ModuleIdentifier.fromString(module), Extension.class)) {
-                ClassLoader oldTccl = SecurityActions.setThreadContextClassLoader(extension.getClass());
-                try {
-                    extension.initializeParsers(extensionRegistry.getExtensionParsingContext(module, null));
-                    extension.initialize(extensionRegistry.getExtensionContext(module, rootRegistration, ExtensionRegistryType.SLAVE));
-                } finally {
-                    SecurityActions.setThreadContextClassLoader(oldTccl);
+                if (rootRegistration.enables(extension)) {
+                    ClassLoader oldTccl = SecurityActions.setThreadContextClassLoader(extension.getClass());
+                    try {
+                        extension.initializeParsers(extensionRegistry.getExtensionParsingContext(module, null));
+                        extension.initialize(extensionRegistry.getExtensionContext(module, rootRegistration, ExtensionRegistryType.SLAVE));
+                    } finally {
+                        SecurityActions.setThreadContextClassLoader(oldTccl);
+                    }
+                } else {
+                    ControllerLogger.ROOT_LOGGER.unstableExtension(extension.getClass().getName(), module);
                 }
             }
         } catch (ModuleLoadException e) {

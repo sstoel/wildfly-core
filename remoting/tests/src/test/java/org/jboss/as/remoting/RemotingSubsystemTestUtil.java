@@ -6,8 +6,8 @@
 package org.jboss.as.remoting;
 
 import static org.jboss.as.controller.capability.RuntimeCapability.buildDynamicCapabilityName;
+import static org.jboss.as.controller.capability.RuntimeCapability.resolveCapabilityName;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.EXTENSION;
-import static org.jboss.as.remoting.Capabilities.IO_WORKER_CAPABILITY_NAME;
 
 import org.jboss.as.controller.Extension;
 import org.jboss.as.controller.ModelOnlyAddStepHandler;
@@ -22,9 +22,12 @@ import org.jboss.as.controller.extension.ExtensionRegistry;
 import org.jboss.as.controller.extension.ExtensionRegistryType;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
+import org.jboss.as.network.OutboundSocketBinding;
+import org.jboss.as.network.SocketBinding;
 import org.jboss.as.subsystem.test.AdditionalInitialization;
 import org.jboss.dmr.ModelType;
 import org.wildfly.extension.io.IOExtension;
+import org.wildfly.io.IOServiceDescriptor;
 
 /**
  * Utilities for the remoting subsystem tests.
@@ -35,12 +38,12 @@ class RemotingSubsystemTestUtil {
 
     static final AdditionalInitialization DEFAULT_ADDITIONAL_INITIALIZATION =
             AdditionalInitialization.withCapabilities(
-                    buildDynamicCapabilityName(IO_WORKER_CAPABILITY_NAME, "default"),
+                    buildDynamicCapabilityName(IOServiceDescriptor.WORKER.getName(), "default"),
                     // This one is specified in one of the test configs
-                    buildDynamicCapabilityName(IO_WORKER_CAPABILITY_NAME, "default-remoting"),
-                    buildDynamicCapabilityName("org.wildfly.network.outbound-socket-binding", "dummy-outbound-socket"),
-                    buildDynamicCapabilityName("org.wildfly.network.outbound-socket-binding", "other-outbound-socket"),
-                    buildDynamicCapabilityName("org.wildfly.network.socket-binding", "remoting")
+                    buildDynamicCapabilityName(IOServiceDescriptor.WORKER.getName(), "default-remoting"),
+                    resolveCapabilityName(OutboundSocketBinding.SERVICE_DESCRIPTOR, "dummy-outbound-socket"),
+                    resolveCapabilityName(OutboundSocketBinding.SERVICE_DESCRIPTOR, "other-outbound-socket"),
+                    resolveCapabilityName(SocketBinding.SERVICE_DESCRIPTOR, "remoting")
 
             );
 
@@ -57,7 +60,7 @@ class RemotingSubsystemTestUtil {
                     super.initializeExtraSubystemsAndModel(extensionRegistry, rootResource, rootRegistration, capabilityRegistry);
                     AdditionalInitialization.registerCapabilities(capabilityRegistry,
                             // This one is specified in one of the test configs
-                            buildDynamicCapabilityName(IO_WORKER_CAPABILITY_NAME, "default-remoting"));
+                            buildDynamicCapabilityName(IOServiceDescriptor.WORKER.getName(), "default-remoting"));
 
                     // Deal with the fact that legacy parsers will add the io extension/subsystem
                     registerIOExtension(extensionRegistry, rootRegistration);

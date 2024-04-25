@@ -4,6 +4,8 @@
  */
 package org.jboss.as.controller.descriptions;
 
+import java.util.Set;
+
 /**
  * String constants frequently used in model descriptions.
  *
@@ -395,6 +397,7 @@ public class ModelDescriptionConstants {
     public static final String READ_CHILDREN_RESOURCES_OPERATION = "read-children-resources";
     public static final String READ_CONFIG_AS_FEATURES_OPERATION = "read-config-as-features";
     public static final String READ_CONFIG_AS_XML_OPERATION = "read-config-as-xml";
+    public static final String READ_CONFIG_AS_XML_FILE_OPERATION = "read-config-as-xml-file";
     public static final String READ_CONTENT = "read-content";
     public static final String READ_FEATURE_DESCRIPTION_OPERATION = "read-feature-description";
     public static final String READ_ONLY = "read-only";
@@ -418,6 +421,7 @@ public class ModelDescriptionConstants {
     public static final String RELEASE_CODENAME = "release-codename";
     public static final String RELEASE_VERSION = "release-version";
     public static final String RELOAD = "reload";
+    public static final String RELOAD_ENHANCED = "reload-enhanced";
     public static final String RELOAD_REQUIRED = "reload-required";
     public static final String REMOVE = "remove";
     public static final String REMOTE = "remote";
@@ -520,6 +524,7 @@ public class ModelDescriptionConstants {
     public static final String SPEC = "spec";
     public static final String SSL = "ssl";
     public static final String SSL_CONTEXT = "ssl-context";
+    public static final String STABILITY = "stability";
     public static final String STANDARD_ROLE_NAMES = "standard-role-names";
     public static final String START = "start";
     public static final String START_MODE = "start-mode";
@@ -611,6 +616,8 @@ public class ModelDescriptionConstants {
     public static final String GIT_MASTER_BRANCH = "master";
     public static final String PRIMARY = "primary";
     public static final String PERFORM_INSTALLATION = "perform-installation";
+
+    public static final Set<String> RELOAD_OPERATIONS = Set.of(RELOAD, RELOAD_ENHANCED);
 
     private ModelDescriptionConstants() {
     }
