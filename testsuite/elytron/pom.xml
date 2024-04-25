@@ -13,7 +13,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-testsuite</artifactId>
-        <version>23.0.0.Beta1-SNAPSHOT</version>
+        <version>25.0.0.Beta1-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -157,10 +157,15 @@
             <groupId>org.wildfly.security</groupId>
             <artifactId>wildfly-elytron-ssl</artifactId>
         </dependency>
-
         <dependency>
             <groupId>org.apache.directory.server</groupId>
             <artifactId>apacheds-all</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.kerby</groupId>
+            <artifactId>kerb-simplekdc</artifactId>
+            <version>${version.org.apache.kerby}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -213,8 +218,8 @@
                 </executions>
             </plugin>
                 <plugin>
-                    <groupId>org.jboss.galleon</groupId>
-                    <artifactId>galleon-maven-plugin</artifactId>
+                    <groupId>org.wildfly.plugins</groupId>
+                    <artifactId>wildfly-maven-plugin</artifactId>
                     <executions>
                         <execution>
                             <id>server-provisioning</id>
@@ -223,14 +228,15 @@
                             </goals>
                             <phase>process-test-resources</phase>
                             <configuration>
-                                <install-dir>${project.build.directory}/${server.output.dir.prefix}</install-dir>
-                                <record-state>false</record-state>
-                                <log-time>${galleon.log.time}</log-time>
-                                <offline>true</offline>
-                                <plugin-options>
+                                <provisioning-dir>${project.build.directory}/${server.output.dir.prefix}</provisioning-dir>
+                                <record-provisioning-state>false</record-provisioning-state>
+                                <log-provisioning-time>${galleon.log.time}</log-provisioning-time>
+                                <offline-provisioning>true</offline-provisioning>
+                                <overwrite-provisioned-server>true</overwrite-provisioned-server>
+                                <galleon-options>
                                     <jboss-maven-dist/>
                                     <jboss-fork-embedded>${galleon.fork.embedded}</jboss-fork-embedded>
-                                </plugin-options>
+                                </galleon-options>
                                 <feature-packs>
                                     <feature-pack>
                                         <groupId>org.wildfly.core</groupId>
@@ -256,46 +262,6 @@
     </build>
 
      <profiles>
-         <!-- profile to configure WildFly to use Elytron -->
-         <profile>
-             <id>elytron.profile</id>
-             <activation>
-                 <property>
-                     <name>!skipTests</name>
-                 </property>
-             </activation>
-             <build>
-                 <plugins>
-                     <plugin>
-                         <groupId>org.wildfly.plugins</groupId>
-                         <artifactId>wildfly-maven-plugin</artifactId>
-                         <version>${version.wildfly.plugin}</version>
-                         <executions>
-                             <execution>
-                                 <phase>process-test-resources</phase>
-                                 <goals>
-                                     <goal>execute-commands</goal>
-                                 </goals>
-                             </execution>
-                         </executions>
-                         <configuration>
-                             <offline>true</offline>
-                             <scripts>
-                                 <script>${ts.config.elytron.cli}</script>
-                             </scripts>
-                             <jboss-home>${project.build.directory}/wildfly-core</jboss-home>
-                             <stdout>${project.build.directory}/wildfly-plugin.log</stdout>
-                             <java-opts>${modular.jdk.args}</java-opts>
-                             <system-properties>
-                                 <maven.repo.local>${settings.localRepository}</maven.repo.local>
-                                 <module.path>${jboss.dist}/modules</module.path>
-                             </system-properties>
-                         </configuration>
-                     </plugin>
-                 </plugins>
-             </build>
-         </profile>
-
          <!-- Test against slimmed servers provisioned by Galleon -->
          <profile>
              <id>layers.profile</id>
@@ -309,7 +275,6 @@
                      <plugin>
                          <groupId>org.wildfly.plugins</groupId>
                          <artifactId>wildfly-maven-plugin</artifactId>
-                         <version>${version.wildfly.plugin}</version>
                          <configuration>
                              <!-- We turn off the ${ts.enable.elytron.cli}
                                   script as Galleon already enabled it-->
@@ -317,10 +282,6 @@
                                  <script>${ts.config.elytron.cli}</script>
                              </scripts>
                          </configuration>
-                     </plugin>
-                     <plugin>
-                         <groupId>org.jboss.galleon</groupId>
-                         <artifactId>galleon-maven-plugin</artifactId>
                          <executions>
                              <!-- Disable the default provisioning -->
                              <execution>
@@ -338,15 +299,16 @@
                                  </goals>
                                  <phase>compile</phase>
                                  <configuration>
-                                     <install-dir>${project.build.directory}/${server.output.dir.prefix}</install-dir>
-                                     <record-state>false</record-state>
-                                     <log-time>${galleon.log.time}</log-time>
-                                     <offline>true</offline>
-                                     <plugin-options>
+                                     <provisioning-dir>${project.build.directory}/${server.output.dir.prefix}</provisioning-dir>
+                                     <record-provisioning-state>false</record-provisioning-state>
+                                     <log-provisioning-time>${galleon.log.time}</log-provisioning-time>
+                                     <offline-provisioning>true</offline-provisioning>
+                                     <overwrite-provisioned-server>true</overwrite-provisioned-server>
+                                     <galleon-options>
                                          <jboss-maven-dist/>
                                          <jboss-fork-embedded>${galleon.fork.embedded}</jboss-fork-embedded>
                                          <optional-packages>passive+</optional-packages>
-                                     </plugin-options>
+                                     </galleon-options>
                                      <feature-packs>
                                          <feature-pack>
                                              <groupId>org.wildfly.core</groupId>
@@ -364,17 +326,11 @@
                                              </excluded-packages>
                                          </feature-pack>
                                      </feature-packs>
-                                     <configurations>
-                                         <config>
-                                             <model>standalone</model>
-                                             <name>standalone.xml</name>
-                                             <layers>
-                                                 <layer>core-server</layer>
-                                                 <layer>core-tools</layer>
-                                                 <layer>deployment-scanner</layer>
-                                             </layers>
-                                         </config>
-                                     </configurations>
+                                     <layers>
+                                         <layer>core-server</layer>
+                                         <layer>core-tools</layer>
+                                         <layer>deployment-scanner</layer>
+                                     </layers>
                                  </configuration>
                              </execution>
                          </executions>
@@ -413,27 +369,26 @@
                         <executions>
                             <execution>
                                 <id>prepare-elytron-config-file</id>
-                                <phase>none</phase>
+                                <phase>none</phase><configuration>
+                                <system-properties>
+                                    <maven.repo.local>${settings.localRepository}</maven.repo.local>
+                                    <module.path>${wildfly.home}/modules</module.path>
+                                </system-properties>
+                            </configuration>
                             </execution>
                         </executions>
                     </plugin>
                     <plugin>
                          <groupId>org.wildfly.plugins</groupId>
                          <artifactId>wildfly-maven-plugin</artifactId>
-                         <version>${version.wildfly.plugin}</version>
                          <executions>
+                             <!-- Disable CLI configuration -->
                              <execution>
                                  <goals>
                                      <goal>execute-commands</goal>
                                  </goals>
                                  <phase>none</phase>
                              </execution>
-                         </executions>
-                     </plugin>
-                    <plugin>
-                        <groupId>org.jboss.galleon</groupId>
-                        <artifactId>galleon-maven-plugin</artifactId>   
-                        <executions>
                             <!-- Disable the default provisioning -->
                             <execution>
                                 <id>server-provisioning</id>

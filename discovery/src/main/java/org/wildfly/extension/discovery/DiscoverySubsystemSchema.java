@@ -23,7 +23,7 @@ enum DiscoverySubsystemSchema implements PersistentSubsystemSchema<DiscoverySubs
     private final VersionedNamespace<IntVersion, DiscoverySubsystemSchema> namespace;
 
     DiscoverySubsystemSchema(int major, int minor) {
-        this.namespace = SubsystemSchema.createLegacySubsystemURN(DiscoveryExtension.SUBSYSTEM_NAME, new IntVersion(major, minor));
+        this.namespace = SubsystemSchema.createLegacySubsystemURN(DiscoverySubsystemRegistrar.NAME, new IntVersion(major, minor));
     }
 
     @Override
@@ -33,6 +33,10 @@ enum DiscoverySubsystemSchema implements PersistentSubsystemSchema<DiscoverySubs
 
     @Override
     public PersistentResourceXMLDescription getXMLDescription() {
-        return DiscoverySubsystemXMLDescriptionFactory.INSTANCE.apply(this);
+        PersistentResourceXMLDescription.Factory factory = PersistentResourceXMLDescription.factory(this);
+        return factory.builder(DiscoverySubsystemRegistrar.PATH)
+                .addChild(factory.builder(StaticDiscoveryProviderRegistrar.PATH).addAttributes(StaticDiscoveryProviderRegistrar.ATTRIBUTES.stream()).build())
+                .addChild(factory.builder(AggregateDiscoveryProviderRegistrar.PATH).addAttributes(AggregateDiscoveryProviderRegistrar.ATTRIBUTES.stream()).build())
+                .build();
     }
 }

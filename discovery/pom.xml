@@ -13,7 +13,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>23.0.0.Beta1-SNAPSHOT</version>
+        <version>25.0.0.Beta1-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-discovery</artifactId>
@@ -24,7 +24,7 @@
 
         <dependency>
             <groupId>org.wildfly.core</groupId>
-            <artifactId>wildfly-controller</artifactId>
+            <artifactId>wildfly-subsystem</artifactId>
         </dependency>
 
         <dependency>

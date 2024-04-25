@@ -6,6 +6,8 @@ package org.jboss.as.controller.extension;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ADD;
 
+import java.util.Iterator;
+
 import org.jboss.as.controller.Extension;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
@@ -85,7 +87,7 @@ public class ExtensionAddHandler implements OperationStepHandler {
         });
     }
 
-    void initializeExtension(String module, ManagementResourceRegistration rootRegistration) {
+    void initializeExtension(String module, ManagementResourceRegistration rootRegistration, PathAddress address) {
         initializeExtension(extensionRegistry, module, rootRegistration, extensionRegistryType);
     }
 
@@ -102,8 +104,12 @@ public class ExtensionAddHandler implements OperationStepHandler {
                                     ExtensionRegistryType extensionRegistryType) {
         try {
             boolean unknownModule = false;
-            boolean initialized = false;
-            for (Extension extension : Module.loadServiceFromCallerModuleLoader(module, Extension.class)) {
+            Iterator<Extension> extensions = Module.loadServiceFromCallerModuleLoader(module, Extension.class).iterator();
+            if (!extensions.hasNext()) {
+                throw ControllerLogger.ROOT_LOGGER.notFound("META-INF/services/", Extension.class.getName(), module);
+            }
+            while (extensions.hasNext()) {
+                Extension extension = extensions.next();
                 ClassLoader oldTccl = WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(extension.getClass());
                 try {
                     if (unknownModule || !extensionRegistry.getExtensionModuleNames().contains(module)) {
@@ -114,14 +120,15 @@ public class ExtensionAddHandler implements OperationStepHandler {
                         // now that we know the registry was unaware of the module
                         unknownModule = true;
                     }
-                    extension.initialize(extensionRegistry.getExtensionContext(module, rootRegistration, extensionRegistryType));
+                    // If extension is not enabled by stability level of process, skip model registration
+                    if (extensionRegistry.enables(extension)) {
+                        extension.initialize(extensionRegistry.getExtensionContext(module, extension.getStability(), rootRegistration, extensionRegistryType));
+                    } else {
+                        ControllerLogger.ROOT_LOGGER.unstableExtension(extension.getClass().getName(), module);
+                    }
                 } finally {
                     WildFlySecurityManager.setCurrentContextClassLoaderPrivileged(oldTccl);
                 }
-                initialized = true;
-            }
-            if (!initialized) {
-                throw ControllerLogger.ROOT_LOGGER.notFound("META-INF/services/", Extension.class.getName(), module);
             }
         } catch (ModuleNotFoundException e) {
             // Treat this as a user mistake, e.g. incorrect module name.

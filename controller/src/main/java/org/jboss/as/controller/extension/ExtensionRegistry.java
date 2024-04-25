@@ -27,6 +27,8 @@ import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.Extension;
 import org.jboss.as.controller.CapabilityReferenceRecorder;
 import org.jboss.as.controller.ExtensionContext;
+import org.jboss.as.controller.Feature;
+import org.jboss.as.controller.FeatureRegistry;
 import org.jboss.as.controller.ModelVersion;
 import org.jboss.as.controller.NotificationDefinition;
 import org.jboss.as.controller.OperationContext;
@@ -37,11 +39,12 @@ import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.PersistentResourceXMLParser;
 import org.jboss.as.controller.ProcessType;
+import org.jboss.as.controller.ProvidedResourceDefinition;
 import org.jboss.as.controller.ProxyController;
 import org.jboss.as.controller.ResourceDefinition;
+import org.jboss.as.controller.ResourceRegistration;
 import org.jboss.as.controller.RunningMode;
 import org.jboss.as.controller.RunningModeControl;
-import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.SubsystemRegistration;
 import org.jboss.as.controller.access.Action;
 import org.jboss.as.controller.access.AuthorizationResult;
@@ -74,10 +77,12 @@ import org.jboss.as.controller.registry.OperationEntry;
 import org.jboss.as.controller.registry.Resource;
 import org.jboss.as.controller.services.path.PathManager;
 import org.jboss.as.controller.transform.TransformerRegistry;
+import org.jboss.as.version.Stability;
 import org.jboss.dmr.ModelNode;
 import org.jboss.staxmapper.XMLElementReader;
 import org.jboss.staxmapper.XMLElementWriter;
 import org.jboss.staxmapper.XMLMapper;
+import org.wildfly.common.Assert;
 import org.wildfly.common.function.Functions;
 import org.wildfly.security.auth.server.SecurityIdentity;
 
@@ -91,7 +96,7 @@ import org.wildfly.security.auth.server.SecurityIdentity;
  * </ul>
  * @author Brian Stansberry (c) 2011 Red Hat Inc.
  */
-public final class ExtensionRegistry {
+public final class ExtensionRegistry implements FeatureRegistry {
 
     /**
      * Returns a builder for creating an {@link ExtensionRegistry}.
@@ -112,6 +117,7 @@ public final class ExtensionRegistry {
         private JmxAuthorizer authorizer = NO_OP_AUTHORIZER;
         private Supplier<SecurityIdentity> securityIdentitySupplier = Functions.constantSupplier(null);
         private RuntimeHostControllerInfoAccessor hostControllerInfoAccessor = RuntimeHostControllerInfoAccessor.SERVER;
+        private Supplier<Stability> stabilitySupplier = Functions.constantSupplier(Stability.DEFAULT);
 
         private Builder(ProcessType processType) {
             this.processType = processType;
@@ -177,6 +183,26 @@ public final class ExtensionRegistry {
         }
 
         /**
+         * Overrides the default stability level of the extension registry. This is a convenience method for
+         * {@link #withStabilitySupplier(Supplier)}.
+         * @param stability the stability level to use
+         * @return a reference to this builder
+         */
+        public Builder withStability(Stability stability) {
+            return withStabilitySupplier(Functions.constantSupplier(stability));
+        }
+
+        /**
+         * Overrides the default stability level of the extension registry.
+         * @param stabilitySupplier a Supplier returning the stability level
+         * @return a reference to this builder
+         */
+        public Builder withStabilitySupplier(Supplier<Stability> stabilitySupplier) {
+            this.stabilitySupplier = stabilitySupplier;
+            return this;
+        }
+
+        /**
          * Constructs an extension registry.
          * @return a new extension registry
          */
@@ -193,6 +219,7 @@ public final class ExtensionRegistry {
     }
 
     private final ProcessType processType;
+    private final Supplier<Stability> stability;
 
     private SubsystemXmlWriterRegistry writerRegistry;
     private volatile PathManager pathManager;
@@ -216,6 +243,7 @@ public final class ExtensionRegistry {
         this.authorizer = builder.authorizer;
         this.securityIdentitySupplier = builder.securityIdentitySupplier;
         this.hostControllerInfoAccessor = builder.hostControllerInfoAccessor;
+        this.stability = builder.stabilitySupplier;
     }
 
     /**
@@ -228,7 +256,7 @@ public final class ExtensionRegistry {
      * @param hostControllerInfoAccessor the host controller
      * @deprecated Use {@link #builder(ProcessType)} instead.
      */
-    @Deprecated(forRemoval = true)
+    @Deprecated
     public ExtensionRegistry(ProcessType processType, RunningModeControl runningModeControl, ManagedAuditLogger auditLogger, JmxAuthorizer authorizer,
             Supplier<SecurityIdentity> securityIdentitySupplier, RuntimeHostControllerInfoAccessor hostControllerInfoAccessor) {
         this(builder(processType).withRunningModeControl(runningModeControl)
@@ -330,9 +358,9 @@ public final class ExtensionRegistry {
      *                   be any actual parsing (e.g. in a slave Host Controller or in a server in a managed domain)
      */
     public void initializeParsers(final Extension extension, final String moduleName, final XMLMapper xmlMapper) {
-        ExtensionParsingContextImpl parsingContext = new ExtensionParsingContextImpl(moduleName, xmlMapper);
-        extension.initializeParsers(parsingContext);
-        parsingContext.attemptCurrentParserInitialization();
+        try (AbstractExtensionParsingContext context = this.enables(extension) ? new ExtensionParsingContextImpl(moduleName, xmlMapper) : new UnstableExtensionParsingContext(moduleName, xmlMapper)) {
+            extension.initializeParsers(context);
+        }
     }
 
     /**
@@ -345,7 +373,23 @@ public final class ExtensionRegistry {
      *
      * @return  the {@link ExtensionContext}.  Will not return {@code null}
      */
+    @Deprecated(forRemoval = true)
     public ExtensionContext getExtensionContext(final String moduleName, ManagementResourceRegistration rootRegistration, ExtensionRegistryType extensionRegistryType) {
+        return this.getExtensionContext(moduleName, Stability.DEFAULT, rootRegistration, extensionRegistryType);
+    }
+
+    /**
+     * Gets an {@link ExtensionContext} for use when handling an {@code add} operation for
+     * a resource representing an {@link org.jboss.as.controller.Extension}.
+     *
+     * @param moduleName the name of the extension's module. Cannot be {@code null}
+     * @param stability the stability of the extension
+     * @param rootRegistration the root management resource registration
+     * @param extensionRegistryType the type of registry we are working on, which has an effect on things like whether extensions get registered etc.
+     *
+     * @return  the {@link ExtensionContext}.  Will not return {@code null}
+     */
+    public ExtensionContext getExtensionContext(final String moduleName, Stability stability, ManagementResourceRegistration rootRegistration, ExtensionRegistryType extensionRegistryType) {
         // Can't use processType.isServer() to determine where to look for profile reg because a lot of test infrastructure
         // doesn't add the profile mrr even in HC-based tests
         ManagementResourceRegistration profileRegistration = rootRegistration.getSubModel(PathAddress.pathAddress(PathElement.pathElement(PROFILE)));
@@ -357,7 +401,7 @@ public final class ExtensionRegistry {
         // Hack to restrict extra data to specified extension(s)
         boolean allowSupplement = legallySupplemented.contains(moduleName);
         ManagedAuditLogger al = allowSupplement ? auditLogger : null;
-        return new ExtensionContextImpl(moduleName, profileRegistration, deploymentsRegistration, pathManager, extensionRegistryType, al);
+        return new ExtensionContextImpl(moduleName, stability, profileRegistration, deploymentsRegistration, pathManager, extensionRegistryType, al);
     }
 
     public Set<ProfileParsingCompletionHandler> getProfileParsingCompletionHandlers() {
@@ -503,30 +547,56 @@ public final class ExtensionRegistry {
         return transformerRegistry;
     }
 
-    private class ExtensionParsingContextImpl implements ExtensionParsingContext {
+    @Override
+    public Stability getStability() {
+        return this.stability.get();
+    }
 
-        private final ExtensionInfo extension;
-        private boolean hasNonSupplierParser;
-        private String latestNamespace;
-        private Supplier<XMLElementReader<List<ModelNode>>> latestSupplier;
+    private abstract class AbstractExtensionParsingContext implements ExtensionParsingContext, AutoCloseable {
+        final ExtensionInfo extension;
 
-        private ExtensionParsingContextImpl(String extensionName, XMLMapper xmlMapper) {
-            extension = getExtensionInfo(extensionName);
+        AbstractExtensionParsingContext(String extensionName, XMLMapper xmlMapper) {
+            this.extension = ExtensionRegistry.this.getExtensionInfo(extensionName);
             if (xmlMapper != null) {
-                synchronized (extension) {
-                    extension.xmlMapper = xmlMapper;
+                synchronized (this.extension) {
+                    this.extension.xmlMapper = xmlMapper;
                 }
             }
         }
-
         @Override
         public ProcessType getProcessType() {
-            return processType;
+            return ExtensionRegistry.this.processType;
         }
 
         @Override
         public RunningMode getRunningMode() {
-            return runningModeControl.getRunningMode();
+            return ExtensionRegistry.this.runningModeControl.getRunningMode();
+        }
+
+        @Override
+        public Stability getStability() {
+            return ExtensionRegistry.this.getStability();
+        }
+
+        @Override
+        public <F extends Feature> boolean enables(F feature) {
+            return ExtensionRegistry.this.enables(feature);
+        }
+
+        @Override
+        public void close() {
+            // Do nothing
+        }
+    }
+
+    private class ExtensionParsingContextImpl extends AbstractExtensionParsingContext {
+
+        private boolean hasNonSupplierParser;
+        private String latestNamespace;
+        private Supplier<XMLElementReader<List<ModelNode>>> latestSupplier;
+
+        ExtensionParsingContextImpl(String extensionName, XMLMapper xmlMapper) {
+            super(extensionName, xmlMapper);
         }
 
         @Override
@@ -569,7 +639,8 @@ public final class ExtensionRegistry {
             }
         }
 
-        private void attemptCurrentParserInitialization() {
+        @Override
+        public void close() {
             if (ExtensionRegistry.this.processType != ProcessType.DOMAIN_SERVER
                     && !hasNonSupplierParser && latestSupplier != null) {
                 // We've only been passed suppliers for parsers, which means the model
@@ -596,6 +667,37 @@ public final class ExtensionRegistry {
         }
     }
 
+    private class UnstableExtensionParsingContext extends AbstractExtensionParsingContext {
+
+        UnstableExtensionParsingContext(String extensionName, XMLMapper xmlMapper) {
+            super(extensionName, xmlMapper);
+        }
+
+        @Override
+        public void setSubsystemXmlMapping(String subsystemName, String namespaceUri, XMLElementReader<List<ModelNode>> reader) {
+            this.setSubsystemXMLMapping(subsystemName, namespaceUri);
+        }
+
+        @Override
+        public void setSubsystemXmlMapping(String subsystemName, String namespaceUri, Supplier<XMLElementReader<List<ModelNode>>> supplier) {
+            this.setSubsystemXMLMapping(subsystemName, namespaceUri);
+        }
+
+        private void setSubsystemXMLMapping(String subsystemName, String namespaceUri) {
+            synchronized (this.extension) {
+                this.extension.getSubsystemInfo(subsystemName).addParsingNamespace(namespaceUri);
+                if (this.extension.xmlMapper != null) {
+                    this.extension.xmlMapper.registerRootElement(new QName(namespaceUri, SUBSYSTEM), new UnstableSubsystemNamespaceParser(subsystemName));
+                }
+            }
+        }
+
+        @Override
+        public void setProfileParsingCompletionHandler(ProfileParsingCompletionHandler handler) {
+            // Ignore
+        }
+    }
+
     @SuppressWarnings("deprecation")
     private class ExtensionContextImpl implements ExtensionContext, ExtensionContextSupplement {
 
@@ -607,8 +709,9 @@ public final class ExtensionRegistry {
         private final ManagementResourceRegistration profileRegistration;
         private final ManagementResourceRegistration deploymentsRegistration;
         private final ExtensionRegistryType extensionRegistryType;
+        private final Stability stability; // stability of extension
 
-        private ExtensionContextImpl(String extensionName, ManagementResourceRegistration profileResourceRegistration,
+        private ExtensionContextImpl(String extensionName, Stability stability, ManagementResourceRegistration profileResourceRegistration,
                                      ManagementResourceRegistration deploymentsResourceRegistration, PathManager pathManager,
                                      ExtensionRegistryType extensionRegistryType, ManagedAuditLogger auditLogger) {
             assert pathManager != null || !processType.isServer() : "pathManager is null";
@@ -628,6 +731,7 @@ public final class ExtensionRegistry {
                 this.deploymentsRegistration = null;
             }
             this.extensionRegistryType = extensionRegistryType;
+            this.stability = stability;
         }
 
         @Override
@@ -645,7 +749,7 @@ public final class ExtensionRegistry {
             if (deprecated){
                 ControllerLogger.DEPRECATED_LOGGER.extensionDeprecated(name);
             }
-            SubsystemRegistrationImpl result =  new SubsystemRegistrationImpl(name, version,
+            SubsystemRegistrationImpl result =  new SubsystemRegistrationImpl(name, version, this.stability,
                                 profileRegistration, deploymentsRegistration, extensionRegistryType, extension.extensionModuleName, processType);
             if (registerTransformers){
                 transformerRegistry.loadAndRegisterTransformers(name, version, extension.extensionModuleName);
@@ -678,6 +782,11 @@ public final class ExtensionRegistry {
         @Override
         public ProcessType getProcessType() {
             return processType;
+        }
+
+        @Override
+        public Stability getStability() {
+            return ExtensionRegistry.this.getStability();
         }
 
         @Override
@@ -790,13 +899,14 @@ public final class ExtensionRegistry {
     private class SubsystemRegistrationImpl implements SubsystemRegistration {
         private final String name;
         private final ModelVersion version;
+        private final Stability stability;
         private final ManagementResourceRegistration profileRegistration;
         private final ManagementResourceRegistration deploymentsRegistration;
         private final ExtensionRegistryType extensionRegistryType;
         private final String extensionModuleName;
         private volatile boolean hostCapable;
 
-        private SubsystemRegistrationImpl(String name, ModelVersion version,
+        private SubsystemRegistrationImpl(String name, ModelVersion version, Stability stability,
                                           ManagementResourceRegistration profileRegistration,
                                           ManagementResourceRegistration deploymentsRegistration,
                                           ExtensionRegistryType extensionRegistryType,
@@ -806,13 +916,24 @@ public final class ExtensionRegistry {
             this.name = name;
             this.profileRegistration = profileRegistration;
             if (deploymentsRegistration == null){
-                this.deploymentsRegistration = ManagementResourceRegistration.Factory.forProcessType(processType).createRegistration(new SimpleResourceDefinition(null, NonResolvingResourceDescriptionResolver.INSTANCE));
+                this.deploymentsRegistration = ManagementResourceRegistration.Factory.forProcessType(processType, this.profileRegistration.getStability()).createRegistration(ResourceDefinition.builder(ResourceRegistration.of(null, this.profileRegistration.getStability()), NonResolvingResourceDescriptionResolver.INSTANCE).build());
             }else {
                 this.deploymentsRegistration = deploymentsRegistration;
             }
             this.version = version;
+            this.stability = stability;
             this.extensionRegistryType = extensionRegistryType;
             this.extensionModuleName = extensionModuleName;
+        }
+
+        @Override
+        public Stability getStability() {
+            return this.stability;
+        }
+
+        @Override
+        public <F extends Feature> boolean enables(F feature) {
+            return this.profileRegistration.enables(feature);
         }
 
         @Override
@@ -822,15 +943,25 @@ public final class ExtensionRegistry {
 
         @Override
         public ManagementResourceRegistration registerSubsystemModel(ResourceDefinition resourceDefinition) {
-            assert resourceDefinition != null : "resourceDefinition is null";
             checkHostCapable();
-            return profileRegistration.registerSubModel(resourceDefinition);
+            return this.register(this.profileRegistration, resourceDefinition);
         }
 
         @Override
         public ManagementResourceRegistration registerDeploymentModel(ResourceDefinition resourceDefinition) {
-            assert resourceDefinition != null : "resourceDefinition is null";
-            return deploymentsRegistration.registerSubModel(resourceDefinition);
+            return this.register(this.deploymentsRegistration, resourceDefinition);
+        }
+
+        private ManagementResourceRegistration register(ManagementResourceRegistration parent, ResourceDefinition definition) {
+            Assert.checkNotNullParam("definition", definition);
+            Stability childStability = definition.getStability();
+            // Propagate parent stability-level to child, if necessary
+            return parent.registerSubModel((childStability != this.stability) && !childStability.enables(this.stability) ? new ProvidedResourceDefinition(definition) {
+                @Override
+                public Stability getStability() {
+                    return SubsystemRegistrationImpl.this.stability;
+                }
+            } : definition);
         }
 
         @Override
@@ -910,6 +1041,16 @@ public final class ExtensionRegistry {
         @Override
         public ProcessType getProcessType() {
             return deployments.getProcessType();
+        }
+
+        @Override
+        public Stability getStability() {
+            return this.deployments.getStability();
+        }
+
+        @Override
+        public <F extends Feature> boolean enables(F feature) {
+            return this.deployments.enables(feature);
         }
 
         @Override
@@ -1154,7 +1295,7 @@ public final class ExtensionRegistry {
         }
 
         @Override
-        public void registerRequirements(Set<CapabilityReferenceRecorder> requirements) {
+        public void registerRequirements(Set<? extends CapabilityReferenceRecorder> requirements) {
             deployments.registerRequirements(requirements);
             subdeployments.registerRequirements(requirements);
         }

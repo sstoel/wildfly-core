@@ -6,8 +6,10 @@
 package org.jboss.as.version;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
 import java.nio.charset.StandardCharsets;
@@ -15,8 +17,11 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.jar.Manifest;
 
 import org.jboss.modules.Module;
@@ -32,7 +37,10 @@ public class ProductConfig implements Serializable {
 
     private final String name;
     private final String version;
+    private String banner;
     private final String consoleSlot;
+    private final Stability defaultStability;
+    private final Set<Stability> stabilities;
     private boolean isProduct;
 
     public static ProductConfig fromFilesystemSlot(ModuleLoader loader, String home, Map<?, ?> providedProperties) {
@@ -47,6 +55,9 @@ public class ProductConfig implements Serializable {
         String projectName = null;
         String productVersion = null;
         String consoleSlot = null;
+        Stability defaultStability = Stability.COMMUNITY;
+        Stability minStability = Stability.EXPERIMENTAL;
+        Stability maxStability = Stability.DEFAULT;
 
         InputStream manifestStream = null;
         try {
@@ -65,7 +76,16 @@ public class ProductConfig implements Serializable {
                     productVersion = manifest.getMainAttributes().getValue("JBoss-Product-Release-Version");
                     consoleSlot = manifest.getMainAttributes().getValue("JBoss-Product-Console-Slot");
                     projectName = manifest.getMainAttributes().getValue("JBoss-Project-Release-Name");
+                    String defaultStabilityValue = manifest.getMainAttributes().getValue("JBoss-Product-Stability");
+                    if (defaultStabilityValue != null) {
+                        defaultStability = Stability.fromString(defaultStabilityValue);
+                    }
+                    String minStabilityValue = manifest.getMainAttributes().getValue("JBoss-Product-Minimum-Stability");
+                    if (minStabilityValue != null) {
+                        minStability = Stability.fromString(minStabilityValue);
+                    }
                 }
+                getBannerFile(module);
             }
 
             setSystemProperties(productConfProps.miscProperties, providedProperties);
@@ -78,6 +98,22 @@ public class ProductConfig implements Serializable {
         name = isProduct ? productName : projectName;
         version = productVersion;
         this.consoleSlot = consoleSlot;
+        this.defaultStability = defaultStability;
+        this.stabilities = Collections.unmodifiableSet(EnumSet.range(maxStability, minStability));
+    }
+
+    private void getBannerFile(Module module) throws IOException {
+        try (final InputStream inputStream = module.getClassLoader().getResourceAsStream("banner.txt");
+             final ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            int nRead;
+            byte[] data = new byte[4096];
+            while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
+                outputStream.write(data, 0, nRead);
+            }
+            banner = System.lineSeparator() + outputStream.toString(StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            // Don't care
+        }
     }
 
     private static String getProductConf(String home) {
@@ -114,6 +150,9 @@ public class ProductConfig implements Serializable {
         this.name = productName;
         this.version = productVersion;
         this.consoleSlot = consoleSlot;
+        this.defaultStability = Stability.DEFAULT;
+        this.stabilities = EnumSet.of(this.defaultStability);
+        this.banner = null;
     }
 
     public String getProductName() {
@@ -130,6 +169,30 @@ public class ProductConfig implements Serializable {
 
     public String getConsoleSlot() {
         return consoleSlot;
+    }
+
+    /**
+     * Returns the presumed stability level of this product.
+     * @return a stability level
+     */
+    public Stability getDefaultStability() {
+        return this.defaultStability;
+    }
+
+    /**
+     * Returns the set of permissible stability levels for this product.
+     * @return a set of stability levels
+     */
+    public Set<Stability> getStabilitySet() {
+        return this.stabilities;
+    }
+
+    /**
+     * The product ASCII banner defined in the 'banner.txt' resource, using \n as line ending.
+     * @return the ASCII banner.
+     */
+    public String getBanner() {
+        return banner;
     }
 
     public String getPrettyVersionString() {

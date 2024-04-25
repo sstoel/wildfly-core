@@ -5,9 +5,15 @@
 
 package org.jboss.as.controller.capability;
 
+import java.util.Map;
 import java.util.Optional;
 
 import org.jboss.msc.service.ServiceName;
+import org.wildfly.service.descriptor.BinaryServiceDescriptor;
+import org.wildfly.service.descriptor.NullaryServiceDescriptor;
+import org.wildfly.service.descriptor.QuaternaryServiceDescriptor;
+import org.wildfly.service.descriptor.TernaryServiceDescriptor;
+import org.wildfly.service.descriptor.UnaryServiceDescriptor;
 
 /**
  * Provides support for capability integration outside the management layer,
@@ -18,7 +24,7 @@ import org.jboss.msc.service.ServiceName;
  *
  * @author Brian Stansberry
  */
-public interface CapabilityServiceSupport {
+public interface CapabilityServiceSupport extends CapabilityServiceDescriptorResolver {
 
     /**
      * Exception thrown when support for an unregistered capability is requested. This is a checked
@@ -34,6 +40,7 @@ public interface CapabilityServiceSupport {
             super(message);
         }
     }
+
     /**
      * Gets whether a runtime capability with the given name is registered.
      *
@@ -41,6 +48,81 @@ public interface CapabilityServiceSupport {
      * @return {@code true} if there is a capability with the given name registered
      */
     boolean hasCapability(String capabilityName);
+
+    /**
+     * Indicates whether a runtime capability with the given name and segments is registered.
+     *
+     * @param capabilityName the name of the capability. Cannot be {@code null}
+     * @parem segments the dynamic name segments of the capability. Cannot be {@code null}
+     * @return {@code true} if there is a capability with the given name registered
+     */
+    default boolean hasCapability(String capabilityName, String... segments) {
+        return this.hasCapability(RuntimeCapability.buildDynamicCapabilityName(capabilityName, segments));
+    }
+
+    /**
+     * Indicates whether or not a runtime capability with the given descriptor is registered.
+     *
+     * @param descriptor the service descriptor of the requested capability
+     * @return {@code true} if there is a capability with the resolved name registered
+     */
+    default boolean hasCapability(NullaryServiceDescriptor<?> descriptor) {
+        return this.hasCapability(descriptor.getName());
+    }
+
+    /**
+     * Indicates whether or not a runtime capability with the given descriptor and segment is registered.
+     *
+     * @param descriptor the service descriptor of the requested capability
+     * @param name the dynamic name segment of the requested capability.
+     * @return {@code true} if there is a capability with the resolved name registered
+     */
+    default boolean hasCapability(UnaryServiceDescriptor<?> descriptor, String name) {
+        Map.Entry<String, String[]> segments = descriptor.resolve(name);
+        return this.hasCapability(segments.getKey(), segments.getValue());
+    }
+
+    /**
+     * Indicates whether or not a runtime capability with the given descriptor and segments is registered.
+     *
+     * @param descriptor the service descriptor of the requested capability
+     * @param parent the first dynamic name segment of the requested capability.
+     * @param child the second dynamic name segment of the requested capability.
+     * @return {@code true} if there is a capability with the resolved name registered
+     */
+    default boolean hasCapability(BinaryServiceDescriptor<?> descriptor, String parent, String child) {
+        Map.Entry<String, String[]> segments = descriptor.resolve(parent, child);
+        return this.hasCapability(segments.getKey(), segments.getValue());
+    }
+
+    /**
+     * Indicates whether or not a runtime capability with the given descriptor and segments is registered.
+     *
+     * @param descriptor the service descriptor of the requested capability
+     * @param grandparent the first dynamic name segment of the requested capability.
+     * @param parent the second dynamic name segment of the requested capability.
+     * @param child the third dynamic name segment of the requested capability.
+     * @return {@code true} if there is a capability with the resolved name registered
+     */
+    default boolean hasCapability(TernaryServiceDescriptor<?> descriptor, String grandparent, String parent, String child) {
+        Map.Entry<String, String[]> segments = descriptor.resolve(grandparent, parent, child);
+        return this.hasCapability(segments.getKey(), segments.getValue());
+    }
+
+    /**
+     * Indicates whether or not a runtime capability with the given descriptor and segments is registered.
+     *
+     * @param descriptor the service descriptor of the requested capability
+     * @param greatGrandparent the first dynamic name segment of the requested capability.
+     * @param grandparent the second dynamic name segment of the requested capability.
+     * @param parent the third dynamic name segment of the requested capability.
+     * @param child the fourth dynamic name segment of the requested capability.
+     * @return {@code true} if there is a capability with the resolved name registered
+     */
+    default boolean hasCapability(QuaternaryServiceDescriptor<?> descriptor, String greatGrandparent, String grandparent, String parent, String child) {
+        Map.Entry<String, String[]> segments = descriptor.resolve(greatGrandparent, grandparent, parent, child);
+        return this.hasCapability(segments.getKey(), segments.getValue());
+    }
 
     /**
      * Gets the runtime API associated with a given capability, if there is one.
@@ -121,4 +203,33 @@ public interface CapabilityServiceSupport {
      * @return the name of the service. Will not return {@code null}
      */
     ServiceName getCapabilityServiceName(String capabilityBaseName, String ... dynamicParts);
+
+    @Override
+    default <T> ServiceName getCapabilityServiceName(NullaryServiceDescriptor<T> descriptor) {
+        return this.getCapabilityServiceName(descriptor.getName());
+    }
+
+    @Override
+    default <T> ServiceName getCapabilityServiceName(UnaryServiceDescriptor<T> descriptor, String name) {
+        Map.Entry<String, String[]> resolved = descriptor.resolve(name);
+        return this.getCapabilityServiceName(resolved.getKey(), resolved.getValue());
+    }
+
+    @Override
+    default <T> ServiceName getCapabilityServiceName(BinaryServiceDescriptor<T> descriptor, String parent, String child) {
+        Map.Entry<String, String[]> resolved = descriptor.resolve(parent, child);
+        return this.getCapabilityServiceName(resolved.getKey(), resolved.getValue());
+    }
+
+    @Override
+    default <T> ServiceName getCapabilityServiceName(TernaryServiceDescriptor<T> descriptor, String grandparent, String parent, String child) {
+        Map.Entry<String, String[]> resolved = descriptor.resolve(grandparent, parent, child);
+        return this.getCapabilityServiceName(resolved.getKey(), resolved.getValue());
+    }
+
+    @Override
+    default <T> ServiceName getCapabilityServiceName(QuaternaryServiceDescriptor<T> descriptor, String greatGrandparent, String grandparent, String parent, String child) {
+        Map.Entry<String, String[]> resolved = descriptor.resolve(greatGrandparent, grandparent, parent, child);
+        return this.getCapabilityServiceName(resolved.getKey(), resolved.getValue());
+    }
 }

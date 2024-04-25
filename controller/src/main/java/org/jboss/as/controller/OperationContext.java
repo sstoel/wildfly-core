@@ -6,6 +6,7 @@
 package org.jboss.as.controller;
 
 import java.io.InputStream;
+import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
 
@@ -14,6 +15,7 @@ import org.jboss.as.controller.access.Action;
 import org.jboss.as.controller.access.AuthorizationResult;
 import org.jboss.as.controller.access.Environment;
 import org.jboss.as.controller.access.ResourceAuthorization;
+import org.jboss.as.controller.capability.CapabilityServiceDescriptorResolver;
 import org.jboss.as.controller.capability.CapabilityServiceSupport;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.client.MessageSeverity;
@@ -21,19 +23,25 @@ import org.jboss.as.controller.notification.Notification;
 import org.jboss.as.controller.registry.ImmutableManagementResourceRegistration;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.Resource;
+import org.jboss.as.version.Stability;
 import org.jboss.dmr.ModelNode;
 import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceRegistry;
 import org.jboss.msc.service.ServiceTarget;
 import org.wildfly.security.auth.server.SecurityIdentity;
+import org.wildfly.service.descriptor.BinaryServiceDescriptor;
+import org.wildfly.service.descriptor.NullaryServiceDescriptor;
+import org.wildfly.service.descriptor.QuaternaryServiceDescriptor;
+import org.wildfly.service.descriptor.TernaryServiceDescriptor;
+import org.wildfly.service.descriptor.UnaryServiceDescriptor;
 
 /**
  * The context for an operation step execution.
  *
  * @author <a href="mailto:david.lloyd@redhat.com">David M. Lloyd</a>
  */
-public interface OperationContext extends ExpressionResolver {
+public interface OperationContext extends ExpressionResolver, CapabilityServiceDescriptorResolver, FeatureRegistry {
 
     /**
      * Add an execution step to this operation process.  Runtime operation steps are automatically added after
@@ -704,6 +712,7 @@ public interface OperationContext extends ExpressionResolver {
      *            manager exists and its {@link SecurityManager#checkPermission checkPermission} method doesn't allow
      *            access to the relevant system property or environment variable
      */
+    @Override
     ModelNode resolveExpressions(ModelNode node) throws OperationFailedException;
 
     /**
@@ -829,7 +838,7 @@ public interface OperationContext extends ExpressionResolver {
      *
      * @throws java.lang.IllegalStateException if {@link #getCurrentStage() the current stage} is not {@link Stage#MODEL}
      */
-    void registerCapability(RuntimeCapability capability);
+    void registerCapability(RuntimeCapability<?> capability);
 
     /**
      * Registers an additional hard requirement a capability has beyond what it was aware of when {@code capability}
@@ -876,6 +885,197 @@ public interface OperationContext extends ExpressionResolver {
      *                                          complete set of capabilities is not known until the end of the model stage.
      */
     boolean hasOptionalCapability(String requested, String dependent, String attribute);
+
+    /**
+     * Checks whether one of a capability's optional and runtime-only requirements is present. Only for use in cases
+     * where the {@code dependent} capability's persistent configuration does not <strong>mandate</strong> the presence
+     * of the {@code requested} capability, but the capability will use it at runtime if it is present.
+     * <p>
+     * This method should be used in preference to {@link #registerAdditionalCapabilityRequirement(String, String, String)}
+     * when the caller's own configuration doesn't impose a hard requirement for the {@code requested} capability, but,
+     * if it is present it will be used. Once the caller declares an intent to use the capability by invoking this
+     * method and getting a {@code true} response, thereafter the system is aware that {@code dependent} is actually
+     * using {@code requested}, but <strong>will not</strong> prevent configuration changes that make {@code requested}
+     * unavailable.
+     * </p>
+     *
+     * @param requested the base name of the requested capability. Cannot be {@code null}
+     * @param dependent the runtime capability that requires the other capability. Cannot be {@code null}
+     * @param attribute the attribute that triggered this requirement, or {@code null} if no single attribute was responsible
+     * @return {@code true} if the requested capability is present; {@code false} if not. If {@code true}, hereafter
+     *         {@code dependent}'s requirement for {@code requested} will not be treated as optional.
+     * @throws IllegalStateException if {@link #getCurrentStage() the current stage} is {@link Stage#MODEL}.
+     *                               The complete set of capabilities is not known until the end of the model stage.
+     */
+    default boolean hasOptionalCapability(String requested, RuntimeCapability<?> dependent, AttributeDefinition attribute) {
+        return this.hasOptionalCapability(requested, dependent.isDynamicallyNamed() ? dependent.getDynamicName(this.getCurrentAddress()) : dependent.getName(), (attribute != null) ? attribute.getName() : null);
+    }
+
+    /**
+     * Checks whether one of a capability's optional and runtime-only requirements is present. Only for use in cases
+     * where the {@code dependent} capability's persistent configuration does not <strong>mandate</strong> the presence
+     * of the {@code requested} capability, but the capability will use it at runtime if it is present.
+     * <p>
+     * This method should be used in preference to {@link #registerAdditionalCapabilityRequirement(String, String, String)}
+     * when the caller's own configuration doesn't impose a hard requirement for the {@code requested} capability, but,
+     * if it is present it will be used. Once the caller declares an intent to use the capability by invoking this
+     * method and getting a {@code true} response, thereafter the system is aware that {@code dependent} is actually
+     * using {@code requested}, but <strong>will not</strong> prevent configuration changes that make {@code requested}
+     * unavailable.
+     * </p>
+     *
+     * @param requested the base name of the requested capability. Cannot be {@code null}
+     * @param requestedSegments the dynamic segments of the requested capability. Cannot be {@code null}
+     * @param dependent the runtime capability that requires the other capability. Cannot be {@code null}
+     * @param attribute the attribute that triggered this requirement, or {@code null} if no single attribute was responsible
+     * @return {@code true} if the requested capability is present; {@code false} if not. If {@code true}, hereafter
+     *         {@code dependent}'s requirement for {@code requested} will not be treated as optional.
+     * @throws IllegalStateException if {@link #getCurrentStage() the current stage} is {@link Stage#MODEL}.
+     *                               The complete set of capabilities is not known until the end of the model stage.
+     */
+    default boolean hasOptionalCapability(String requested, String[] requestedSegments, RuntimeCapability<?> dependent, AttributeDefinition attribute) {
+        return this.hasOptionalCapability(RuntimeCapability.buildDynamicCapabilityName(requested, requestedSegments), dependent, attribute);
+    }
+
+    /**
+     * Checks whether one of a capability's optional and runtime-only requirements is present. Only for use in cases
+     * where the {@code dependent} capability's persistent configuration does not <strong>mandate</strong> the presence
+     * of the {@code requested} capability, but the capability will use it at runtime if it is present.
+     * <p>
+     * This method should be used in preference to {@link #registerAdditionalCapabilityRequirement(String, String, String)}
+     * when the caller's own configuration doesn't impose a hard requirement for the {@code requested} capability, but,
+     * if it is present it will be used. Once the caller declares an intent to use the capability by invoking this
+     * method and getting a {@code true} response, thereafter the system is aware that {@code dependent} is actually
+     * using {@code requested}, but <strong>will not</strong> prevent configuration changes that make {@code requested}
+     * unavailable.
+     * </p>
+     *
+     * @param requested the base name of the requested capability. Cannot be {@code null}
+     * @param requestedSegments the dynamic segments of the requested capability. Cannot be {@code null}
+     * @param dependent the runtime capability that requires the other capability. Cannot be {@code null}
+     * @param attribute the attribute that triggered this requirement, or {@code null} if no single attribute was responsible
+     * @return {@code true} if the requested capability is present; {@code false} if not. If {@code true}, hereafter
+     *         {@code dependent}'s requirement for {@code requested} will not be treated as optional.
+     * @throws IllegalStateException if {@link #getCurrentStage() the current stage} is {@link Stage#MODEL}.
+     *                               The complete set of capabilities is not known until the end of the model stage.
+     */
+    default boolean hasOptionalCapability(NullaryServiceDescriptor<?> requested, RuntimeCapability<?> dependent, AttributeDefinition attribute) {
+        return this.hasOptionalCapability(requested.getName(), dependent, attribute);
+    }
+
+    /**
+     * Checks whether one of a capability's optional and runtime-only requirements is present. Only for use in cases
+     * where the {@code dependent} capability's persistent configuration does not <strong>mandate</strong> the presence
+     * of the {@code requested} capability, but the capability will use it at runtime if it is present.
+     * <p>
+     * This method should be used in preference to {@link #registerAdditionalCapabilityRequirement(String, String, String)}
+     * when the caller's own configuration doesn't impose a hard requirement for the {@code requested} capability, but,
+     * if it is present it will be used. Once the caller declares an intent to use the capability by invoking this
+     * method and getting a {@code true} response, thereafter the system is aware that {@code dependent} is actually
+     * using {@code requested}, but <strong>will not</strong> prevent configuration changes that make {@code requested}
+     * unavailable.
+     * </p>
+     *
+     * @param requested the service descriptor of the requested capability. Cannot be {@code null}
+     * @param name the dynamic name segment of the requested capability.
+     * @param dependent the runtime capability that requires the other capability. Cannot be {@code null}
+     * @param attribute the attribute that triggered this requirement, or {@code null} if no single attribute was responsible
+     * @return {@code true} if the requested capability is present; {@code false} if not. If {@code true}, hereafter
+     *         {@code dependent}'s requirement for {@code requested} will not be treated as optional.
+     * @throws IllegalStateException if {@link #getCurrentStage() the current stage} is {@link Stage#MODEL}.
+     *                               The complete set of capabilities is not known until the end of the model stage.
+     */
+    default boolean hasOptionalCapability(UnaryServiceDescriptor<?> requested, String name, RuntimeCapability<?> dependent, AttributeDefinition attribute) {
+        Map.Entry<String, String[]> segments = requested.resolve(name);
+        return this.hasOptionalCapability(segments.getKey(), segments.getValue(), dependent, attribute);
+    }
+
+    /**
+     * Checks whether one of a capability's optional and runtime-only requirements is present. Only for use in cases
+     * where the {@code dependent} capability's persistent configuration does not <strong>mandate</strong> the presence
+     * of the {@code requested} capability, but the capability will use it at runtime if it is present.
+     * <p>
+     * This method should be used in preference to {@link #registerAdditionalCapabilityRequirement(String, String, String)}
+     * when the caller's own configuration doesn't impose a hard requirement for the {@code requested} capability, but,
+     * if it is present it will be used. Once the caller declares an intent to use the capability by invoking this
+     * method and getting a {@code true} response, thereafter the system is aware that {@code dependent} is actually
+     * using {@code requested}, but <strong>will not</strong> prevent configuration changes that make {@code requested}
+     * unavailable.
+     * </p>
+     *
+     * @param requested the service descriptor of the requested capability. Cannot be {@code null}
+     * @param parent the first dynamic name segment of the requested capability.
+     * @param child the second dynamic name segment of the requested capability.
+     * @param dependent the runtime capability that requires the other capability. Cannot be {@code null}
+     * @param attribute the attribute that triggered this requirement, or {@code null} if no single attribute was responsible
+     * @return {@code true} if the requested capability is present; {@code false} if not. If {@code true}, hereafter
+     *         {@code dependent}'s requirement for {@code requested} will not be treated as optional.
+     * @throws IllegalStateException if {@link #getCurrentStage() the current stage} is {@link Stage#MODEL}.
+     *                               The complete set of capabilities is not known until the end of the model stage.
+     */
+    default boolean hasOptionalCapability(BinaryServiceDescriptor<?> requested, String parent, String child, RuntimeCapability<?> dependent, AttributeDefinition attribute) {
+        Map.Entry<String, String[]> segments = requested.resolve(parent, child);
+        return this.hasOptionalCapability(segments.getKey(), segments.getValue(), dependent, attribute);
+    }
+
+    /**
+     * Checks whether one of a capability's optional and runtime-only requirements is present. Only for use in cases
+     * where the {@code dependent} capability's persistent configuration does not <strong>mandate</strong> the presence
+     * of the {@code requested} capability, but the capability will use it at runtime if it is present.
+     * <p>
+     * This method should be used in preference to {@link #registerAdditionalCapabilityRequirement(String, String, String)}
+     * when the caller's own configuration doesn't impose a hard requirement for the {@code requested} capability, but,
+     * if it is present it will be used. Once the caller declares an intent to use the capability by invoking this
+     * method and getting a {@code true} response, thereafter the system is aware that {@code dependent} is actually
+     * using {@code requested}, but <strong>will not</strong> prevent configuration changes that make {@code requested}
+     * unavailable.
+     * </p>
+     *
+     * @param requested the service descriptor of the requested capability. Cannot be {@code null}
+     * @param grandparent the first dynamic name segment of the requested capability.
+     * @param parent the second dynamic name segment of the requested capability.
+     * @param child the third dynamic name segment of the requested capability.
+     * @param dependent the runtime capability that requires the other capability. Cannot be {@code null}
+     * @param attribute the attribute that triggered this requirement, or {@code null} if no single attribute was responsible
+     * @return {@code true} if the requested capability is present; {@code false} if not. If {@code true}, hereafter
+     *         {@code dependent}'s requirement for {@code requested} will not be treated as optional.
+     * @throws IllegalStateException if {@link #getCurrentStage() the current stage} is {@link Stage#MODEL}.
+     *                               The complete set of capabilities is not known until the end of the model stage.
+     */
+    default boolean hasOptionalCapability(TernaryServiceDescriptor<?> requested, String grandparent, String parent, String child, RuntimeCapability<?> dependent, AttributeDefinition attribute) {
+        Map.Entry<String, String[]> segments = requested.resolve(grandparent, parent, child);
+        return this.hasOptionalCapability(segments.getKey(), segments.getValue(), dependent, attribute);
+    }
+
+    /**
+     * Checks whether one of a capability's optional and runtime-only requirements is present. Only for use in cases
+     * where the {@code dependent} capability's persistent configuration does not <strong>mandate</strong> the presence
+     * of the {@code requested} capability, but the capability will use it at runtime if it is present.
+     * <p>
+     * This method should be used in preference to {@link #registerAdditionalCapabilityRequirement(String, String, String)}
+     * when the caller's own configuration doesn't impose a hard requirement for the {@code requested} capability, but,
+     * if it is present it will be used. Once the caller declares an intent to use the capability by invoking this
+     * method and getting a {@code true} response, thereafter the system is aware that {@code dependent} is actually
+     * using {@code requested}, but <strong>will not</strong> prevent configuration changes that make {@code requested}
+     * unavailable.
+     * </p>
+     *
+     * @param requested the service descriptor of the requested capability. Cannot be {@code null}
+     * @param greatGrandparent the first dynamic name segment of the requested capability.
+     * @param grandparent the second dynamic name segment of the requested capability.
+     * @param parent the third dynamic name segment of the requested capability.
+     * @param child the fourth dynamic name segment of the requested capability.
+     * @param dependent the runtime capability that requires the other capability. Cannot be {@code null}
+     * @param attribute the attribute that triggered this requirement, or {@code null} if no single attribute was responsible
+     * @return {@code true} if the requested capability is present; {@code false} if not. If {@code true}, hereafter
+     *         {@code dependent}'s requirement for {@code requested} will not be treated as optional.
+     * @throws IllegalStateException if {@link #getCurrentStage() the current stage} is {@link Stage#MODEL}.
+     *                               The complete set of capabilities is not known until the end of the model stage.
+     */
+    default boolean hasOptionalCapability(QuaternaryServiceDescriptor<?> requested, String greatGrandparent, String grandparent, String parent, String child, RuntimeCapability<?> dependent, AttributeDefinition attribute) {
+        Map.Entry<String, String[]> segments = requested.resolve(greatGrandparent, grandparent, parent, child);
+        return this.hasOptionalCapability(segments.getKey(), segments.getValue(), dependent, attribute);
+    }
 
     /**
      * Requests that one of a capability's optional requirements hereafter be treated as required, until the process is
@@ -1021,7 +1221,6 @@ public interface OperationContext extends ExpressionResolver {
      */
     ServiceName getCapabilityServiceName(String capabilityBaseName, String dynamicPart, Class<?> serviceType);
 
-
     /**
      * Gets the name of a service associated with a given {@link RuntimeCapability#isDynamicallyNamed() dynamically named}
      * capability, if there is one.
@@ -1056,6 +1255,40 @@ public interface OperationContext extends ExpressionResolver {
      *  <li>The process is a HC, and the address of the operation is a subsystem in the host model or a child thereof</li>
      */
     boolean isDefaultRequiresRuntime();
+
+    @Override
+    default Stability getStability() {
+        return Stability.DEFAULT;
+    }
+
+    @Override
+    default <T> ServiceName getCapabilityServiceName(NullaryServiceDescriptor<T> descriptor) {
+        return this.getCapabilityServiceName(descriptor.getName(), descriptor.getType());
+    }
+
+    @Override
+    default <T> ServiceName getCapabilityServiceName(UnaryServiceDescriptor<T> descriptor, String name) {
+        Map.Entry<String, String[]> resolved = descriptor.resolve(name);
+        return this.getCapabilityServiceName(resolved.getKey(), descriptor.getType(), resolved.getValue());
+    }
+
+    @Override
+    default <T> ServiceName getCapabilityServiceName(BinaryServiceDescriptor<T> descriptor, String parent, String child) {
+        Map.Entry<String, String[]> resolved = descriptor.resolve(parent, child);
+        return this.getCapabilityServiceName(resolved.getKey(), descriptor.getType(), resolved.getValue());
+    }
+
+    @Override
+    default <T> ServiceName getCapabilityServiceName(TernaryServiceDescriptor<T> descriptor, String grandparent, String parent, String child) {
+        Map.Entry<String, String[]> resolved = descriptor.resolve(grandparent, parent, child);
+        return this.getCapabilityServiceName(resolved.getKey(), descriptor.getType(), resolved.getValue());
+    }
+
+    @Override
+    default <T> ServiceName getCapabilityServiceName(QuaternaryServiceDescriptor<T> descriptor, String greatGrandparent, String grandparent, String parent, String child) {
+        Map.Entry<String, String[]> resolved = descriptor.resolve(greatGrandparent, grandparent, parent, child);
+        return this.getCapabilityServiceName(resolved.getKey(), descriptor.getType(), resolved.getValue());
+    }
 
     /**
      * The stage at which a step should apply.

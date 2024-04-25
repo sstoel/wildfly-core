@@ -337,6 +337,9 @@ public interface ElytronSubsystemMessages extends BasicLogger {
     @Message(id = 48, value = "A string representation of an X.500 distinguished name is required: %s")
     IllegalArgumentException representationOfX500IsRequired(String causeMessage);
 
+    @Message(id = 49, value = "Entry is not defined.")
+    StartException jaasEntryNotDefined();
+
     /*
      * Credential Store Section.
      */
@@ -650,6 +653,10 @@ public interface ElytronSubsystemMessages extends BasicLogger {
 
     @Message(id = 1089, value = "Invalid file encoding '%s'.")
     OperationFailedException invalidEncodingName(String encoding);
+
+    @Message(id = 1090, value = "Allowed jku values haven't been specified for token realm '%s'. Token validation will fail if the token contains a 'jku' header parameter. The allowed jku values can be specified as a space separated string using the '%s' system property.")
+    @LogMessage(level = WARN)
+    void noAllowedJkuValuesSpecifiedForTokenRealm(String realmName, String systemPropertyName);
 
     /*
      * Expression Resolver Section

@@ -27,6 +27,7 @@ import org.jboss.as.controller.OperationDefinition;
 import org.jboss.as.controller.ProcessType;
 import org.jboss.as.controller.PropertiesAttributeDefinition;
 import org.jboss.as.controller.ResourceDefinition;
+import org.jboss.as.controller.ResourceRegistration;
 import org.jboss.as.controller.RunningMode;
 import org.jboss.as.controller.RunningModeControl;
 import org.jboss.as.controller.SimpleAttributeDefinition;
@@ -54,6 +55,7 @@ import org.jboss.as.controller.operations.common.SnapshotListHandler;
 import org.jboss.as.controller.operations.common.SnapshotTakeHandler;
 import org.jboss.as.controller.operations.common.ValidateAddressOperationHandler;
 import org.jboss.as.controller.operations.common.ValidateOperationHandler;
+import org.jboss.as.controller.operations.common.XmlFileMarshallingHandler;
 import org.jboss.as.controller.operations.common.XmlMarshallingHandler;
 import org.jboss.as.controller.operations.global.GlobalInstallationReportHandler;
 import org.jboss.as.controller.operations.global.GlobalNotifications;
@@ -281,7 +283,7 @@ public class ServerRootResourceDefinition extends SimpleResourceDefinition {
             final MutableRootResourceRegistrationProvider rootResourceRegistrationProvider,
             final BootErrorCollector bootErrorCollector,
             final CapabilityRegistry capabilityRegistry) {
-        super(new Parameters(null, ServerDescriptions.getResourceDescriptionResolver(SERVER, false))
+        super(new Parameters(ResourceRegistration.root(), ServerDescriptions.getResourceDescriptionResolver(SERVER, false))
                 .addCapabilities(PATH_CAPABILITY.fromBaseCapability(ServerEnvironment.HOME_DIR),
                         PATH_CAPABILITY.fromBaseCapability(ServerEnvironment.SERVER_BASE_DIR),
                         PATH_CAPABILITY.fromBaseCapability(ServerEnvironment.SERVER_CONFIG_DIR),
@@ -334,8 +336,12 @@ public class ServerRootResourceDefinition extends SimpleResourceDefinition {
         // Other root resource operations
         resourceRegistration.registerOperationHandler(CompositeOperationHandler.DEFINITION, CompositeOperationHandler.INSTANCE, false);
 
-        XmlMarshallingHandler xmh = new XmlMarshallingHandler(extensibleConfigurationPersister);
-        resourceRegistration.registerOperationHandler(XmlMarshallingHandler.DEFINITION, xmh);
+        SimpleOperationDefinitionBuilder xmlMarshallingHandlerBuilder = XmlMarshallingHandler.createOperationDefinitionBuilder();
+        if(resourceRegistration.enables(XmlFileMarshallingHandler.DEFINITION)) {
+            xmlMarshallingHandlerBuilder.setDeprecated(ModelVersion.create(24, 0, 0 ));
+        }
+        resourceRegistration.registerOperationHandler(xmlMarshallingHandlerBuilder.build(), new XmlMarshallingHandler(extensibleConfigurationPersister));
+        resourceRegistration.registerOperationHandler(XmlFileMarshallingHandler.DEFINITION, new XmlFileMarshallingHandler(extensibleConfigurationPersister));
         resourceRegistration.registerOperationHandler(NamespaceAddHandler.DEFINITION, NamespaceAddHandler.INSTANCE);
         resourceRegistration.registerOperationHandler(NamespaceRemoveHandler.DEFINITION, NamespaceRemoveHandler.INSTANCE);
         resourceRegistration.registerOperationHandler(SchemaLocationAddHandler.DEFINITION, SchemaLocationAddHandler.INSTANCE);
@@ -407,8 +413,10 @@ public class ServerRootResourceDefinition extends SimpleResourceDefinition {
             resourceRegistration.registerOperationHandler(ServerDomainProcessShutdownHandler.DOMAIN_DEFINITION, new ServerDomainProcessShutdownHandler());
 
         } else {
-            final ServerProcessReloadHandler reloadHandler = new ServerProcessReloadHandler(Services.JBOSS_AS, runningModeControl, processState, serverEnvironment);
-            resourceRegistration.registerOperationHandler(ServerProcessReloadHandler.DEFINITION, reloadHandler, false);
+
+
+            ServerProcessReloadHandler.registerStandardReloadOperation(resourceRegistration, runningModeControl, processState, serverEnvironment, extensibleConfigurationPersister);
+            ServerProcessReloadHandler.registerEnhancedReloadOperation(resourceRegistration, runningModeControl, processState, serverEnvironment, extensibleConfigurationPersister);
 
             resourceRegistration.registerOperationHandler(ServerSuspendHandler.DEFINITION, ServerSuspendHandler.INSTANCE);
             resourceRegistration.registerOperationHandler(ServerResumeHandler.DEFINITION, ServerResumeHandler.INSTANCE);

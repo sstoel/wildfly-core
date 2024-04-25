@@ -5,12 +5,16 @@
 
 package org.wildfly.core.launcher;
 
+import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import static org.wildfly.core.launcher.AbstractCommandBuilder.DEFAULT_VM_ARGUMENTS;
+import java.util.StringJoiner;
+
+import static org.wildfly.core.launcher.JBossModulesCommandBuilder.DEFAULT_VM_ARGUMENTS;
 
 import org.wildfly.core.launcher.Arguments.Argument;
 import static org.wildfly.core.launcher.StandaloneCommandBuilder.DEBUG_FORMAT;
@@ -23,7 +27,7 @@ import org.wildfly.core.launcher.logger.LauncherMessages;
  *
  * @author <a href="mailto:jfdenise@redhat.com">JF Denise</a>
  */
-@SuppressWarnings("unused")
+@SuppressWarnings({"unused", "UnusedReturnValue"})
 public class BootableJarCommandBuilder implements CommandBuilder {
 
     private final Arguments javaOpts;
@@ -231,6 +235,39 @@ public class BootableJarCommandBuilder implements CommandBuilder {
     }
 
     /**
+     * Adds the YAML configuration file argument with the given YAML configuration files.
+     *
+     * @param yamlFiles the files to add
+     *
+     * @return the builder
+     */
+    public BootableJarCommandBuilder setYamlFiles(final Path... yamlFiles) {
+        if (yamlFiles == null || yamlFiles.length == 0) {
+            return this;
+        }
+        return setYamlFiles(List.of(yamlFiles));
+    }
+
+    /**
+     * Adds the YAML configuration file argument with the given YAML configuration files.
+     *
+     * @param yamlFiles the files to add
+     *
+     * @return the builder
+     */
+    public BootableJarCommandBuilder setYamlFiles(final Collection<Path> yamlFiles) {
+        if (yamlFiles == null || yamlFiles.isEmpty()) {
+            return this;
+        }
+        StringJoiner joiner = new StringJoiner(File.pathSeparator);
+        for (Path yamlFile : yamlFiles) {
+            joiner.add(yamlFile.toAbsolutePath().toString());
+        }
+        setSingleServerArg("--yaml", joiner.toString());
+        return this;
+    }
+
+    /**
      * Adds the array of JVM arguments to the command.
      *
      * @param javaOpts the array of JVM arguments to add, {@code null} arguments are ignored
@@ -430,10 +467,9 @@ public class BootableJarCommandBuilder implements CommandBuilder {
 
     @Override
     public List<String> buildArguments() {
-        final List<String> cmd = new ArrayList<>();
-        cmd.addAll(getJavaOptions());
+        final List<String> cmd = new ArrayList<>(getJavaOptions());
         if (jvm.enhancedSecurityManagerAvailable()) {
-            cmd.add(AbstractCommandBuilder.SECURITY_MANAGER_PROP_WITH_ALLOW_VALUE);
+            cmd.add(JBossModulesCommandBuilder.SECURITY_MANAGER_PROP_WITH_ALLOW_VALUE);
         }
         if (modulesLocklessArg != null) {
             cmd.add(modulesLocklessArg);

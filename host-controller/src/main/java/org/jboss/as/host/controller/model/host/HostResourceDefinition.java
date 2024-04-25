@@ -7,7 +7,6 @@ package org.jboss.as.host.controller.model.host;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.DOMAIN_ORGANIZATION;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST;
-import static org.jboss.as.controller.services.path.PathResourceDefinition.PATH_CAPABILITY;
 
 import org.jboss.as.controller.BootErrorCollector;
 import org.jboss.as.controller.ControlledProcessState;
@@ -55,6 +54,12 @@ import org.jboss.as.controller.registry.AttributeAccess;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.services.path.PathManagerService;
 import org.jboss.as.controller.services.path.PathResourceDefinition;
+
+import static org.jboss.as.controller.services.path.PathResourceDefinition.PATH_CAPABILITY;
+
+import org.jboss.as.controller.ModelVersion;
+import org.jboss.as.controller.SimpleOperationDefinitionBuilder;
+import org.jboss.as.controller.operations.common.XmlFileMarshallingHandler;
 import org.jboss.as.domain.controller.DomainController;
 import org.jboss.as.domain.controller.operations.DomainServerLifecycleHandlers;
 import org.jboss.as.domain.controller.operations.HostProcessReloadHandler;
@@ -77,6 +82,7 @@ import org.jboss.as.host.controller.operations.DomainControllerWriteAttributeHan
 import org.jboss.as.host.controller.operations.HostShutdownHandler;
 import org.jboss.as.host.controller.operations.HostSpecifiedInterfaceAddHandler;
 import org.jboss.as.host.controller.operations.HostSpecifiedInterfaceRemoveHandler;
+import org.jboss.as.host.controller.operations.HostXmlFileMarshallingHandler;
 import org.jboss.as.host.controller.operations.HostXmlMarshallingHandler;
 import org.jboss.as.host.controller.operations.InstallationReportHandler;
 import org.jboss.as.host.controller.operations.IsMasterHandler;
@@ -345,8 +351,12 @@ public class HostResourceDefinition extends SimpleResourceDefinition {
         hostRegistration.registerOperationHandler(CleanObsoleteContentHandler.DEFINITION, CleanObsoleteContentHandler.createOperation(contentRepository));
         hostRegistration.registerOperationHandler(WriteConfigHandler.DEFINITION, WriteConfigHandler.INSTANCE);
 
-        XmlMarshallingHandler xmh = new HostXmlMarshallingHandler(configurationPersister.getHostPersister(), hostControllerInfo);
-        hostRegistration.registerOperationHandler(XmlMarshallingHandler.DEFINITION, xmh);
+        SimpleOperationDefinitionBuilder xmlMarshallingHandlerBuilder = XmlMarshallingHandler.createOperationDefinitionBuilder();
+        if(hostRegistration.enables(HostXmlFileMarshallingHandler.DEFINITION)) {
+            xmlMarshallingHandlerBuilder.setDeprecated(ModelVersion.create(24, 0, 0 ));
+        }
+        hostRegistration.registerOperationHandler(xmlMarshallingHandlerBuilder.build(), new HostXmlMarshallingHandler(configurationPersister.getHostPersister(), hostControllerInfo));
+        hostRegistration.registerOperationHandler(XmlFileMarshallingHandler.DEFINITION, new HostXmlFileMarshallingHandler(configurationPersister.getHostPersister(), hostControllerInfo));
 
 
         StartServersHandler ssh = new StartServersHandler(environment, serverInventory, runningModeControl);

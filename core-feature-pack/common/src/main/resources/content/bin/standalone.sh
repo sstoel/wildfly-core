@@ -34,7 +34,7 @@ do
           shift
           break;;
       *)
-          SERVER_OPTS="$SERVER_OPTS '$1'"
+          SERVER_OPTS="$SERVER_OPTS \"$1\""
           ;;
     esac
     shift
@@ -144,7 +144,7 @@ if $linux; then
     for var in $CONSOLIDATED_OPTS
     do
        # Remove quotes
-       p=`echo $var | tr -d "'"`
+       p=`echo $var | tr -d "'" | tr -d "\""`
        case $p in
          -Djboss.server.base.dir=*)
               JBOSS_BASE_DIR=`readlink -m ${p#*=}`
@@ -165,8 +165,8 @@ if $solaris; then
     # process the standalone options
     for var in $CONSOLIDATED_OPTS
     do
-       # Remove quotes
-       p=`echo $var | tr -d "'"`
+      # Remove quotes
+      p=`echo $var | tr -d "'" | tr -d "\""`
       case $p in
         -Djboss.server.base.dir=*)
              JBOSS_BASE_DIR=`echo $p | awk -F= '{print $2}'`
@@ -189,7 +189,7 @@ if $darwin || $freebsd || $other ; then
     for var in $CONSOLIDATED_OPTS
     do
        # Remove quotes
-       p=`echo $var | tr -d "'"`
+       p=`echo $var | tr -d "'" | tr -d "\""`
        case $p in
          -Djboss.server.base.dir=*)
               JBOSS_BASE_DIR=`cd ${p#*=} ; pwd -P`
@@ -277,6 +277,11 @@ if [ "$PRESERVE_JAVA_OPTS" != "true" ]; then
             # Remove the gc.log file from the -version check
             rm -f "$JBOSS_LOG_DIR/gc.log" >/dev/null 2>&1
         fi
+    fi
+
+    JDK_FILTER_SET=`echo $JAVA_OPTS | $GREP "\-Djdk.serialFilter"`
+    if [ "x$DISABLE_JDK_SERIAL_FILTER" = "x" -a "x$JDK_FILTER_SET" = "x" ]; then
+        PREPEND_JAVA_OPTS="$PREPEND_JAVA_OPTS -Djdk.serialFilter=\"$JDK_SERIAL_FILTER\""
     fi
 
     # Set default modular JVM options

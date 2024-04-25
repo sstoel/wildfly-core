@@ -8,10 +8,11 @@ package org.jboss.as.process;
 import java.io.PrintStream;
 
 import org.jboss.as.process.logging.ProcessLogger;
+import org.jboss.as.version.ProductConfig;
 
 public class CommandLineArgumentUsageImpl extends CommandLineArgumentUsage {
 
-    public static void init(){
+    public static void init(ProductConfig productConfig){
 
         addArguments(CommandLineConstants.ADMIN_ONLY);
         instructions.add(ProcessLogger.ROOT_LOGGER.argAdminOnly());
@@ -78,10 +79,15 @@ public class CommandLineArgumentUsageImpl extends CommandLineArgumentUsage {
 
         addArguments(CommandLineConstants.SECMGR);
         instructions.add(ProcessLogger.ROOT_LOGGER.argSecMgr());
+
+        if (productConfig.getStabilitySet().size() > 1) {
+            addArguments(CommandLineConstants.STABILITY + "=<value>");
+            instructions.add(ProcessLogger.ROOT_LOGGER.argStability(productConfig.getStabilitySet(), productConfig.getDefaultStability()));
+        }
     }
 
-    public static void printUsage(final PrintStream out) {
-        init();
+    public static void printUsage(ProductConfig productConfig, PrintStream out) {
+        init(productConfig);
         out.print(usage("domain"));
     }
 }

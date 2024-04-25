@@ -11,6 +11,7 @@ import java.io.BufferedInputStream;
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileInputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -43,6 +44,7 @@ public class XmlConfigurationPersister extends AbstractConfigurationPersister {
     private final XMLElementReader<List<ModelNode>> rootParser;
     private final Map<QName, XMLElementReader<List<ModelNode>>> additionalParsers;
     private final boolean suppressLoad;
+    protected volatile boolean stored = false;
 
     /**
      * Construct a new instance.
@@ -83,6 +85,7 @@ public class XmlConfigurationPersister extends AbstractConfigurationPersister {
     /** {@inheritDoc} */
     @Override
     public PersistenceResource store(final ModelNode model, Set<PathAddress> affectedAddresses) throws ConfigurationPersistenceException {
+        stored = true;
         return new FilePersistenceResource(model, fileName, this);
     }
 
@@ -105,7 +108,7 @@ public class XmlConfigurationPersister extends AbstractConfigurationPersister {
         XMLStreamReader streamReader = null;
         try {
             input = new BufferedInputStream(new FileInputStream(fileName));
-            streamReader = XMLInputFactoryUtil.create().createXMLStreamReader(input);
+            streamReader = XMLInputFactoryUtil.create().createXMLStreamReader(input, StandardCharsets.UTF_8.toString());
             mapper.parseDocument(updates, streamReader);
         } catch (XMLStreamException e) {
             final boolean reported = reportValidationError(e);
@@ -154,6 +157,11 @@ public class XmlConfigurationPersister extends AbstractConfigurationPersister {
 
     protected void successfulBoot(File file) throws ConfigurationPersistenceException {
 
+    }
+
+    @Override
+    public boolean hasStored() {
+        return isPersisting() && stored;
     }
 
 }

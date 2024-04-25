@@ -15,6 +15,7 @@ import static org.wildfly.extension.elytron.Capabilities.AUTHENTICATION_CONTEXT_
 import static org.wildfly.extension.elytron.Capabilities.SECURITY_DOMAIN_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.SECURITY_FACTORY_CREDENTIAL_CAPABILITY;
 import static org.wildfly.extension.elytron.Capabilities.SSL_CONTEXT_CAPABILITY;
+import static org.wildfly.extension.elytron.ElytronDefinition.commonRequirements;
 import static org.wildfly.extension.elytron._private.ElytronSubsystemMessages.ROOT_LOGGER;
 
 import java.util.HashMap;
@@ -42,6 +43,7 @@ import org.jboss.as.controller.security.CredentialReference;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.msc.service.ServiceBuilder;
+import org.jboss.msc.service.ServiceController;
 import org.jboss.msc.value.InjectedValue;
 import org.wildfly.common.function.ExceptionSupplier;
 import org.wildfly.extension.elytron.TrivialService.ValueSupplier;
@@ -491,6 +493,16 @@ class AuthenticationClientDefinitions {
                 return () -> finalContext.apply(parentSupplier.get());
             }
 
+            @Override
+            protected void performRuntime(OperationContext context, ModelNode operation, ModelNode model) throws OperationFailedException {
+                commonRequirements(installService(context, model)).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+            }
+
+            ServiceBuilder<AuthenticationContext> installService(OperationContext context, ModelNode model)  throws OperationFailedException {
+                ServiceBuilder<AuthenticationContext> serviceBuilder = (ServiceBuilder<AuthenticationContext>) context.getCapabilityServiceTarget().addCapability(AUTHENTICATION_CONTEXT_RUNTIME_CAPABILITY);
+                TrivialService<AuthenticationContext> authenticationContextTrivialService = new TrivialService<>(getValueSupplier(serviceBuilder, context, model));
+                return serviceBuilder.setInstance(authenticationContextTrivialService);
+            }
         };
 
         return new TrivialResourceDefinition(ElytronDescriptionConstants.AUTHENTICATION_CONTEXT, add, attributes,
