@@ -54,21 +54,20 @@ public abstract class AbstractFileAuditLogHandlerResourceDefinition extends Audi
     @Override
     public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
         super.registerAttributes(resourceRegistration);
-        HandlerWriteAttributeHandler write = getWriteAttributeHandler(auditLogger, pathManager, ATTRIBUTES);
+        HandlerWriteAttributeHandler write = getWriteAttributeHandler(auditLogger, pathManager);
         for (AttributeDefinition def : ATTRIBUTES) {
             resourceRegistration.registerReadWriteAttribute(def, null, write);
         }
     }
 
-    protected abstract HandlerWriteAttributeHandler getWriteAttributeHandler(ManagedAuditLogger auditLogger, PathManagerService pathManager, AttributeDefinition... attributeDefinitions);
+    protected abstract HandlerWriteAttributeHandler getWriteAttributeHandler(ManagedAuditLogger auditLogger, PathManagerService pathManager);
 
     protected abstract static class AbstractFileAuditLogHandlerAddHandler extends AbstractAddStepHandler {
 
         protected final ManagedAuditLogger auditLogger;
         protected final PathManagerService pathManager;
 
-        protected AbstractFileAuditLogHandlerAddHandler(ManagedAuditLogger auditLogger, PathManagerService pathManager, AttributeDefinition[] attributes) {
-            super(attributes);
+        protected AbstractFileAuditLogHandlerAddHandler(ManagedAuditLogger auditLogger, PathManagerService pathManager) {
             this.auditLogger = auditLogger;
             this.pathManager = pathManager;
         }
@@ -110,8 +109,8 @@ public abstract class AbstractFileAuditLogHandlerResourceDefinition extends Audi
 
     protected abstract static class AbstractFileAuditLogHandlerWriteAttributeHandler extends AuditLogHandlerResourceDefinition.HandlerWriteAttributeHandler {
 
-        public AbstractFileAuditLogHandlerWriteAttributeHandler(ManagedAuditLogger auditLogger, PathManagerService pathManager, AttributeDefinition... attributeDefinitions) {
-            super(auditLogger, pathManager, attributeDefinitions);
+        public AbstractFileAuditLogHandlerWriteAttributeHandler(ManagedAuditLogger auditLogger, PathManagerService pathManager) {
+            super(auditLogger, pathManager);
         }
 
         @Override

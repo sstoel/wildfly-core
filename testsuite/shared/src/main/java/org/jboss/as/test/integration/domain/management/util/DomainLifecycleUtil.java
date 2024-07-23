@@ -4,6 +4,15 @@
  */
 package org.jboss.as.test.integration.domain.management.util;
 
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.ADDRESS;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.DOMAIN_CONFIG;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.HOST_CONFIG;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.OP;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RELOAD;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RELOAD_ENHANCED;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.RESTART_SERVERS;
+import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.STABILITY;
 import static org.jboss.as.test.integration.domain.management.util.DomainTestSupport.safeClose;
 
 import java.io.File;
@@ -47,7 +56,6 @@ import org.jboss.as.controller.client.OperationBuilder;
 import org.jboss.as.controller.client.helpers.ContextualModelControllerClient;
 import org.jboss.as.controller.client.helpers.domain.DomainClient;
 import org.jboss.as.controller.client.helpers.domain.ServerIdentity;
-import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
 import org.jboss.as.network.NetworkUtils;
 import org.jboss.as.test.shared.TestSuiteEnvironment;
 import org.jboss.as.version.Stability;
@@ -104,7 +112,7 @@ public class DomainLifecycleUtil implements AutoCloseable {
         assert clientConfiguration != null : "clientConfiguration is null";
         this.configuration = configuration;
         this.clientConfiguration = clientConfiguration;
-        this.address = PathAddress.pathAddress(PathElement.pathElement(ModelDescriptionConstants.HOST, configuration.getHostName()));
+        this.address = PathAddress.pathAddress(PathElement.pathElement(HOST, configuration.getHostName()));
         this.closeClientConfig = closeClientConfig;
     }
 
@@ -405,43 +413,7 @@ public class DomainLifecycleUtil implements AutoCloseable {
      *
      */
     public void reload(String host) throws IOException, InterruptedException, TimeoutException {
-        reload(host, false, null, null, null);
-    }
-
-    /**
-     * Executes a {@code reload} operation.
-     *
-     * @param host the host to use for the request. Cannot be {@code null}
-     * @param restartServers if {@code true}, servers will be restarted
-     *
-     */
-    public void reload(String host, Boolean restartServers) throws IOException, InterruptedException, TimeoutException {
-        reload(host, false, restartServers, null, null);
-    }
-
-    /**
-     * Executes a {@code reload} operation.
-     *
-     * @param host the host to use for the request. Cannot be {@code null}
-     * @param restartServers if {@code true}, servers will be restarted
-     * @param waitForServers if {@code true}, wait for Servers reload to complete
-     *
-     */
-    public void reload(String host, Boolean restartServers, Boolean waitForServers) throws IOException, InterruptedException, TimeoutException {
-        reload(host, false, restartServers, waitForServers, null);
-    }
-
-    /**
-     * Executes a {@code reload} operation and waits a configurable maximum time for the reload to complete.
-     *
-     * @param host the host to use for the request. Cannot be {@code null}
-     * @param restartServers if {@code true}, servers will be restarted
-     * @param waitForServers if {@code true}, wait for Servers reload to complete
-     * @param timeout maximum time to wait for the Host Controller and Servers reload to complete, in milliseconds
-     *
-     */
-    public void reload(String host, Boolean restartServers, Boolean waitForServers, Long timeout) throws IOException, InterruptedException, TimeoutException {
-        reload(host, false, restartServers, waitForServers, timeout);
+        reload(host, new ReloadParameters());
     }
 
     /**
@@ -451,7 +423,10 @@ public class DomainLifecycleUtil implements AutoCloseable {
      *
      */
     public void reloadAdminOnly(String host) throws IOException, InterruptedException, TimeoutException {
-        reload(host, true, null, null, null);
+        ReloadParameters parameters = new ReloadParameters()
+                .setAdminOnly(true);
+
+        reload(host, parameters);
     }
 
     /**
@@ -462,45 +437,158 @@ public class DomainLifecycleUtil implements AutoCloseable {
      *
      */
     public void reloadAdminOnly(String host, Long timeout) throws IOException, InterruptedException, TimeoutException {
-        reload(host, true, null, null, timeout);
+        ReloadParameters parameters = new ReloadParameters()
+                .setAdminOnly(true)
+                .setTimeout(timeout);
+
+        reload(host, parameters);
     }
 
     /**
      * Executes a {@code reload} operation and waits a configurable maximum time for the reload to complete.
      *
      * @param host the host to use for the request. Cannot be {@code null}
-     * @param adminOnly if {@code true}, the Host Controller will be reloaded in admin-only mode
-     * @param restartServers if {@code true}, servers will be restarted
-     * @param waitForServers if {@code true}, wait for Servers reload to complete
-     * @param timeout maximum time to wait for the Host Controller and Servers reload to complete, in milliseconds
-     *
+     * @param parameters {@link DomainLifecycleUtil.ReloadParameters} to configure reload
      */
-    private void reload(String host, Boolean adminOnly, Boolean restartServers, Boolean waitForServers, Long timeout) throws IOException, InterruptedException, TimeoutException {
+    public void reload(String host, ReloadParameters parameters) throws IOException, InterruptedException, TimeoutException {
         ModelNode op = new ModelNode();
-        op.get(ModelDescriptionConstants.ADDRESS).add(ModelDescriptionConstants.HOST, host);
-        op.get(ModelDescriptionConstants.OP).set("reload");
-        if (adminOnly != null) {
-            op.get("admin-only").set(adminOnly);
-        }
-        if (restartServers != null) {
-            op.get(ModelDescriptionConstants.RESTART_SERVERS).set(restartServers);
-        }
+        op.get(ADDRESS).add(HOST, host);
+        op.get(OP).set(RELOAD);
+        op.get("admin-only").set(parameters.adminOnly);
+        op.get(RESTART_SERVERS).set(parameters.restartServers);
         long startupTimeout;
-        if (timeout == null) {
+        if (parameters.timeout == null) {
             startupTimeout = configuration.getStartupTimeoutInSeconds();
         } else {
-            startupTimeout = timeout;
+            startupTimeout = parameters.timeout;
         }
-
+        if (parameters.hostConfig != null) {
+            op.get(HOST_CONFIG).set(parameters.hostConfig);
+        }
+        if (parameters.domainConfig != null) {
+            op.get(DOMAIN_CONFIG).set(parameters.domainConfig);
+        }
+        if (parameters instanceof ReloadEnhancedParameters) {
+            Stability stabilityParam = ((ReloadEnhancedParameters) parameters).stability;
+            if (stabilityParam != null) {
+                op.get(OP).set(RELOAD_ENHANCED);
+                op.get(STABILITY).set(stabilityParam.toString());
+            }
+        }
         executeAwaitConnectionClosed(op);
         // Try to reconnect to the hc
         connect();
         awaitHostController(System.currentTimeMillis(), startupTimeout);
         // check that the servers are up
-        if (adminOnly == null || !adminOnly) {
-            if (waitForServers == null || waitForServers) {
+        if (!parameters.adminOnly) {
+            if (parameters.waitForServers) {
                 awaitServers(System.currentTimeMillis(), startupTimeout);
             }
+        }
+    }
+
+    /**
+     * ReloadParameters object for the DomainLifecycleUtil reload
+     */
+    public static class ReloadParameters {
+
+        boolean adminOnly = false;
+
+        boolean restartServers = true;
+
+        boolean waitForServers = true;
+
+        Long timeout = null;
+
+        String hostConfig;
+
+        String domainConfig;
+
+        /**
+         * Sets the adminOnly
+         *
+         * @param adminOnly whether the controller should start in running mode ADMIN_ONLY when it restarts
+         * @return this ReloadParameters object
+         */
+        public ReloadParameters setAdminOnly(boolean adminOnly) {
+            this.adminOnly = adminOnly;
+            return this;
+        }
+
+        /**
+         * Sets the restartServers
+         *
+         * @param restartServers if {@code true}, servers will be restarted
+         *                       if {@code false} the servers will be left running and reconnect to the Host Controller when started again
+         * @return this ReloadParameters object
+         */
+        public ReloadParameters setRestartServers(boolean restartServers) {
+            this.restartServers = restartServers;
+            return this;
+        }
+
+        /**
+         * Sets the waitForServers
+         *
+         * @param waitForServers if {@code true}, wait for Servers reload to complete
+         *                       if {@code false} continue without waiting
+         * @return this ReloadParameters object
+         */
+        public ReloadParameters setWaitForServers(boolean waitForServers) {
+            this.waitForServers = waitForServers;
+            return this;
+        }
+
+        /**
+         * Sets the timeout
+         *
+         * @param timeout maximum time to wait for the Host Controller and Servers reload to complete, in milliseconds,
+         *                if {@code null} {@link WildFlyManagedConfiguration.startupTimeoutInSeconds} will be used
+         * @return this ReloadParameters object
+         */
+        public ReloadParameters setTimeout(Long timeout) {
+            this.timeout = timeout;
+            return this;
+        }
+
+        /**
+         * Sets the hostConfig
+         *
+         * @param hostConfig the path to the host configuration file to use
+         * @return this ReloadParameters object
+         */
+        public ReloadParameters setHostConfig(String hostConfig) {
+            this.hostConfig = hostConfig;
+            return this;
+        }
+
+        /**
+         * Sets the domainConfig
+         *
+         * @param domainConfig the path to the domain configuration file to use
+         * @return this ReloadParameters object
+         */
+        public ReloadParameters setDomainConfig(String domainConfig) {
+            this.domainConfig = domainConfig;
+            return this;
+        }
+    }
+
+    /**
+     * Reload parameters to execute reload-enhanced operation
+     */
+    public static class ReloadEnhancedParameters extends ReloadParameters {
+        Stability stability;
+
+        /**
+         * Sets the stability
+         *
+         * @param stability the stability level to use
+         * @return this ReloadParameters object
+         */
+        public ReloadParameters setStability(Stability stability) {
+            this.stability = stability;
+            return this;
         }
     }
 

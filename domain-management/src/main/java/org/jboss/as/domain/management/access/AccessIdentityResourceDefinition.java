@@ -93,7 +93,6 @@ public class AccessIdentityResourceDefinition extends SimpleResourceDefinition {
         private final ManagementSecurityIdentitySupplier securityIdentitySupplier;
 
         AccessIdentityAddHandler(ManagementSecurityIdentitySupplier securityIdentitySupplier) {
-            super(ATTRIBUTES);
             this.securityIdentitySupplier = securityIdentitySupplier;
         }
 
@@ -147,10 +146,6 @@ public class AccessIdentityResourceDefinition extends SimpleResourceDefinition {
     }
 
     static class WriteAttributeHandler extends ReloadRequiredWriteAttributeHandler {
-
-        public WriteAttributeHandler() {
-            super(ATTRIBUTES);
-        }
 
         @Override
         protected boolean requiresRuntime(OperationContext context) {

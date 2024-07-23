@@ -56,7 +56,7 @@ public class RootResourceDefinition extends PersistentResourceDefinition {
 
     @Override
     public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-        OperationStepHandler write = new AbstractWriteAttributeHandler<Void>(ATTRIBUTE) {
+        OperationStepHandler write = new AbstractWriteAttributeHandler<Void>() {
 
             @Override
             protected boolean applyUpdateToRuntime(OperationContext context, ModelNode operation, String attributeName, ModelNode resolvedValue, ModelNode currentValue, HandbackHolder<Void> handbackHolder) throws OperationFailedException {
@@ -80,10 +80,6 @@ public class RootResourceDefinition extends PersistentResourceDefinition {
     private static class AddSubsystemHandler extends AbstractAddStepHandler {
 
         private static final AbstractAddStepHandler INSTANCE = new AddSubsystemHandler();
-
-        private AddSubsystemHandler()  {
-            super(ATTRIBUTE);
-        }
 
         @Override
         protected void performRuntime(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {

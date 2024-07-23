@@ -49,6 +49,7 @@ import org.jboss.as.controller.client.impl.AdditionalBootCliScriptInvoker;
 import org.jboss.as.controller.descriptions.DescriptionProvider;
 import org.jboss.as.controller.extension.MutableRootResourceRegistrationProvider;
 import org.jboss.as.controller.logging.ControllerLogger;
+import org.jboss.as.controller.management.Capabilities;
 import org.jboss.as.controller.notification.NotificationHandlerRegistry;
 import org.jboss.as.controller.notification.NotificationSupport;
 import org.jboss.as.controller.operations.common.Util;
@@ -126,14 +127,10 @@ public abstract class AbstractControllerService implements Service<ModelControll
     }
 
     /** Capability in-vm users of the controller use to create clients */
-    protected static final RuntimeCapability<Void> CLIENT_FACTORY_CAPABILITY =
-            RuntimeCapability.Builder.of("org.wildfly.management.model-controller-client-factory", ModelControllerClientFactory.class)
-            .build();
+    protected static final RuntimeCapability<Void> CLIENT_FACTORY_CAPABILITY = RuntimeCapability.Builder.of(ModelControllerClientFactory.SERVICE_DESCRIPTOR).build();
 
     /** Capability in-vm users of the controller use to register notification handlers */
-    protected static final RuntimeCapability<Void> NOTIFICATION_REGISTRY_CAPABILITY =
-            RuntimeCapability.Builder.of("org.wildfly.management.notification-handler-registry", NotificationHandlerRegistry.class)
-                    .build();
+    protected static final RuntimeCapability<Void> NOTIFICATION_REGISTRY_CAPABILITY = RuntimeCapability.Builder.of(NotificationHandlerRegistry.SERVICE_DESCRIPTOR).build();
 
     /**
      * Capability users of the controller use to coordinate changes to paths.
@@ -147,18 +144,16 @@ public abstract class AbstractControllerService implements Service<ModelControll
      * This capability isn't necessarily directly related to this class but we declare it
      * here as it's as good a place as any at this time.
      */
-    public static final RuntimeCapability<Void> EXECUTOR_CAPABILITY =
-            RuntimeCapability.Builder.of("org.wildfly.management.executor", ExecutorService.class)
-                    .build();
+    // TODO Exposing the ability to shutdown the executor is not ideal
+    // TODO Remove type narrowing once references to ExecutorService are removed from WildFly
+    public static final RuntimeCapability<Void> EXECUTOR_CAPABILITY = RuntimeCapability.Builder.of(Capabilities.MANAGEMENT_EXECUTOR.asType(ExecutorService.class)).build();
 
     /**
      * Capability users of the controller use to read process state and get notification of state changes.
      * This capability isn't necessarily directly related to this class but we declare it
      * here as it's as good a place as any at this time.
      */
-    protected static final RuntimeCapability<Void> PROCESS_STATE_NOTIFIER_CAPABILITY =
-            RuntimeCapability.Builder.of("org.wildfly.management.process-state-notifier", ProcessStateNotifier.class)
-                    .build();
+    protected static final RuntimeCapability<Void> PROCESS_STATE_NOTIFIER_CAPABILITY = RuntimeCapability.Builder.of(ProcessStateNotifier.SERVICE_DESCRIPTOR).build();
 
     private static final OperationDefinition INIT_CONTROLLER_OP = new SimpleOperationDefinitionBuilder("boottime-controller-initializer-step", null)
         .setPrivateEntry()
@@ -197,7 +192,7 @@ public abstract class AbstractControllerService implements Service<ModelControll
      * @param authorizer              handles authorization
      * @param capabilityRegistry      the capability registry
      */
-    @Deprecated
+    @Deprecated(forRemoval = true)
     protected AbstractControllerService(final ProcessType processType, final RunningModeControl runningModeControl,
                                         final ConfigurationPersister configurationPersister,
                                         final ControlledProcessState processState, final ResourceDefinition rootResourceDefinition,
@@ -223,7 +218,7 @@ public abstract class AbstractControllerService implements Service<ModelControll
      * @param capabilityRegistry      the capability registry
      * @deprecated For use by legacy versions
      */
-    @Deprecated
+    @Deprecated(forRemoval = true)
     protected AbstractControllerService(final Supplier<ExecutorService> executorService,
                                         final Supplier<ControllerInstabilityListener> instabilityListener,
                                         final ProcessType processType, final RunningModeControl runningModeControl,
@@ -273,13 +268,14 @@ public abstract class AbstractControllerService implements Service<ModelControll
                                       final OperationStepHandler prepareStep, final ExpressionResolver expressionResolver, final ManagedAuditLogger auditLogger,
                                       final DelegatingConfigurableAuthorizer authorizer, final ManagementSecurityIdentitySupplier securityIdentitySupplier,
                                       final CapabilityRegistry capabilityRegistry, final ConfigurationExtension configExtension) {
-        assert rootDescriptionProvider == null: "description provider cannot be used anymore";
-        assert rootResourceDefinition != null: "Null root resource definition";
+        assert rootDescriptionProvider == null : "description provider cannot be used anymore";
+        assert rootResourceDefinition != null : "Null root resource definition";
         assert expressionResolver != null : "Null expressionResolver";
         assert auditLogger != null : "Null auditLogger";
         assert authorizer != null : "Null authorizer";
         assert securityIdentitySupplier != null : "Null securityIdentitySupplier";
-        assert capabilityRegistry!=null : "Null capabilityRegistry";
+        assert capabilityRegistry != null : "Null capabilityRegistry";
+        assert stability != null : "Null stability";
         this.executorService = executorService;
         this.instabilityListener = instabilityListener;
         this.processType = processType;

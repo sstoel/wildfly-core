@@ -91,9 +91,6 @@ public class ConfigurationChangeResourceDefinition extends PersistentResourceDef
 
 
     private static class ConfigurationChangeResourceAddHandler extends AbstractAddStepHandler {
-        private ConfigurationChangeResourceAddHandler() {
-            super(MAX_HISTORY);
-        }
 
         @Override
         protected void performRuntime(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {
@@ -133,7 +130,6 @@ public class ConfigurationChangeResourceDefinition extends PersistentResourceDef
         private final ConfigurationChangesCollector collector;
 
         private MaxHistoryWriteHandler(ConfigurationChangesCollector collector) {
-            super(MAX_HISTORY);
             this.collector = collector;
         }
 

@@ -27,7 +27,7 @@ public class ModelOnlyResourceDefinition extends SimpleResourceDefinition {
     }
 
     public ModelOnlyResourceDefinition(PathElement pathElement, ResourceDescriptionResolver descriptionResolver, AttributeDefinition... attributes) {
-        super(pathElement, descriptionResolver, new ModelOnlyAddStepHandler(attributes), ModelOnlyRemoveStepHandler.INSTANCE);
+        super(pathElement, descriptionResolver, ModelOnlyAddStepHandler.INSTANCE, ModelOnlyRemoveStepHandler.INSTANCE);
         this.attributes = attributes;
     }
 
@@ -38,9 +38,8 @@ public class ModelOnlyResourceDefinition extends SimpleResourceDefinition {
 
     @Override
     public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-        OperationStepHandler writeHandler = new ModelOnlyWriteAttributeHandler(attributes);
         for (AttributeDefinition ad : attributes) {
-            resourceRegistration.registerReadWriteAttribute(ad, null, writeHandler);
+            resourceRegistration.registerReadWriteAttribute(ad, null, ModelOnlyWriteAttributeHandler.INSTANCE);
         }
     }
 }

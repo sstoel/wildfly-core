@@ -69,7 +69,7 @@ public class ReadConfigAsFeaturesTestCase extends AbstractControllerTestBase {
             .build();
     private static final AttributeDefinition ATTR_SUBSYSTEM_DEF = TestUtils.createAttribute(SUBSYSTEM, ModelType.STRING);
 
-    private static final OperationStepHandler WRITE_HANDLER = new ModelOnlyWriteAttributeHandler();
+    private static final OperationStepHandler WRITE_HANDLER = ModelOnlyWriteAttributeHandler.INSTANCE;
 
     private ManagementResourceRegistration registration;
 
@@ -229,7 +229,7 @@ public class ReadConfigAsFeaturesTestCase extends AbstractControllerTestBase {
         subsystem.registerReadWriteAttribute(ATTR_LIST_OBJ_DEF, null, WRITE_HANDLER);
 
         AttributeDefinition[] attrDefs = new AttributeDefinition[] {ATTR_HOST_DEF, ATTR_PROFILE_DEF, ATTR_STR_DEF, ATTR_RT_ONLY_DEF, ATTR_LIST_STR_DEF, ATTR_OBJ_DEF, ATTR_OBJ_REQUIRED_DEF, ATTR_LIST_OBJ_DEF};
-        subsystem.registerOperationHandler(TestUtils.createOperationDefinition("add", attrDefs), new ModelOnlyAddStepHandler(attrDefs));
+        subsystem.registerOperationHandler(TestUtils.createOperationDefinition("add", attrDefs), ModelOnlyAddStepHandler.INSTANCE);
 
         final ManagementResourceRegistration resource = subsystem.registerSubModel(new SimpleResourceDefinition(PathElement.pathElement(RESOURCE, "*"),
                 NonResolvingResourceDescriptionResolver.INSTANCE));
@@ -238,7 +238,7 @@ public class ReadConfigAsFeaturesTestCase extends AbstractControllerTestBase {
         resource.registerReadWriteAttribute(ATTR_LIST_STR_DEF, null, WRITE_HANDLER);
         resource.registerReadWriteAttribute(ATTR_SUBSYSTEM_DEF, null, WRITE_HANDLER);
         attrDefs = new AttributeDefinition[] {ATTR_STR_DEF, ATTR_RT_ONLY_DEF, ATTR_LIST_STR_DEF, ATTR_SUBSYSTEM_DEF};
-        resource.registerOperationHandler(TestUtils.createOperationDefinition("add", attrDefs), new ModelOnlyAddStepHandler(attrDefs));
+        resource.registerOperationHandler(TestUtils.createOperationDefinition("add", attrDefs), ModelOnlyAddStepHandler.INSTANCE);
 
         final ManagementResourceRegistration rt = subsystem.registerSubModel(new SimpleResourceDefinition(
                 new SimpleResourceDefinition.Parameters(PathElement.pathElement(RT_RESOURCE, TEST),

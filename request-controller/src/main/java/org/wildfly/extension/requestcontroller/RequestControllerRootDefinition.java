@@ -54,7 +54,7 @@ class RequestControllerRootDefinition extends PersistentResourceDefinition {
 
     RequestControllerRootDefinition(boolean registerRuntimeOnly) {
         super(new SimpleResourceDefinition.Parameters(RequestControllerExtension.SUBSYSTEM_PATH, RequestControllerExtension.getResolver())
-                .setAddHandler(new RequestControllerSubsystemAdd(getAttributeDefinitions(registerRuntimeOnly)))
+                .setAddHandler(new RequestControllerSubsystemAdd())
                 .setRemoveHandler(ReloadRequiredRemoveStepHandler.INSTANCE)
                 .addCapabilities(REQUEST_CONTROLLER_CAPABILITY));
         this.registerRuntimeOnly = registerRuntimeOnly;
@@ -80,9 +80,9 @@ class RequestControllerRootDefinition extends PersistentResourceDefinition {
 
     @Override
     public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-        MaxRequestsWriteHandler handler = new MaxRequestsWriteHandler(MAX_REQUESTS);
+        MaxRequestsWriteHandler handler = new MaxRequestsWriteHandler();
         resourceRegistration.registerReadWriteAttribute(MAX_REQUESTS, null, handler);
-        resourceRegistration.registerReadWriteAttribute(TRACK_INDIVIDUAL_ENDPOINTS, null, new ReloadRequiredWriteAttributeHandler(TRACK_INDIVIDUAL_ENDPOINTS));
+        resourceRegistration.registerReadWriteAttribute(TRACK_INDIVIDUAL_ENDPOINTS, null, ReloadRequiredWriteAttributeHandler.INSTANCE);
         if(registerRuntimeOnly) {
             resourceRegistration.registerMetric(ACTIVE_REQUESTS, new ActiveRequestsReadHandler());
         }

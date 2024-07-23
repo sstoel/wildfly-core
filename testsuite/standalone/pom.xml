@@ -20,7 +20,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-testsuite</artifactId>
-        <version>25.0.0.Beta1-SNAPSHOT</version>
+        <version>26.0.0.Beta1-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -187,7 +187,7 @@
                         <jboss.home>${wildfly.home}</jboss.home>
                         <!-- This is required so JBoss Modules knows which repository to use -->
                         <maven.repo.local>${settings.localRepository}</maven.repo.local>
-                        <jvm.args>-Dmaven.repo.local=${settings.localRepository} ${surefire.system.args} ${jvm.args.ip.server} ${jvm.args.security} ${jvm.args.other} ${jvm.args.timeouts} -Djbossas.ts.dir=${jbossas.ts.dir}</jvm.args>
+                        <jvm.args>-Dmaven.repo.local=${settings.localRepository} ${surefire.jvm.args} ${jvm.args.ip.server} ${jvm.args.security} ${jvm.args.other} ${jvm.args.timeouts} -Djbossas.ts.dir=${jbossas.ts.dir}</jvm.args>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

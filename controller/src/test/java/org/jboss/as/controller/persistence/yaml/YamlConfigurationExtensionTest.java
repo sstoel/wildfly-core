@@ -70,59 +70,56 @@ public class YamlConfigurationExtensionTest {
                 .setValidator(new StringLengthValidator(0, true, true))
                 .build();
         SimpleResourceDefinition systemPropertyResource = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(PathElement.pathElement("system-property"), descriptionResolver)
-                .setAddHandler(new AbstractBoottimeAddStepHandler(valueAtt) {
+                .setAddHandler(new AbstractBoottimeAddStepHandler() {
                 })) {
             @Override
             public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
                 super.registerAttributes(resourceRegistration);
-                resourceRegistration.registerReadWriteAttribute(valueAtt, null, new ModelOnlyWriteAttributeHandler(valueAtt));
+                resourceRegistration.registerReadWriteAttribute(valueAtt, null, ModelOnlyWriteAttributeHandler.INSTANCE);
             }
 
             @Override
             public void registerOperations(ManagementResourceRegistration resourceRegistration) {
                 super.registerOperations(resourceRegistration);
-                resourceRegistration.registerOperationHandler(SimpleOperationDefinitionBuilder.of(WRITE_ATTRIBUTE_OPERATION, descriptionResolver).build(), new ModelOnlyWriteAttributeHandler(valueAtt));
+                resourceRegistration.registerOperationHandler(SimpleOperationDefinitionBuilder.of(WRITE_ATTRIBUTE_OPERATION, descriptionResolver).build(), ModelOnlyWriteAttributeHandler.INSTANCE);
             }
         };
         SimpleResourceDefinition extensionResource = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(PathElement.pathElement("extension"), descriptionResolver)
-                .setAddHandler(new AbstractBoottimeAddStepHandler(SimpleAttributeDefinitionBuilder.create("module", STRING, false)
-                        .setAllowExpression(true)
-                        .setValidator(new StringLengthValidator(0, true, true))
-                        .build()) {
+                .setAddHandler(new AbstractBoottimeAddStepHandler() {
                 }));
         AttributeDefinition listAtt = PrimitiveListAttributeDefinition.Builder.of("strings", STRING).build();
         SimpleResourceDefinition listResource = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(PathElement.pathElement("list"), descriptionResolver)
-                .setAddHandler(new AbstractBoottimeAddStepHandler(listAtt) {
+                .setAddHandler(new AbstractBoottimeAddStepHandler() {
                 })) {
             @Override
             public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
                 super.registerAttributes(resourceRegistration);
-                resourceRegistration.registerReadWriteAttribute(listAtt, null, new ModelOnlyWriteAttributeHandler(valueAtt));
+                resourceRegistration.registerReadWriteAttribute(listAtt, null, ModelOnlyWriteAttributeHandler.INSTANCE);
             }
         };
         SimpleResourceDefinition basicResource = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(PathElement.pathElement("basic"), descriptionResolver)
-                .setAddHandler(new AbstractBoottimeAddStepHandler(valueAtt) {
+                .setAddHandler(new AbstractBoottimeAddStepHandler() {
                 })) {
             @Override
             public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
                 super.registerAttributes(resourceRegistration);
-                resourceRegistration.registerReadWriteAttribute(valueAtt, null, new ModelOnlyWriteAttributeHandler(valueAtt));
+                resourceRegistration.registerReadWriteAttribute(valueAtt, null, ModelOnlyWriteAttributeHandler.INSTANCE);
             }
         };
         PropertiesAttributeDefinition propertiesAtt = new PropertiesAttributeDefinition.Builder("props", false).build();
         SimpleResourceDefinition propertyResource = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(PathElement.pathElement("property"), descriptionResolver)
-                .setAddHandler(new AbstractBoottimeAddStepHandler(propertiesAtt) {
+                .setAddHandler(new AbstractBoottimeAddStepHandler() {
                 })) {
             @Override
             public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
                 super.registerAttributes(resourceRegistration);
-                resourceRegistration.registerReadWriteAttribute(propertiesAtt, null, new ModelOnlyWriteAttributeHandler(propertiesAtt));
+                resourceRegistration.registerReadWriteAttribute(propertiesAtt, null, ModelOnlyWriteAttributeHandler.INSTANCE);
             }
 
             @Override
             public void registerOperations(ManagementResourceRegistration resourceRegistration) {
                 super.registerOperations(resourceRegistration);
-                resourceRegistration.registerOperationHandler(SimpleOperationDefinitionBuilder.of(WRITE_ATTRIBUTE_OPERATION, descriptionResolver).build(), new ModelOnlyWriteAttributeHandler(propertiesAtt));
+                resourceRegistration.registerOperationHandler(SimpleOperationDefinitionBuilder.of(WRITE_ATTRIBUTE_OPERATION, descriptionResolver).build(), ModelOnlyWriteAttributeHandler.INSTANCE);
             }
         };
         ObjectTypeAttributeDefinition CLASS = ObjectTypeAttributeDefinition.Builder.of("class",
@@ -137,30 +134,30 @@ public class YamlConfigurationExtensionTest {
                 .setRequired(false)
                 .build();
         SimpleResourceDefinition classpathResource = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(PathElement.pathElement("classpath"), descriptionResolver)
-                .setAddHandler(new AbstractBoottimeAddStepHandler(COMPLEX_MAP) {
+                .setAddHandler(new AbstractBoottimeAddStepHandler() {
                 })) {
             @Override
             public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
                 super.registerAttributes(resourceRegistration);
-                resourceRegistration.registerReadWriteAttribute(COMPLEX_MAP, null, new ModelOnlyWriteAttributeHandler(valueAtt));
+                resourceRegistration.registerReadWriteAttribute(COMPLEX_MAP, null, ModelOnlyWriteAttributeHandler.INSTANCE);
             }
         };
         SimpleResourceDefinition childResource = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(PathElement.pathElement("child"), descriptionResolver)
-                .setAddHandler(new AbstractBoottimeAddStepHandler(valueAtt) {
+                .setAddHandler(new AbstractBoottimeAddStepHandler() {
                 })) {
             @Override
             public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
                 super.registerAttributes(resourceRegistration);
-                resourceRegistration.registerReadWriteAttribute(valueAtt, null, new ModelOnlyWriteAttributeHandler(valueAtt));
+                resourceRegistration.registerReadWriteAttribute(valueAtt, null, ModelOnlyWriteAttributeHandler.INSTANCE);
             }
         };
         SimpleResourceDefinition parentResource = new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(PathElement.pathElement("parent"), descriptionResolver)
-                .setAddHandler(new AbstractBoottimeAddStepHandler(valueAtt) {
+                .setAddHandler(new AbstractBoottimeAddStepHandler() {
                 })) {
             @Override
             public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
                 super.registerAttributes(resourceRegistration);
-                resourceRegistration.registerReadWriteAttribute(valueAtt, null, new ModelOnlyWriteAttributeHandler(valueAtt));
+                resourceRegistration.registerReadWriteAttribute(valueAtt, null, ModelOnlyWriteAttributeHandler.INSTANCE);
             }
 
             @Override
@@ -185,21 +182,21 @@ public class YamlConfigurationExtensionTest {
                 .build();
         ManagementResourceRegistration connectorRegistration = root.registerSubModel(new SimpleResourceDefinition(new SimpleResourceDefinition.Parameters(
                 PathElement.pathElement("connector"), NonResolvingResourceDescriptionResolver.INSTANCE)
-                .setAddHandler(new AbstractBoottimeAddStepHandler(connectorType) {
+                .setAddHandler(new AbstractBoottimeAddStepHandler() {
                 })
                 .setRemoveHandler(new AbstractRemoveStepHandler() {
                 }))
         );
-        connectorRegistration.registerReadWriteAttribute(connectorType, null, new ModelOnlyWriteAttributeHandler(connectorType));
+        connectorRegistration.registerReadWriteAttribute(connectorType, null, ModelOnlyWriteAttributeHandler.INSTANCE);
         ManagementResourceRegistration acceptorRegistration = connectorRegistration.registerSubModel(
                 new SimpleResourceDefinition(
                         new SimpleResourceDefinition.Parameters(PathElement.pathElement("acceptor"), NonResolvingResourceDescriptionResolver.INSTANCE)
-                                .setAddHandler(new AbstractBoottimeAddStepHandler(connectorType) {
+                                .setAddHandler(new AbstractBoottimeAddStepHandler() {
                                 })
                                 .setRemoveHandler(new AbstractRemoveStepHandler() {
                                 }))
         );
-        acceptorRegistration.registerReadWriteAttribute(connectorType, null, new ModelOnlyWriteAttributeHandler(connectorType));
+        acceptorRegistration.registerReadWriteAttribute(connectorType, null, ModelOnlyWriteAttributeHandler.INSTANCE);
         rootRegistration = root;
     }
 

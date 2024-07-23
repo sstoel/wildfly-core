@@ -104,9 +104,6 @@ public class LegacyConfigurationChangeResourceDefinition extends SimpleResourceD
     }
 
     private static class LegacyConfigurationChangeResourceAddHandler extends AbstractAddStepHandler {
-        private LegacyConfigurationChangeResourceAddHandler() {
-            super(MAX_HISTORY);
-        }
 
         @Override
         protected void performRuntime(OperationContext context, ModelNode operation, ModelNode model) throws OperationFailedException {
@@ -150,7 +147,6 @@ public class LegacyConfigurationChangeResourceDefinition extends SimpleResourceD
         private final ConfigurationChangesCollector collector;
 
         private LegacyMaxHistoryWriteHandler(ConfigurationChangesCollector collector) {
-            super(MAX_HISTORY);
             this.collector = collector;
         }
 

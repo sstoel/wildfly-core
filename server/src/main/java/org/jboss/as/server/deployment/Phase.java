@@ -234,6 +234,7 @@ public enum Phase {
     public static final int STRUCTURE_GLOBAL_MODULES                    = 0x1E00;
     public static final int STRUCTURE_GLOBAL_DIRECTORIES                = 0x1E01;
     public static final int STRUCTURE_NAMING_EXTERNAL_CONTEXTS          = 0x1F00;
+    public static final int STRUCTURE_NAMING_JDK_DEPENDENCIES           = 0x1FF0;
     public static final int STRUCTURE_GLOBAL_REQUEST_CONTROLLER         = 0x2000;
     public static final int STRUCTURE_WS_SERVICES_DEPS                  = 0x2100;
     public static final int STRUCTURE_DEPENDENCIES_MANIFEST             = 0x2200;
@@ -248,6 +249,8 @@ public enum Phase {
     public static final int PARSE_COMPOSITE_ANNOTATION_INDEX            = 0x0301;
     public static final int PARSE_EXTENSION_LIST                        = 0x0700;
     public static final int PARSE_EXTENSION_NAME                        = 0x0800;
+    public static final int PARSE_SCAN_EXPERIMENTAL_ANNOTATIONS         = 0x0840;
+    public static final int PARSE_REPORT_EXPERIMENTAL_ANNOTATIONS       = 0x0850;
 
     public static final int PARSE_WEB_DEPLOYMENT                        = 0x0B00;
     public static final int PARSE_WEB_DEPLOYMENT_FRAGMENT               = 0x0C00;
@@ -394,6 +397,7 @@ public enum Phase {
     public static final int DEPENDENCIES_MICROPROFILE_JWT               = 0x18A0;
     public static final int DEPENDENCIES_MICROPROFILE_REACTIVE_MESSAGING = 0x18B0;
     public static final int DEPENDENCIES_MICROPROFILE_REACTIVE_STREAMS_OPERATORS = 0x18C0;
+    public static final int DEPENDENCIES_OPENTELEMETRY                  = 0x18C5;
     public static final int DEPENDENCIES_MICROPROFILE_TELEMETRY         = 0x18D0;
     public static final int DEPENDENCIES_MICROPROFILE_FAULT_TOLERANCE   = 0x1900;
     public static final int DEPENDENCIES_MICROMETER                     = 0x1910;
@@ -553,6 +557,7 @@ public enum Phase {
     public static final int POST_MODULE_MICROPROFILE_OPENTRACING        = 0x3780;
     public static final int POST_MODULE_MICROPROFILE_OPENAPI            = 0x3790;
     public static final int POST_MODULE_MICROPROFILE_FAULT_TOLERANCE    = 0x3800;
+    public static final int POST_MODULE_OPENTELEMETRY                   = 0x3810;
     public static final int POST_MODULE_MICROPROFILE_TELEMETRY          = 0x3820;
 
     public static final int POST_MODULE_EJB_HIBERNATE_VALIDATOR         = 0x3850;

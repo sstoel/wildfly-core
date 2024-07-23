@@ -6,6 +6,7 @@
 package org.jboss.as.host.controller;
 
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.VALUE;
+import static org.jboss.as.server.ElapsedTime.startingFromNow;
 
 import java.io.File;
 import java.io.IOException;
@@ -14,6 +15,7 @@ import java.net.UnknownHostException;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -24,15 +26,16 @@ import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
 import org.jboss.as.controller.ProcessType;
 import org.jboss.as.controller.RunningMode;
+import org.jboss.as.server.ElapsedTime;
 import org.jboss.as.controller.operations.common.ProcessEnvironment;
 import org.jboss.as.controller.persistence.ConfigurationFile;
-import org.jboss.as.host.controller.logging.HostControllerLogger;
 import org.jboss.as.host.controller.jvm.JvmType;
+import org.jboss.as.host.controller.logging.HostControllerLogger;
 import org.jboss.as.host.controller.operations.LocalHostControllerInfoImpl;
 import org.jboss.as.network.NetworkUtils;
 import org.jboss.as.server.logging.ServerLogger;
-import org.jboss.as.version.Stability;
 import org.jboss.as.version.ProductConfig;
+import org.jboss.as.version.Stability;
 import org.jboss.dmr.ModelNode;
 import org.wildfly.common.Assert;
 import org.wildfly.security.manager.WildFlySecurityManager;
@@ -234,7 +237,7 @@ public class HostControllerEnvironment extends ProcessEnvironment {
     private final boolean useCachedDc;
 
     private final RunningMode initialRunningMode;
-    private final Stability stability;
+    private volatile Stability stability;
     private final Set<Stability> stabilities;
     private final ProductConfig productConfig;
     private final String qualifiedHostName;
@@ -245,7 +248,7 @@ public class HostControllerEnvironment extends ProcessEnvironment {
     private final HostRunningModeControl runningModeControl;
     private final boolean securityManagerEnabled;
     private final UUID hostControllerUUID;
-    private final long startTime;
+    private final ElapsedTime elapsedTime;
     private final ProcessType processType;
 
     /** Only for test cases */
@@ -255,17 +258,17 @@ public class HostControllerEnvironment extends ProcessEnvironment {
                                      String initialHostConfig, RunningMode initialRunningMode, boolean backupDomainFiles, boolean useCachedDc, ProductConfig productConfig) {
         this(hostSystemProperties, isRestart, modulePath, processControllerAddress, processControllerPort, hostControllerAddress, hostControllerPort, defaultJVM,
                 domainConfig, initialDomainConfig, hostConfig, initialHostConfig, initialRunningMode, backupDomainFiles, useCachedDc, productConfig, false,
-                System.currentTimeMillis(), ProcessType.HOST_CONTROLLER, ConfigurationFile.InteractionPolicy.STANDARD, ConfigurationFile.InteractionPolicy.STANDARD);
+                startingFromNow(), ProcessType.HOST_CONTROLLER, ConfigurationFile.InteractionPolicy.STANDARD, ConfigurationFile.InteractionPolicy.STANDARD);
     }
 
     public HostControllerEnvironment(Map<String, String> hostSystemProperties, boolean isRestart, String modulePath,
                                      InetAddress processControllerAddress, Integer processControllerPort, InetAddress hostControllerAddress,
                                      Integer hostControllerPort, String defaultJVM, String domainConfig, String initialDomainConfig, String hostConfig,
                                      String initialHostConfig, RunningMode initialRunningMode, boolean backupDomainFiles, boolean useCachedDc,
-                                     ProductConfig productConfig, boolean securityManagerEnabled, long startTime, ProcessType processType,
+                                     ProductConfig productConfig, boolean securityManagerEnabled, ElapsedTime elapsedTime, ProcessType processType,
                                      ConfigurationFile.InteractionPolicy hostConfigInteractionPolicy, ConfigurationFile.InteractionPolicy domainConfigInteractionPolicy) {
 
-        this.hostSystemProperties = Collections.unmodifiableMap(Assert.checkNotNullParam("hostSystemProperties", hostSystemProperties));
+        this.hostSystemProperties = new HashMap<>(Assert.checkNotNullParam("hostSystemProperties", hostSystemProperties));
         Assert.checkNotNullParam("modulePath", modulePath);
         Assert.checkNotNullParam("processControllerAddress", processControllerAddress);
         Assert.checkNotNullParam("processControllerPort", processControllerPort);
@@ -277,7 +280,7 @@ public class HostControllerEnvironment extends ProcessEnvironment {
         this.hostControllerPort = hostControllerPort;
         this.isRestart = isRestart;
         this.modulePath = modulePath;
-        this.startTime = startTime;
+        this.elapsedTime = elapsedTime;
         this.initialRunningMode = initialRunningMode;
         this.runningModeControl = new HostRunningModeControl(initialRunningMode, RestartMode.SERVERS);
         this.domainConfigInteractionPolicy = domainConfigInteractionPolicy;
@@ -736,10 +739,10 @@ public class HostControllerEnvironment extends ProcessEnvironment {
 
     /**
      * Initial set of system properties provided to this Host Controller at boot via the command line.
-     * @return the properties
+     * @return An unmodifiable map with the system properties.
      */
     public Map<String, String> getHostSystemProperties() {
-        return hostSystemProperties;
+        return Collections.unmodifiableMap(hostSystemProperties);
     }
 
     /**
@@ -781,7 +784,7 @@ public class HostControllerEnvironment extends ProcessEnvironment {
      * @return the time, in ms since the epoch
      */
     public long getStartTime() {
-        return startTime;
+        return elapsedTime.getStartTime();
     }
 
     @Override
@@ -868,6 +871,15 @@ public class HostControllerEnvironment extends ProcessEnvironment {
     }
 
     /**
+     * Gets this Host Controller's {@link ElapsedTime} tracker.
+     *
+     * @return the elapsed time tracker. Will not be {@code null}.
+     */
+    ElapsedTime getElapsedTime() {
+        return elapsedTime;
+    }
+
+    /**
      * Get a File from configuration.
      * @param name the name of the property
      * @return the CanonicalFile form for the given name.
@@ -920,6 +932,22 @@ public class HostControllerEnvironment extends ProcessEnvironment {
      */
     public OperationStepHandler getHostNameWriteHandler(LocalHostControllerInfoImpl hostControllerInfo) {
         return new HostNameWriteAttributeHandler(hostControllerInfo);
+    }
+
+    void setStability(Stability stability) {
+        WildFlySecurityManager.setPropertyPrivileged(ProcessEnvironment.STABILITY, stability.toString());
+        this.hostSystemProperties.put(ProcessEnvironment.STABILITY, stability.toString());
+        this.stability = stability;
+    }
+
+    public void checkStabilityIsValidForInstallation(Stability stability) {
+        checkStabilityIsValidForInstallation(productConfig, stability);
+    }
+
+    private void checkStabilityIsValidForInstallation(ProductConfig productConfig, Stability stability) {
+        if (!productConfig.getStabilitySet().contains(stability)) {
+            throw HostControllerLogger.ROOT_LOGGER.unsupportedStability(this.stability, productConfig.getProductName());
+        }
     }
 
     protected class HostNameWriteAttributeHandler extends ProcessNameWriteAttributeHandler {

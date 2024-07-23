@@ -12,7 +12,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-feature-pack-parent</artifactId>
-        <version>25.0.0.Beta1-SNAPSHOT</version>
+        <version>26.0.0.Beta1-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-core-feature-pack-common</artifactId>
@@ -526,6 +526,11 @@
             <groupId>org.wildfly.security</groupId>
             <artifactId>wildfly-elytron-x500-principal</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.wildfly.unstable.api.annotation</groupId>
+            <artifactId>unstable-api-annotation-classpath-indexer</artifactId>
+        </dependency>
+
 
         <dependency>
             <groupId>org.wildfly.core</groupId>

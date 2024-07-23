@@ -20,12 +20,14 @@ import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.PersistentResourceDefinition;
+import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.PropertiesAttributeDefinition;
 import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.client.helpers.MeasurementUnit;
 import org.jboss.as.controller.descriptions.ModelDescriptionConstants;
+import org.jboss.as.controller.management.Capabilities;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
@@ -43,7 +45,7 @@ public class ProcessStateListenerResourceDefinition extends PersistentResourceDe
     private static final String PROCESS_STATE_LISTENER_CAPABILITY_NAME = "org.wildfly.extension.core-management.process-state";
     static final RuntimeCapability<Void> PROCESS_STATE_LISTENER_CAPABILITY =
             RuntimeCapability.Builder.of(PROCESS_STATE_LISTENER_CAPABILITY_NAME, true, Void.class)
-                    .addRequirements("org.wildfly.management.executor", "org.wildfly.management.process-state-notifier")
+                    .addRequirements(Capabilities.MANAGEMENT_EXECUTOR, ProcessStateNotifier.SERVICE_DESCRIPTOR)
                     .build();
 
     public static final PropertiesAttributeDefinition PROPERTIES = new PropertiesAttributeDefinition.Builder("properties", true)
@@ -88,10 +90,6 @@ public class ProcessStateListenerResourceDefinition extends PersistentResourceDe
     }
 
     private static class ProcessStateListenerAddHandler extends AbstractAddStepHandler  {
-
-        ProcessStateListenerAddHandler() {
-            super(ATTRIBUTES);
-        }
 
         @Override
         protected void performRuntime(OperationContext context, ModelNode operation, ModelNode model) throws OperationFailedException {

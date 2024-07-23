@@ -277,12 +277,12 @@ public class AbstractOrderedChildResourceSyncModelTestCase extends AbstractContr
     static class NonOrderedChildResourceDefinition extends SimpleResourceDefinition {
 
         public NonOrderedChildResourceDefinition() {
-            super(NON_ORDERED_CHILD, NonResolvingResourceDescriptionResolver.INSTANCE, new ModelOnlyAddStepHandler(REQUEST_ATTRIBUTES), new ModelOnlyRemoveStepHandler());
+            super(NON_ORDERED_CHILD, NonResolvingResourceDescriptionResolver.INSTANCE, ModelOnlyAddStepHandler.INSTANCE, new ModelOnlyRemoveStepHandler());
         }
 
 
         public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-            resourceRegistration.registerReadWriteAttribute(ATTR, null, new ModelOnlyWriteAttributeHandler(ATTR));
+            resourceRegistration.registerReadWriteAttribute(ATTR, null, ModelOnlyWriteAttributeHandler.INSTANCE);
         }
     }
 
@@ -296,7 +296,7 @@ public class AbstractOrderedChildResourceSyncModelTestCase extends AbstractContr
 
         @Override
         public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-            resourceRegistration.registerReadWriteAttribute(ATTR, null, new ModelOnlyWriteAttributeHandler(ATTR));
+            resourceRegistration.registerReadWriteAttribute(ATTR, null, ModelOnlyWriteAttributeHandler.INSTANCE);
         }
 
     }

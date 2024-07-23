@@ -80,7 +80,8 @@ public class HostExcludeResourceDefinition extends SimpleResourceDefinition {
         WILDFLY29("WildFly29.0", KernelAPIVersion.VERSION_22_0),
         WILDFLY30("WildFly30.0", KernelAPIVersion.VERSION_23_0),
         WILDFLY31("WildFly31.0", KernelAPIVersion.VERSION_24_0),
-        WILDFLY32("WildFly32.0", KernelAPIVersion.VERSION_25_0);
+        WILDFLY32("WildFly32.0", KernelAPIVersion.VERSION_25_0),
+        WILDFLY33("WildFly33.0", KernelAPIVersion.VERSION_26_0);
 
         private static final Map<String, KnownRelease> map = new HashMap<>();
         static {
@@ -163,7 +164,7 @@ public class HostExcludeResourceDefinition extends SimpleResourceDefinition {
 
     @Override
     public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-        OperationStepHandler handler = new WriteHandler(domainHostExcludeRegistry, attributes);
+        OperationStepHandler handler = new WriteHandler(domainHostExcludeRegistry);
         for (AttributeDefinition ad : attributes) {
             resourceRegistration.registerReadWriteAttribute(ad, null, handler);
         }
@@ -221,7 +222,6 @@ public class HostExcludeResourceDefinition extends SimpleResourceDefinition {
         private final DomainHostExcludeRegistry domainHostExcludeRegistry;
 
         private AddHandler(DomainHostExcludeRegistry domainHostExcludeRegistry) {
-            super(HostExcludeResourceDefinition.attributes);
             this.domainHostExcludeRegistry = domainHostExcludeRegistry;
         }
 
@@ -275,8 +275,7 @@ public class HostExcludeResourceDefinition extends SimpleResourceDefinition {
 
         private final DomainHostExcludeRegistry domainHostExcludeRegistry;
 
-        private WriteHandler(DomainHostExcludeRegistry domainHostExcludeRegistry, AttributeDefinition... attributes) {
-            super(attributes);
+        private WriteHandler(DomainHostExcludeRegistry domainHostExcludeRegistry) {
             this.domainHostExcludeRegistry = domainHostExcludeRegistry;
         }
 

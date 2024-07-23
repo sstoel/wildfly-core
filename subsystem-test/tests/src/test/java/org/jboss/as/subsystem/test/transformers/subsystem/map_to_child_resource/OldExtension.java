@@ -69,13 +69,13 @@ public class OldExtension implements Extension {
         private TestResourceDefinition() {
             super(SUBSYSTEM_PATH,
                     NonResolvingResourceDescriptionResolver.INSTANCE,
-                    new ModelOnlyAddStepHandler(TEST),
+                    ModelOnlyAddStepHandler.INSTANCE,
                     ModelOnlyRemoveStepHandler.INSTANCE);
         }
 
         @Override
         public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-            resourceRegistration.registerReadWriteAttribute(TEST, null, new ModelOnlyWriteAttributeHandler());
+            resourceRegistration.registerReadWriteAttribute(TEST, null, ModelOnlyWriteAttributeHandler.INSTANCE);
         }
 
         @Override
@@ -88,13 +88,13 @@ public class OldExtension implements Extension {
         private PropertyResourceDefinition() {
             super(PathElement.pathElement("property"),
                     NonResolvingResourceDescriptionResolver.INSTANCE,
-                    new ModelOnlyAddStepHandler(VALUE),
+                    ModelOnlyAddStepHandler.INSTANCE,
                     ModelOnlyRemoveStepHandler.INSTANCE);
         }
 
         @Override
         public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-            resourceRegistration.registerReadWriteAttribute(VALUE, null, new ModelOnlyWriteAttributeHandler());
+            resourceRegistration.registerReadWriteAttribute(VALUE, null, ModelOnlyWriteAttributeHandler.INSTANCE);
         }
     }
 }
