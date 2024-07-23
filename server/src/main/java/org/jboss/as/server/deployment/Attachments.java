@@ -9,6 +9,7 @@ import java.lang.ref.Reference;
 import java.security.PermissionCollection;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.jar.Manifest;
@@ -75,6 +76,12 @@ public final class Attachments {
     public static final AttachmentKey<VirtualFile> DEPLOYMENT_CONTENTS = AttachmentKey.create(VirtualFile.class);
 
     /**
+     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
+     */
+    @Deprecated
+    public static final AttachmentKey<Boolean> ALLOW_PHASE_RESTART = AttachmentKey.create(Boolean.class);
+
+    /**
      * An attachment defining a transformer of the ServiceTarget used to install a deployment unit phase.
      */
     public static final AttachmentKey<UnaryOperator<ServiceTarget>> DEPLOYMENT_UNIT_PHASE_SERVICE_TARGET_TRANSFORMER = AttachmentKey.create(UnaryOperator.class);
@@ -126,6 +133,12 @@ public final class Attachments {
      * The MANIFEST.MF of the deployment unit.
      */
     public static final AttachmentKey<Manifest> MANIFEST = AttachmentKey.create(Manifest.class);
+
+    /**
+     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
+     */
+    @Deprecated
+    public static final AttachmentKey<Manifest> OSGI_MANIFEST = AttachmentKey.create(Manifest.class);
 
     /**
      * Module identifiers for Class-Path information
@@ -234,6 +247,12 @@ public final class Attachments {
     // REGISTER
     //
 
+    /**
+     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
+     */
+    @Deprecated
+    public static final AttachmentKey<BundleState> BUNDLE_STATE_KEY = AttachmentKey.create(BundleState.class);
+
     //
     // DEPENDENCIES
     //
@@ -246,6 +265,18 @@ public final class Attachments {
      * The module identifier.
      */
     public static final AttachmentKey<ModuleIdentifier> MODULE_IDENTIFIER = AttachmentKey.create(ModuleIdentifier.class);
+
+    /**
+     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
+     */
+    @Deprecated
+    public static final AttachmentKey<AttachmentList<String>> DEFERRED_MODULES = AttachmentKey.createList(String.class);
+
+    /**
+     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
+     */
+    @Deprecated
+    public static final AttachmentKey<AtomicInteger> DEFERRED_ACTIVATION_COUNT = AttachmentKey.create(AtomicInteger.class);
 
     //
     // MODULARIZE
@@ -322,6 +353,12 @@ public final class Attachments {
     public static final AttachmentKey<AttachmentList<SetupAction>> SETUP_ACTIONS = AttachmentKey.createList(SetupAction.class);
 
     /**
+     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
+     */
+    @Deprecated
+    public static final AttachmentKey<AttachmentList<ServiceName>> BUNDLE_ACTIVE_DEPENDENCIES = AttachmentKey.createList(ServiceName.class);
+
+    /**
      * List of services that need to be up before we consider this deployment 'done'. This is used to manage initialize-in-order,
      * and inter deployment dependencies.
      *
@@ -334,5 +371,16 @@ public final class Attachments {
     //
 
     private Attachments() {
+    }
+
+    /**
+     * @deprecated the object attached under this key does nothing - it was used for OSGi integration
+     */
+    @Deprecated
+    public static enum BundleState {
+        INSTALLED,
+        RESOLVED,
+        ACTIVE,
+        UNINSTALLED
     }
 }
