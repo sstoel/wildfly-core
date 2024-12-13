@@ -20,7 +20,6 @@ import java.util.Properties;
 import javax.net.ssl.SSLContext;
 
 import org.jboss.as.controller.AbstractAddStepHandler;
-import org.jboss.as.controller.AbstractWriteAttributeHandler;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.ObjectTypeAttributeDefinition;
 import org.jboss.as.controller.OperationContext;
@@ -143,9 +142,8 @@ class DirContextDefinition extends SimpleResourceDefinition {
 
     @Override
     public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-        AbstractWriteAttributeHandler handler = new ElytronReloadRequiredWriteAttributeHandler(ATTRIBUTES);
         for (AttributeDefinition current : ATTRIBUTES) {
-            resourceRegistration.registerReadWriteAttribute(current, null, handler);
+            resourceRegistration.registerReadWriteAttribute(current, null, ElytronReloadRequiredWriteAttributeHandler.INSTANCE);
         }
     }
 
@@ -217,7 +215,7 @@ class DirContextDefinition extends SimpleResourceDefinition {
         };
     }
 
-    private static final AbstractAddStepHandler ADD = new BaseAddHandler(DIR_CONTEXT_RUNTIME_CAPABILITY, ATTRIBUTES) {
+    private static final AbstractAddStepHandler ADD = new BaseAddHandler(DIR_CONTEXT_RUNTIME_CAPABILITY) {
         protected void populateModel(final OperationContext context, final ModelNode operation, final Resource resource) throws  OperationFailedException {
             super.populateModel(context, operation, resource);
             handleCredentialReferenceUpdate(context, resource.getModel());

@@ -65,7 +65,7 @@ public class FilterResourceDefinition extends SimpleResourceDefinition {
     /**
      * A step handler to add a custom filter
      */
-    private static final OperationStepHandler ADD = new LoggingOperations.LoggingAddOperationStepHandler(ATTRIBUTES) {
+    private static final OperationStepHandler ADD = new LoggingOperations.LoggingAddOperationStepHandler() {
         private final List<String> reservedNames = Arrays.asList(
                 "accept",
                 "deny",
@@ -153,7 +153,7 @@ public class FilterResourceDefinition extends SimpleResourceDefinition {
         }
     };
 
-    private static final OperationStepHandler WRITE = new LoggingWriteAttributeHandler(ATTRIBUTES) {
+    private static final OperationStepHandler WRITE = new LoggingWriteAttributeHandler() {
 
         @Override
         protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {

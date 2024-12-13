@@ -65,6 +65,7 @@ import org.wildfly.extension.elytron._private.ElytronSubsystemMessages;
 import org.wildfly.security.authz.jacc.DelegatingPolicyContextHandler;
 import org.wildfly.security.authz.jacc.ElytronPolicyConfigurationFactory;
 import org.wildfly.security.authz.jacc.JaccDelegatingPolicy;
+import org.wildfly.security.authz.jacc.PolicyUtil;
 import org.wildfly.security.manager.WildFlySecurityManager;
 
 /**
@@ -125,7 +126,7 @@ class PolicyDefinitions {
 
     static ResourceDefinition getPolicy() {
         AttributeDefinition[] attributes = new AttributeDefinition[] {DEFAULT_POLICY, JaccPolicyDefinition.POLICY, CustomPolicyDefinition.POLICY};
-        AbstractAddStepHandler add = new BaseAddHandler(POLICY_RUNTIME_CAPABILITY, attributes) {
+        AbstractAddStepHandler add = new BaseAddHandler(POLICY_RUNTIME_CAPABILITY) {
 
             @Override
             protected void populateModel(OperationContext context, ModelNode operation, Resource resource) throws OperationFailedException {
@@ -212,7 +213,7 @@ class PolicyDefinitions {
 
                     private PrivilegedAction<Void> setPolicyAction(Policy policy) {
                         return () -> {
-                            Policy.setPolicy(policy);
+                            PolicyUtil.setPolicy(policy);
                             return null;
                         };
                     }
@@ -226,7 +227,7 @@ class PolicyDefinitions {
                     }
 
                     private PrivilegedAction<Policy> getPolicyAction() {
-                        return Policy::getPolicy;
+                        return PolicyUtil::getPolicy;
                     }
                 };
             }
@@ -270,7 +271,7 @@ class PolicyDefinitions {
                 .setMaxOccurs(1)) {
             @Override
             public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-                OperationStepHandler write = new ReloadRequiredWriteAttributeHandler(attributes) {
+                OperationStepHandler write = new ReloadRequiredWriteAttributeHandler() {
                     @Override
                     protected void recordCapabilitiesAndRequirements(OperationContext context, AttributeDefinition attributeDefinition, ModelNode newValue, ModelNode oldValue) {
                         super.recordCapabilitiesAndRequirements(context, attributeDefinition, newValue, oldValue);
@@ -288,8 +289,7 @@ class PolicyDefinitions {
                     if (current != DEFAULT_POLICY) {
                         resourceRegistration.registerReadWriteAttribute(current, null, write);
                     } else {
-                        resourceRegistration.registerReadWriteAttribute(current, null,
-                                new ModelOnlyWriteAttributeHandler(DEFAULT_POLICY));
+                        resourceRegistration.registerReadWriteAttribute(current, null, ModelOnlyWriteAttributeHandler.INSTANCE);
                     }
                 }
             }

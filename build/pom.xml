@@ -13,7 +13,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>26.0.0.Beta1-SNAPSHOT</version>
+        <version>27.0.0.Beta6-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-core-build</artifactId>
@@ -30,7 +30,7 @@
     </dependencies>
 
     <build>
-        <finalName>${server.output.dir.prefix}-${project.version}</finalName>
+        <finalName>${server.output.dir.prefix}-${wildfly.core.release.version}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.jboss.galleon</groupId>

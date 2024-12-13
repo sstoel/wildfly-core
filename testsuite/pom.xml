@@ -38,7 +38,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>26.0.0.Beta1-SNAPSHOT</version>
+        <version>27.0.0.Beta6-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-core-testsuite</artifactId>
@@ -117,7 +117,7 @@
 
 
         <!-- Common surefire properties. -->
-        <surefire.memory.args>-Xmx512m -XX:MetaspaceSize=128m</surefire.memory.args>
+        <surefire.memory.args>-Xmx512m</surefire.memory.args>
         <surefire.jpda.args></surefire.jpda.args>
         <as.debug.port>8787</as.debug.port>
         <surefire.jvm.args>${surefire.memory.args} ${modular.jdk.args} ${modular.jdk.props} -Djboss.dist=${jboss.dist} ${surefire.jacoco.args} -Djava.io.tmpdir=${project.build.directory}</surefire.jvm.args>
@@ -306,8 +306,7 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <configuration>
                         <failIfNoTests>false</failIfNoTests>
-			<forkNode implementation="org.apache.maven.plugin.surefire.extensions.SurefireForkNodeFactory"/>
-                        <redirectTestOutputToFile>${testLogToFile}</redirectTestOutputToFile>
+                        <forkNode implementation="org.apache.maven.plugin.surefire.extensions.SurefireForkNodeFactory"/>
                         <argLine>-Djava.util.logging.manager=org.jboss.logmanager.LogManager</argLine>
                         <systemPropertyVariables>
                             <jboss.dist>${jboss.dist}</jboss.dist>
@@ -414,17 +413,6 @@
                     <name>ts.bootable</name>
                 </property>
             </activation>
-            <build>
-                <pluginManagement>
-                    <plugins>
-                        <plugin>
-                            <groupId>org.wildfly.plugins</groupId>
-                            <artifactId>wildfly-jar-maven-plugin</artifactId>
-                            <version>${version.org.wildfly.jar.plugin}</version>
-                        </plugin>
-                    </plugins>
-                </pluginManagement>
-            </build>
             <modules>
                 <module>rbac</module>
                 <module>manualmode</module>

@@ -6,6 +6,9 @@ package org.wildfly.subsystem.service;
 
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -26,7 +29,25 @@ import org.wildfly.service.descriptor.UnaryServiceDescriptor;
 public interface ServiceDependency<V> extends Dependency<RequirementServiceBuilder<?>, V> {
 
     @Override
+    default ServiceDependency<V> andThen(Consumer<? super RequirementServiceBuilder<?>> after) {
+        Objects.requireNonNull(after);
+        return new ServiceDependency<>() {
+            @Override
+            public void accept(RequirementServiceBuilder<?> builder) {
+                ServiceDependency.this.accept(builder);
+                after.accept(builder);
+            }
+
+            @Override
+            public V get() {
+                return ServiceDependency.this.get();
+            }
+        };
+    }
+
+    @Override
     default <R> ServiceDependency<R> map(Function<V, R> mapper) {
+        Objects.requireNonNull(mapper);
         return new ServiceDependency<>() {
             @Override
             public void accept(RequirementServiceBuilder<?> builder) {
@@ -40,15 +61,54 @@ public interface ServiceDependency<V> extends Dependency<RequirementServiceBuild
         };
     }
 
+    @Override
+    default <T, R> ServiceDependency<R> combine(Dependency<RequirementServiceBuilder<?>, T> dependency, BiFunction<V, T, R> mapper) {
+        Objects.requireNonNull(dependency);
+        Objects.requireNonNull(mapper);
+        return new ServiceDependency<>() {
+            @Override
+            public void accept(RequirementServiceBuilder<?> builder) {
+                ServiceDependency.this.accept(builder);
+                dependency.accept(builder);
+            }
+
+            @Override
+            public R get() {
+                return mapper.apply(ServiceDependency.this.get(), dependency.get());
+            }
+        };
+    }
+
     /**
-     * Returns a pseudo-dependency whose {@link #get()} returns the specified value.
-     * @param <T> the value type
-     * @param value a service value
-     * @return a service dependency
+     * Returns an empty pseudo-dependency whose {@link #get()} returns null.
+     * @param <V> the value type
+     * @return an empty service dependency
      */
     @SuppressWarnings("unchecked")
-    static <T> ServiceDependency<T> of(T value) {
-        return (value != null) ? new SimpleServiceDependency<>(value) : (ServiceDependency<T>) SimpleServiceDependency.NULL;
+    static <V> ServiceDependency<V> empty() {
+        return (ServiceDependency<V>) SimpleServiceDependency.EMPTY;
+    }
+
+    /**
+     * Returns a pseudo-dependency whose {@link #get()} returns the specified value.
+     * @param <V> the value type
+     * @param value a service value
+     * @return a pseudo-dependency whose {@link #get()} returns the specified value.
+     */
+    static <V> ServiceDependency<V> of(V value) {
+        return (value != null) ? new SimpleServiceDependency<>(value) : empty();
+    }
+
+    /**
+     * Returns a pseudo-dependency whose {@link #get()} returns the value from the specified supplier.
+     * @param <V> the value type
+     * @param factory a service value supplier
+     * @return a pseudo-dependency whose {@link #get()} returns the value from the specified supplier.
+     * @throws NullPointerException if {@code supplier} was null
+     */
+    static <V> ServiceDependency<V> from(Supplier<V> supplier) {
+        Objects.requireNonNull(supplier);
+        return new SuppliedServiceDependency<>(supplier);
     }
 
     /**
@@ -58,15 +118,17 @@ public interface ServiceDependency<V> extends Dependency<RequirementServiceBuild
      * @return a service dependency
      */
     static <T> ServiceDependency<T> on(ServiceName name) {
-        return (name != null) ? new DefaultServiceDependency<>(name) : of(null);
+        return (name != null) ? new DefaultServiceDependency<>(name) : empty();
     }
 
     /**
      * Wraps a {@link org.wildfly.service.ServiceDependency} as a {@link ServiceDependency}.
      * @param <T> the dependency type
      * @return a service dependency
+     * @throws NullPointerException if {@code dependency} was null
      */
     static <T> ServiceDependency<T> from(org.wildfly.service.ServiceDependency<T> dependency) {
+        Objects.requireNonNull(dependency);
         return new ServiceDependency<>() {
             @Override
             public void accept(RequirementServiceBuilder<?> builder) {
@@ -215,10 +277,16 @@ public interface ServiceDependency<V> extends Dependency<RequirementServiceBuild
     }
 
     class SimpleServiceDependency<V> extends SimpleDependency<RequirementServiceBuilder<?>, V> implements ServiceDependency<V> {
-        static final ServiceDependency<Object> NULL = new SimpleServiceDependency<>(null);
+        static final ServiceDependency<Object> EMPTY = new SimpleServiceDependency<>(null);
 
         SimpleServiceDependency(V value) {
             super(value);
+        }
+    }
+
+    class SuppliedServiceDependency<V> extends SuppliedDependency<RequirementServiceBuilder<?>, V> implements ServiceDependency<V> {
+        SuppliedServiceDependency(Supplier<V> supplier) {
+            super(supplier);
         }
     }
 

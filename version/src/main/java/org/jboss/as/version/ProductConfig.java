@@ -23,9 +23,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.jar.Manifest;
+import java.util.stream.Collectors;
 
 import org.jboss.modules.Module;
-import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoader;
 
 /**
@@ -150,8 +150,10 @@ public class ProductConfig implements Serializable {
         this.name = productName;
         this.version = productVersion;
         this.consoleSlot = consoleSlot;
-        this.defaultStability = Stability.DEFAULT;
-        this.stabilities = EnumSet.of(this.defaultStability);
+        this.defaultStability = Stability.COMMUNITY;
+        this.stabilities = EnumSet.allOf(Stability.class).stream()
+                .filter(this.defaultStability::enables)
+                .collect(Collectors.toUnmodifiableSet());
         this.banner = null;
     }
 
@@ -221,7 +223,7 @@ public class ProductConfig implements Serializable {
     }
 
     private void setSystemProperties(final Properties propConfProps, final Map providedProperties) {
-        if (propConfProps.size() == 0) {
+        if (propConfProps.isEmpty()) {
             return;
         }
 
@@ -259,10 +261,10 @@ public class ProductConfig implements Serializable {
 
     private static class ProductConfProps {
         private final Properties miscProperties;
-        private final ModuleIdentifier productModuleId;
+        private final String productModuleId;
 
         private ProductConfProps(String slot) {
-            this.productModuleId = slot == null ? null : ModuleIdentifier.create("org.jboss.as.product", slot);
+            this.productModuleId = slot == null ? null : "main".equals(slot) ? "org.jboss.as.product" : "org.jboss.as.product:" + slot;
             this.miscProperties = new Properties();
         }
 

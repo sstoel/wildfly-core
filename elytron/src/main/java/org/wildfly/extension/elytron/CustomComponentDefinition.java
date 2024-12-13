@@ -14,13 +14,11 @@ import static org.wildfly.extension.elytron._private.ElytronSubsystemMessages.RO
 import java.lang.reflect.Method;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 import org.jboss.as.controller.AbstractAddStepHandler;
-import org.jboss.as.controller.AbstractWriteAttributeHandler;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.OperationContext;
 import org.jboss.as.controller.OperationFailedException;
@@ -79,9 +77,8 @@ class CustomComponentDefinition<C, T> extends SimpleResourceDefinition {
 
     @Override
     public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-        AbstractWriteAttributeHandler writeHandler = new ElytronReloadRequiredWriteAttributeHandler(ATTRIBUTES);
         for (AttributeDefinition current : ATTRIBUTES) {
-            resourceRegistration.registerReadWriteAttribute(current, null, writeHandler);
+            resourceRegistration.registerReadWriteAttribute(current, null, ElytronReloadRequiredWriteAttributeHandler.INSTANCE);
         }
     }
 
@@ -92,7 +89,7 @@ class CustomComponentDefinition<C, T> extends SimpleResourceDefinition {
         private final Function<C, T> wrapper;
 
         private ComponentAddHandler(Class<C> serviceType, Function<C, T> wrapper, RuntimeCapability<?> ... runtimeCapabilities) {
-            super(new HashSet<>(Arrays.asList(runtimeCapabilities)), ATTRIBUTES);
+            super(Set.of(runtimeCapabilities));
             this.runtimeCapabilities = runtimeCapabilities;
             this.serviceType = serviceType;
             this.wrapper = wrapper;

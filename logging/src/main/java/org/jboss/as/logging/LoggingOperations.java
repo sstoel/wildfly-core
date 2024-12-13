@@ -163,9 +163,6 @@ public final class LoggingOperations {
      * A base step handler for logging operations.
      */
     public abstract static class LoggingAddOperationStepHandler extends AbstractAddStepHandler {
-        public LoggingAddOperationStepHandler(final AttributeDefinition... attributes) {
-            super(attributes);
-        }
 
         @Override
         public void execute(final OperationContext context, final ModelNode operation) throws OperationFailedException {
@@ -392,12 +389,6 @@ public final class LoggingOperations {
      * A default log handler write attribute step handler.
      */
     public abstract static class LoggingWriteAttributeHandler extends AbstractWriteAttributeHandler<ConfigurationPersistence> {
-        private final AttributeDefinition[] attributes;
-
-        protected LoggingWriteAttributeHandler(final AttributeDefinition[] attributes) {
-            super(attributes);
-            this.attributes = attributes;
-        }
 
         @Override
         protected final boolean applyUpdateToRuntime(final OperationContext context, final ModelNode operation, final String attributeName, final ModelNode resolvedValue, final ModelNode currentValue, final HandbackHolder<ConfigurationPersistence> handbackHolder) throws OperationFailedException {
@@ -463,15 +454,6 @@ public final class LoggingOperations {
                 submodel.remove(CommonAttributes.FILTER.getName());
                 submodel.get(LoggerAttributes.FILTER_SPEC.getName()).set(filterSpec.isEmpty() ? new ModelNode() : new ModelNode(filterSpec));
             }
-        }
-
-        /**
-         * Returns a collection of attributes used for the write attribute.
-         *
-         * @return a collection of attributes
-         */
-        public final AttributeDefinition[] getAttributes() {
-            return attributes;
         }
     }
 }

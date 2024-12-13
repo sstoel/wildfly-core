@@ -56,7 +56,7 @@ public class HostExcludeResourceDefinition extends SimpleResourceDefinition {
         EAP72("EAP7.2", KernelAPIVersion.VERSION_8_0),
         EAP73("EAP7.3", KernelAPIVersion.VERSION_10_0),
         EAP74("EAP7.4", KernelAPIVersion.VERSION_16_0),
-        EAP80("EAP8.0", KernelAPIVersion.VERSION_21_0),
+        EAP80("EAP8.0", KernelAPIVersion.VERSION_22_0),
         WILDFLY10("WildFly10.0", KernelAPIVersion.VERSION_4_0),
         WILDFLY10_1("WildFly10.1", KernelAPIVersion.VERSION_4_2),
         WILDFLY11("WildFly11.0", KernelAPIVersion.VERSION_5_0),
@@ -81,7 +81,8 @@ public class HostExcludeResourceDefinition extends SimpleResourceDefinition {
         WILDFLY30("WildFly30.0", KernelAPIVersion.VERSION_23_0),
         WILDFLY31("WildFly31.0", KernelAPIVersion.VERSION_24_0),
         WILDFLY32("WildFly32.0", KernelAPIVersion.VERSION_25_0),
-        WILDFLY33("WildFly33.0", KernelAPIVersion.VERSION_26_0);
+        WILDFLY33("WildFly33.0", KernelAPIVersion.VERSION_26_0),
+        WILDFLY34("WildFly34.0", KernelAPIVersion.VERSION_27_0);
 
         private static final Map<String, KnownRelease> map = new HashMap<>();
         static {

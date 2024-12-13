@@ -4,6 +4,8 @@
  */
 package org.wildfly.service;
 
+import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -18,7 +20,32 @@ import org.wildfly.common.function.Functions;
  */
 public interface Dependency<B extends ServiceBuilder<?>, V> extends Consumer<B>, Supplier<V> {
 
+    @Override
+    default Dependency<B, V> andThen(Consumer<? super B> after) {
+        Objects.requireNonNull(after);
+        return new Dependency<>() {
+            @Override
+            public void accept(B builder) {
+                Dependency.this.accept(builder);
+                after.accept(builder);
+            }
+
+            @Override
+            public V get() {
+                return Dependency.this.get();
+            }
+        };
+    }
+
+    /**
+     * Returns a dependency whose value is the result of applying the specified mapping function.
+     * @param <R> the mapped value type
+     * @param mapper a mapping function
+     * @return a dependency whose value is the result of applying the specified mapping function.
+     * @throws NullPointerException if {@code mapper} was null
+     */
     default <R> Dependency<B, R> map(Function<V, R> mapper) {
+        Objects.requireNonNull(mapper);
         return new Dependency<>() {
             @Override
             public void accept(B builder) {
@@ -32,6 +59,49 @@ public interface Dependency<B extends ServiceBuilder<?>, V> extends Consumer<B>,
         };
     }
 
+    /**
+     * Returns a dependency that combines this dependency with the specified dependency, whose value is determined by the specified mapping function.
+     * @param <T> the other dependency type
+     * @param <R> the mapped value type
+     * @param dependency another dependency
+     * @param mapper a mapping function
+     * @return a dependency that combines this dependency with the specified dependency, whose value is determined by the specified mapping function.
+     * @throws NullPointerException if {@code dependency} or {@code mapper} were null.
+     */
+    default <T, R> Dependency<B, R> combine(Dependency<B, T> dependency, BiFunction<V, T, R> mapper) {
+        Objects.requireNonNull(dependency);
+        Objects.requireNonNull(mapper);
+        return new Dependency<>() {
+            @Override
+            public void accept(B builder) {
+                Dependency.this.accept(builder);
+                dependency.accept(builder);
+            }
+
+            @Override
+            public R get() {
+                return mapper.apply(Dependency.this.get(), dependency.get());
+            }
+        };
+    }
+
+    /**
+     * Indicates whether this dependency will never provide a value.
+     * @return true, if this dependency will not provide a value, false otherwise.
+     */
+    default boolean isEmpty() {
+        return false;
+    }
+
+    /**
+     * Indicates whether this dependency will provide a value.
+     * This method is the direct inverse of {@link #isEmpty()}.
+     * @return true, if this dependency will provide a value, false otherwise.
+     */
+    default boolean isPresent() {
+        return !this.isEmpty();
+    }
+
     class SimpleDependency<B extends ServiceBuilder<?>, V> implements Dependency<B, V> {
 
         private final V value;
@@ -43,6 +113,30 @@ public interface Dependency<B extends ServiceBuilder<?>, V> extends Consumer<B>,
         @Override
         public V get() {
             return this.value;
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return this.value == null;
+        }
+
+        @Override
+        public void accept(B builder) {
+            // Nothing to register
+        }
+    }
+
+    class SuppliedDependency<B extends ServiceBuilder<?>, V> implements Dependency<B, V> {
+
+        private final Supplier<V> supplier;
+
+        protected SuppliedDependency(Supplier<V> supplier) {
+            this.supplier = supplier;
+        }
+
+        @Override
+        public V get() {
+            return this.supplier.get();
         }
 
         @Override

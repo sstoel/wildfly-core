@@ -79,7 +79,7 @@ public class CustomFormatterResourceDefinition extends SimpleResourceDefinition 
     /**
      * A step handler to add a custom formatter
      */
-    private static final OperationStepHandler ADD = new LoggingOperations.LoggingAddOperationStepHandler(ATTRIBUTES) {
+    private static final OperationStepHandler ADD = new LoggingOperations.LoggingAddOperationStepHandler() {
 
         @Override
         public void performRuntime(final OperationContext context, final ModelNode operation, final ModelNode model, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {
@@ -107,7 +107,7 @@ public class CustomFormatterResourceDefinition extends SimpleResourceDefinition 
         }
     };
 
-    private static final OperationStepHandler WRITE = new LoggingWriteAttributeHandler(ATTRIBUTES) {
+    private static final OperationStepHandler WRITE = new LoggingWriteAttributeHandler() {
 
         @Override
         protected boolean applyUpdate(final OperationContext context, final String attributeName, final String addressName, final ModelNode value, final LogContextConfiguration logContextConfiguration) throws OperationFailedException {

@@ -4,8 +4,6 @@
  */
 package org.jboss.as.host.controller.parsing;
 
-import static org.jboss.as.controller.parsing.Namespace.CURRENT;
-
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 
@@ -13,12 +11,13 @@ import javax.xml.stream.XMLStreamException;
 
 import org.jboss.as.controller.extension.ExtensionRegistry;
 import org.jboss.as.controller.parsing.ExtensionXml;
-import org.jboss.as.controller.parsing.Namespace;
+import org.jboss.as.controller.parsing.ManagementXmlReaderWriter;
+import org.jboss.as.controller.parsing.ManagementXmlSchema;
 import org.jboss.as.controller.persistence.ModelMarshallingContext;
+import org.jboss.as.controller.xml.VersionedNamespace;
 import org.jboss.dmr.ModelNode;
 import org.jboss.modules.ModuleLoader;
-import org.jboss.staxmapper.XMLElementReader;
-import org.jboss.staxmapper.XMLElementWriter;
+import org.jboss.staxmapper.IntVersion;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
 import org.jboss.staxmapper.XMLExtendedStreamWriter;
 
@@ -28,7 +27,7 @@ import org.jboss.staxmapper.XMLExtendedStreamWriter;
  * @author Emanuel Muckenhuber
  * @author <a href="mailto:darran.lofthouse@jboss.com">Darran Lofthouse</a>
  */
-public final class DomainXml implements XMLElementReader<List<ModelNode>>, XMLElementWriter<ModelMarshallingContext> {
+public final class DomainXml implements ManagementXmlReaderWriter {
 
     private final ExtensionXml extensionXml;
     private final ExtensionRegistry extensionRegistry;
@@ -39,16 +38,19 @@ public final class DomainXml implements XMLElementReader<List<ModelNode>>, XMLEl
     }
 
     @Override
-    public void readElement(final XMLExtendedStreamReader reader, final List<ModelNode> nodes) throws XMLStreamException {
-        Namespace readerNS = Namespace.forUri(reader.getNamespaceURI());
-        switch (readerNS.getMajorVersion()) {
+    public void readElement(final XMLExtendedStreamReader reader, final VersionedNamespace<IntVersion, ManagementXmlSchema> namespace, final List<ModelNode> nodes) throws XMLStreamException {
+
+        final IntVersion version = namespace.getVersion();
+        final String namespaceUri = namespace.getUri();
+
+        switch (version.major()) {
             case 1:
             case 2:
             case 3:
-                new DomainXml_Legacy(extensionXml, extensionRegistry, readerNS).readElement(reader, nodes);
+                new DomainXml_Legacy(extensionXml, extensionRegistry, version, namespaceUri).readElement(reader, nodes);
                 break;
             case 4:
-                new DomainXml_4(extensionXml, extensionRegistry, readerNS).readElement(reader, nodes);
+                new DomainXml_4(extensionXml, extensionRegistry, version, namespaceUri).readElement(reader, nodes);
                 break;
             case 5:
             case 6:
@@ -61,20 +63,20 @@ public final class DomainXml implements XMLElementReader<List<ModelNode>>, XMLEl
             case 13:
             case 14:
             case 15:
-                new DomainXml_5(extensionXml, extensionRegistry, readerNS).readElement(reader, nodes);
+                new DomainXml_5(extensionXml, extensionRegistry, version, namespaceUri).readElement(reader, nodes);
                 break;
-            case 16:
-            case 17:
-            case 18:
-            case 19:
             default:
-                new DomainXml_16(extensionXml, extensionRegistry, readerNS).readElement(reader, nodes);
+                new DomainXml_16(extensionXml, extensionRegistry, version, namespaceUri).readElement(reader, nodes);
         }
     }
 
     @Override
-    public void writeContent(final XMLExtendedStreamWriter writer, final ModelMarshallingContext context) throws XMLStreamException {
-        new DomainXml_16(extensionXml, extensionRegistry, CURRENT).writeContent(writer, context);
+    public void writeContent(final XMLExtendedStreamWriter writer, final VersionedNamespace<IntVersion, ManagementXmlSchema> namespace, final ModelMarshallingContext context) throws XMLStreamException {
+
+        final IntVersion version = namespace.getVersion();
+        final String namespaceUri = namespace.getUri();
+
+        new DomainXml_16(extensionXml, extensionRegistry, version, namespaceUri).writeContent(writer, context);
     }
 
 }

@@ -98,8 +98,7 @@ class RoleDecoderDefinitions {
 
         @Override
         public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-            resourceRegistration.registerReadWriteAttribute(ATTRIBUTE, null,
-                    new ElytronReloadRequiredWriteAttributeHandler(ATTRIBUTE));
+            resourceRegistration.registerReadWriteAttribute(ATTRIBUTE, null, ElytronReloadRequiredWriteAttributeHandler.INSTANCE);
         }
 
     }
@@ -107,7 +106,7 @@ class RoleDecoderDefinitions {
     private static class SimpleRoleDecoderAddHandler extends BaseAddHandler {
 
         private SimpleRoleDecoderAddHandler() {
-            super(ROLE_DECODER_RUNTIME_CAPABILITY, ATTRIBUTE);
+            super(ROLE_DECODER_RUNTIME_CAPABILITY);
         }
 
         @Override
@@ -147,8 +146,7 @@ class RoleDecoderDefinitions {
         @Override
         public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
             for (AttributeDefinition attributeDefinition : ATTRIBUTES) {
-                resourceRegistration.registerReadWriteAttribute(attributeDefinition, null,
-                        new ElytronReloadRequiredWriteAttributeHandler(attributeDefinition));
+                resourceRegistration.registerReadWriteAttribute(attributeDefinition, null, ElytronReloadRequiredWriteAttributeHandler.INSTANCE);
             }
         }
     }
@@ -156,7 +154,7 @@ class RoleDecoderDefinitions {
     private static class SourceAddressRoleDecoderAddHandler extends BaseAddHandler {
 
         private SourceAddressRoleDecoderAddHandler() {
-            super(ROLE_DECODER_RUNTIME_CAPABILITY, SOURCE_ADDRESS, PATTERN, ROLES);
+            super(ROLE_DECODER_RUNTIME_CAPABILITY);
         }
 
         @Override

@@ -34,7 +34,6 @@ import java.util.regex.Pattern;
 import javax.security.sasl.SaslServerFactory;
 
 import org.jboss.as.controller.AbstractAddStepHandler;
-import org.jboss.as.controller.AbstractWriteAttributeHandler;
 import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.ObjectListAttributeDefinition;
 import org.jboss.as.controller.ObjectTypeAttributeDefinition;
@@ -209,7 +208,7 @@ class SaslServerDefinitions {
 
     static ResourceDefinition getConfigurableSaslServerFactoryDefinition() {
         AttributeDefinition[] attributes = new AttributeDefinition[] { SASL_SERVER_FACTORY, SERVER_NAME, PROTOCOL, PROPERTIES, CONFIGURED_FILTERS };
-        AbstractAddStepHandler add = new SaslServerAddHandler(attributes) {
+        AbstractAddStepHandler add = new SaslServerAddHandler() {
 
             @Override
             protected ServiceBuilder<SaslServerFactory> installService(OperationContext context,
@@ -285,7 +284,7 @@ class SaslServerDefinitions {
     }
 
     static ResourceDefinition getProviderSaslServerFactoryDefinition() {
-        AbstractAddStepHandler add = new SaslServerAddHandler(PROVIDERS) {
+        AbstractAddStepHandler add = new SaslServerAddHandler() {
 
             @Override
             protected ServiceBuilder<SaslServerFactory> installService(OperationContext context,
@@ -315,7 +314,7 @@ class SaslServerDefinitions {
     }
 
     static ResourceDefinition getServiceLoaderSaslServerFactoryDefinition() {
-        AbstractAddStepHandler add = new SaslServerAddHandler(MODULE) {
+        AbstractAddStepHandler add = new SaslServerAddHandler() {
 
             @Override
             protected ValueSupplier<SaslServerFactory> getValueSupplier(OperationContext context, ModelNode model)
@@ -342,7 +341,7 @@ class SaslServerDefinitions {
 
     static ResourceDefinition getMechanismProviderFilteringSaslServerFactory() {
         AttributeDefinition[] attributes = new AttributeDefinition[] { SASL_SERVER_FACTORY, ENABLING, MECH_PROVIDER_FILTERS };
-        AbstractAddStepHandler add = new SaslServerAddHandler(attributes) {
+        AbstractAddStepHandler add = new SaslServerAddHandler() {
 
             @Override
             protected ServiceBuilder<SaslServerFactory> installService(OperationContext context,
@@ -440,9 +439,8 @@ class SaslServerDefinitions {
         @Override
         public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
              if (attributes != null && attributes.length > 0) {
-                 AbstractWriteAttributeHandler write = new ElytronReloadRequiredWriteAttributeHandler(attributes);
                  for (AttributeDefinition current : attributes) {
-                     resourceRegistration.registerReadWriteAttribute(current, null, write);
+                     resourceRegistration.registerReadWriteAttribute(current, null, ElytronReloadRequiredWriteAttributeHandler.INSTANCE);
                  }
              }
         }
@@ -451,8 +449,8 @@ class SaslServerDefinitions {
 
     private static class SaslServerAddHandler extends BaseAddHandler {
 
-        private SaslServerAddHandler(AttributeDefinition ... attributes) {
-            super(SASL_SERVER_FACTORY_RUNTIME_CAPABILITY, attributes);
+        private SaslServerAddHandler() {
+            super(SASL_SERVER_FACTORY_RUNTIME_CAPABILITY);
         }
 
         @Override

@@ -11,12 +11,16 @@ import java.util.NavigableSet;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.jboss.as.server.suspend.SuspendableActivityRegistry.SuspendPriority;
+import org.junit.Assert;
 import org.junit.Test;
 
 /**
- * Unit tests of {@link SuspendController}.
+ * Unit tests of {@link ServerSuspendController}.
  */
 public class SuspendControllerTestCase {
 
@@ -34,29 +38,37 @@ public class SuspendControllerTestCase {
 
     private void serverActivityCallbackOrderTest(CounterActivity... activities) {
         SuspendController testee = new SuspendController();
+        Assert.assertSame(ServerSuspendController.State.SUSPENDED, testee.getState());
         testee.resume();
+        Assert.assertSame(ServerSuspendController.State.RUNNING, testee.getState());
 
         NavigableSet<CounterActivity> activitySet = new TreeSet<>();
         for (CounterActivity activity : activities) {
-            testee.registerActivity(activity);
+            testee.registerActivity(activity, SuspendPriority.of(activity.executionGroup));
             activitySet.add(activity);
         }
 
+        Assert.assertSame(ServerSuspendController.State.RUNNING, testee.getState());
         testee.suspend(-1);
+        Assert.assertSame(ServerSuspendController.State.SUSPENDED, testee.getState());
         testee.resume();
+        Assert.assertSame(ServerSuspendController.State.RUNNING, testee.getState());
 
         orderCheck(activitySet);
 
         // Randomly unregister some activities
         for (CounterActivity activity : activities) {
             if (Math.random() < 0.5) {
-                testee.unRegisterActivity(activity);
+                testee.unregisterActivity(activity);
                 assertTrue(activitySet.remove(activity));
             }
         }
 
+        Assert.assertSame(ServerSuspendController.State.RUNNING, testee.getState());
         testee.suspend(-1);
+        Assert.assertSame(ServerSuspendController.State.SUSPENDED, testee.getState());
         testee.resume();
+        Assert.assertSame(ServerSuspendController.State.RUNNING, testee.getState());
 
         orderCheck(activitySet);
     }
@@ -121,7 +133,7 @@ public class SuspendControllerTestCase {
         }
     }
 
-    private static class CounterActivity implements ServerActivity, Comparable<CounterActivity> {
+    private static class CounterActivity implements SuspendableActivity, Comparable<CounterActivity> {
         private static final AtomicInteger invocationCounter = new AtomicInteger();
 
         private static final CounterActivity ONE = new CounterActivity(1,1);
@@ -143,25 +155,30 @@ public class SuspendControllerTestCase {
         }
 
         @Override
-        public int getExecutionGroup() {
-            return executionGroup;
+        public CompletionStage<Void> prepare(ServerSuspendContext context) {
+            return CompletableFuture.runAsync(this::preSuspend);
         }
 
         @Override
-        public void preSuspend(ServerActivityCallback listener) {
-            preSuspend = invocationCounter.getAndIncrement();
-            listener.done();
+        public CompletionStage<Void> suspend(ServerSuspendContext context) {
+            return CompletableFuture.runAsync(this::suspended);
         }
 
         @Override
-        public void suspended(ServerActivityCallback listener) {
-            suspended = invocationCounter.getAndIncrement();
-            listener.done();
+        public CompletionStage<Void> resume(ServerResumeContext context) {
+            return CompletableFuture.runAsync(this::resume);
         }
 
-        @Override
-        public void resume() {
-            resume = invocationCounter.getAndIncrement();
+        private void preSuspend() {
+            this.preSuspend = invocationCounter.getAndIncrement();
+        }
+
+        private void suspended() {
+            this.suspended = invocationCounter.getAndIncrement();
+        }
+
+        private void resume() {
+            this.resume = invocationCounter.getAndIncrement();
         }
 
         @Override

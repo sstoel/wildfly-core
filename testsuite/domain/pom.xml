@@ -12,7 +12,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-testsuite</artifactId>
-        <version>26.0.0.Beta1-SNAPSHOT</version>
+        <version>27.0.0.Beta6-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -214,6 +214,7 @@
                         <include>org/jboss/as/test/integration/domain/secondaryreconnect/*TestCase.java</include>
                         <include>org/jboss/as/test/integration/domain/management/*TestCase.java</include>
                         <include>org/jboss/as/test/integration/domain/elytron/*TestCase.java</include>
+                        <include>org/jboss/as/test/integration/domain/installationmanager/*TestCase.java</include>
                     </includes>
                 </configuration>
             </plugin>
@@ -253,7 +254,6 @@
                         <configuration>
                             <failIfNoTests>false</failIfNoTests>
                             <!-- parallel>none</parallel -->
-                            <redirectTestOutputToFile>${testLogToFile}</redirectTestOutputToFile>
 
                             <!-- System properties to forked surefire JVM which runs clients. -->
                             <argLine>${jvm.args.ip.client} ${jvm.args.timeouts} ${surefire.system.args} -Djava.util.logging.manager=org.jboss.logmanager.LogManager</argLine>

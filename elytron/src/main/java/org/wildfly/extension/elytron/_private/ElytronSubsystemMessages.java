@@ -8,6 +8,7 @@ package org.wildfly.extension.elytron._private;
 import static org.jboss.logging.Logger.Level.WARN;
 
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.net.UnknownHostException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -45,7 +46,7 @@ public interface ElytronSubsystemMessages extends BasicLogger {
     /**
      * A root logger with the category of the package name.
      */
-    ElytronSubsystemMessages ROOT_LOGGER = Logger.getMessageLogger(ElytronSubsystemMessages.class, "org.wildfly.extension.elytron");
+    ElytronSubsystemMessages ROOT_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ElytronSubsystemMessages.class, "org.wildfly.extension.elytron");
 
     /**
      * {@link OperationFailedException} if the same realm is injected multiple times for a single domain.
@@ -339,6 +340,9 @@ public interface ElytronSubsystemMessages extends BasicLogger {
 
     @Message(id = 49, value = "Entry is not defined.")
     StartException jaasEntryNotDefined();
+
+    @Message(id = 50, value = "The realm is not available. You can't flush the cache.")
+    OperationFailedException cachedRealmServiceNotAvailable();
 
     /*
      * Credential Store Section.

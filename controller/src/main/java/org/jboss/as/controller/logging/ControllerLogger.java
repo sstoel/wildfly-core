@@ -14,6 +14,7 @@ import static org.jboss.logging.annotations.Message.NONE;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.file.Path;
@@ -76,22 +77,22 @@ public interface ControllerLogger extends BasicLogger {
     /**
      * Default root logger with category of the package name.
      */
-    ControllerLogger ROOT_LOGGER = Logger.getMessageLogger(ControllerLogger.class, "org.jboss.as.controller");
+    ControllerLogger ROOT_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ControllerLogger.class, "org.jboss.as.controller");
 
     /**
      * Logger for management operation messages.
      */
-    ControllerLogger MGMT_OP_LOGGER = Logger.getMessageLogger(ControllerLogger.class, "org.jboss.as.controller.management-operation");
+    ControllerLogger MGMT_OP_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ControllerLogger.class, "org.jboss.as.controller.management-operation");
 
     /**
      * A logger for logging deprecated resources usage
      */
-    ControllerLogger DEPRECATED_LOGGER = Logger.getMessageLogger(ControllerLogger.class, "org.jboss.as.controller.management-deprecated");
+    ControllerLogger DEPRECATED_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ControllerLogger.class, "org.jboss.as.controller.management-deprecated");
 
     /**
      * A logger for access control related messages.
      */
-    ControllerLogger ACCESS_LOGGER = Logger.getMessageLogger(ControllerLogger.class, "org.jboss.as.controller.access-control");
+    ControllerLogger ACCESS_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ControllerLogger.class, "org.jboss.as.controller.access-control");
 
     /**
      * Logs a warning message indicating the address, represented by the {@code address} parameter, could not be
@@ -3645,10 +3646,10 @@ public interface ControllerLogger extends BasicLogger {
     @Message(id = 478, value = "Unable to create command based CredentialSource for credential reference.")
     OperationFailedException unableToBuildCommandCredentialSource(@Cause Throwable throwable);
 
-    @Message(id = 479, value = "Attribute '%s' at resource '%s' with unresolved value '%s' cannot be resolved using the non-security-sensitive sources resolution supported by the 'resolve' parameter. Response will report the unresolved value.")
+    @Message(id = 479, value = "Attribute '%s' at resource '%s' with unresolved value '%s' cannot be resolved using the non-security-sensitive resolution sources supported by the 'resolve' parameter. Response will report the unresolved value.")
     String attributeUnresolvableUsingSimpleResolution(String attribute, String address, ModelNode unresolved);
 
-    @Message(id = 480, value = "Expression '%s' cannot be resolved using the non-security-sensitive sources resolution supported by the '%s' operation. Response will report the unresolved value.")
+    @Message(id = 480, value = "Expression '%s' cannot be resolved using the non-security-sensitive resolution sources supported by the '%s' operation. Response will report the unresolved value.")
     String expressionUnresolvableUsingSimpleResolution(ModelNode unresolved, String opName);
 
     @LogMessage(level = WARN)
@@ -3782,4 +3783,30 @@ public interface ControllerLogger extends BasicLogger {
     @LogMessage(level = WARN)
     @Message(id = 512, value = "No resource exists at address '%s'. Ignoring the remove opreation.")
     void removingUnexistingResource(String address);
+
+    /**
+     * Creates an exception indicating a namespace which is no longer supported has been encountered.
+     *
+     * @param name     the fully qualified unexpected element name.
+     * @param location the location of the error.
+     *
+     * @return a {@link XMLStreamException} for the error.
+     */
+    @Message(id = 513, value = "The XML namespace of %s is no longer supported.")
+    XMLStreamException unsupportedNamespace(QName name, @Param Location location);
+
+    @Message(id = 514, value = "Management namespace %s is not enabled by the current stability level")
+    XMLStreamException unstableManagementNamespace(String namespaceURI);
+
+    @LogMessage(level = INFO)
+    @Message(id = 515, value = "The system property '%s' is deprecated and may be removed in a future version, " +
+        "attribute '%s' on resource '%s' should be used instead.")
+    void systemPropertyDeprecated(String systemProperty, String attribute, String address);
+
+    @Message(id = 516, value = "Parameter %s specifies an invalid module name: %s")
+    OperationFailedException invalidModuleNameParameter(String parameterName, String moduleName);
+
+    @LogMessage(level = WARN)
+    @Message(id = 517, value = "There are multiple Parallel Boot Operations.")
+    void multipleParallelBootOperation();
 }

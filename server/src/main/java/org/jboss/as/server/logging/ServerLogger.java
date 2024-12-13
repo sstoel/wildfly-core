@@ -14,12 +14,14 @@ import static org.jboss.logging.Logger.Level.WARN;
 import java.io.File;
 import java.io.IOException;
 import java.io.InvalidObjectException;
+import java.lang.invoke.MethodHandles;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.nio.file.Path;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.jar.Attributes;
 import java.util.zip.ZipException;
 
@@ -37,7 +39,7 @@ import org.jboss.as.server.deployment.MountType;
 import org.jboss.as.server.deployment.Phase;
 import org.jboss.as.server.deployment.module.ExtensionListEntry;
 import org.jboss.as.server.deployment.module.ResourceRoot;
-import org.jboss.as.server.suspend.ServerActivity;
+import org.jboss.as.server.suspend.SuspendableActivity;
 import org.jboss.as.version.Stability;
 import org.jboss.invocation.proxy.MethodIdentifier;
 import org.jboss.logging.BasicLogger;
@@ -67,51 +69,51 @@ public interface ServerLogger extends BasicLogger {
     /**
      * A logger with a category of the package name.
      */
-    ServerLogger ROOT_LOGGER = Logger.getMessageLogger(ServerLogger.class, "org.jboss.as.server");
+    ServerLogger ROOT_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ServerLogger.class, "org.jboss.as.server");
 
     /**
      * A logger with the category {@code org.jboss.as}.
      */
-    ServerLogger AS_ROOT_LOGGER = Logger.getMessageLogger(ServerLogger.class, "org.jboss.as");
+    ServerLogger AS_ROOT_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ServerLogger.class, "org.jboss.as");
 
     /**
      * A logger with the category {@code org.jboss.as.config}.
      */
-    ServerLogger CONFIG_LOGGER = Logger.getMessageLogger(ServerLogger.class, "org.jboss.as.config");
+    ServerLogger CONFIG_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ServerLogger.class, "org.jboss.as.config");
 
     /**
      * A logger with the category {@code org.jboss.as.warn.fd-limit}.
      */
-    ServerLogger FD_LIMIT_LOGGER = Logger.getMessageLogger(ServerLogger.class, "org.jboss.as.warn.fd-limit");
+    ServerLogger FD_LIMIT_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ServerLogger.class, "org.jboss.as.warn.fd-limit");
 
     /**
      * A logger with the category {@code org.jboss.as.server.deployment}.
      */
-    ServerLogger DEPLOYMENT_LOGGER = Logger.getMessageLogger(ServerLogger.class, "org.jboss.as.server.deployment");
+    ServerLogger DEPLOYMENT_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ServerLogger.class, "org.jboss.as.server.deployment");
 
     /**
      * Logger for private APIs.
      */
-    ServerLogger PRIVATE_DEP_LOGGER = Logger.getMessageLogger(ServerLogger.class, "org.jboss.as.dependency.private");
+    ServerLogger PRIVATE_DEP_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ServerLogger.class, "org.jboss.as.dependency.private");
     /**
      * Logger for unsupported APIs.
      */
-    ServerLogger UNSUPPORTED_DEP_LOGGER = Logger.getMessageLogger(ServerLogger.class, "org.jboss.as.dependency.unsupported");
+    ServerLogger UNSUPPORTED_DEP_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ServerLogger.class, "org.jboss.as.dependency.unsupported");
 
     /**
      * A logger with the category {@code org.jboss.as.server.moduleservice}.
      */
-    ServerLogger MODULE_SERVICE_LOGGER = Logger.getMessageLogger(ServerLogger.class, "org.jboss.as.server.moduleservice");
+    ServerLogger MODULE_SERVICE_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ServerLogger.class, "org.jboss.as.server.moduleservice");
 
     /**
      * A logger with the category {@code org.jboss.as.server.net}.
      */
-    ServerLogger NETWORK_LOGGER = Logger.getMessageLogger(ServerLogger.class, "org.jboss.as.server.net");
+    ServerLogger NETWORK_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ServerLogger.class, "org.jboss.as.server.net");
 
     /**
      * Logger for deprecated APIs
      */
-    ServerLogger DEPRECATED_DEP_LOGGER = Logger.getMessageLogger(ServerLogger.class, "org.jboss.as.dependency.deprecated");
+    ServerLogger DEPRECATED_DEP_LOGGER = Logger.getMessageLogger(MethodHandles.lookup(), ServerLogger.class, "org.jboss.as.dependency.deprecated");
 
     /**
      * Log message for when a jboss-deployment-structure.xml file is ignored
@@ -1093,6 +1095,21 @@ public interface ServerLogger extends BasicLogger {
     @Message(id = 210, value = "Server is already paused")
     IllegalStateException serverAlreadyPaused();
 
+    /**
+     * Logs the appropriate suspend message based on the specified suspend timeout.
+     * @param timeout the timeout value
+     * @param unit the timeout unit
+     */
+    default void suspendingServer(long timeout, TimeUnit unit) {
+        if (timeout > 0) {
+            ServerLogger.ROOT_LOGGER.suspendingServer(TimeUnit.MILLISECONDS.convert(timeout, unit));
+        } else if (timeout < 0) {
+            ServerLogger.ROOT_LOGGER.suspendingServerWithNoTimeout();
+        } else {
+            ServerLogger.ROOT_LOGGER.suspendingServer();
+        }
+    }
+
     @LogMessage(level = INFO)
     @Message(id = 211, value = "Suspending server with %d ms timeout.")
     void suspendingServer(long timeoutMillis);
@@ -1110,7 +1127,7 @@ public interface ServerLogger extends BasicLogger {
 
     @LogMessage(level = ERROR)
     @Message(id = 215, value = "Failed to resume activity %s. To resume normal operation it is recommended that you restart the server.")
-    void failedToResume(ServerActivity activity, @Cause Exception cause);
+    void failedToResume(SuspendableActivity activity, @Cause Throwable cause);
 
     @LogMessage(level = ERROR)
     @Message(id = 216, value = "Error cleaning obsolete content %s ")

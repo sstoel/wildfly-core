@@ -10,7 +10,7 @@
     <parent>
         <artifactId>wildfly-core-testsuite</artifactId>
         <groupId>org.wildfly.core</groupId>
-        <version>26.0.0.Beta1-SNAPSHOT</version>
+        <version>27.0.0.Beta6-SNAPSHOT</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
@@ -27,6 +27,13 @@
         <test.log.level>INFO</test.log.level>
         <test.log.file>${project.build.directory}${file.separator}test.log</test.log.file>
     </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.wildfly.launcher</groupId>
+            <artifactId>wildfly-launcher</artifactId>
+        </dependency>
+    </dependencies>
 
     <build>
         <plugins>
@@ -62,7 +69,6 @@
                 <configuration>
                     <skip>${skipTests}</skip>
                     <failIfNoTests>false</failIfNoTests>
-                    <redirectTestOutputToFile>${testLogToFile}</redirectTestOutputToFile>
                     <reuseForks>true</reuseForks>
 
                     <systemPropertyVariables>

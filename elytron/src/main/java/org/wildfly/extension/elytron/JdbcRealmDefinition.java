@@ -19,7 +19,6 @@ import static org.wildfly.extension.elytron.ElytronDescriptionConstants.UTF_8;
 import static org.wildfly.extension.elytron._private.ElytronSubsystemMessages.ROOT_LOGGER;
 
 import java.nio.charset.Charset;
-import java.security.InvalidKeyException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,8 +32,10 @@ import org.jboss.as.controller.AttributeDefinition;
 import org.jboss.as.controller.ObjectListAttributeDefinition;
 import org.jboss.as.controller.ObjectTypeAttributeDefinition;
 import org.jboss.as.controller.OperationContext;
+import org.jboss.as.controller.OperationContext.Stage;
 import org.jboss.as.controller.OperationFailedException;
 import org.jboss.as.controller.OperationStepHandler;
+import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.PathElement;
 import org.jboss.as.controller.ResourceDefinition;
 import org.jboss.as.controller.RunningMode;
@@ -43,11 +44,12 @@ import org.jboss.as.controller.SimpleAttributeDefinitionBuilder;
 import org.jboss.as.controller.SimpleResourceDefinition;
 import org.jboss.as.controller.capability.RuntimeCapability;
 import org.jboss.as.controller.operations.validation.CharsetValidator;
-import org.jboss.as.controller.operations.validation.StringAllowedValuesValidator;
 import org.jboss.as.controller.operations.validation.IntRangeValidator;
+import org.jboss.as.controller.operations.validation.StringAllowedValuesValidator;
 import org.jboss.as.controller.registry.AttributeAccess;
 import org.jboss.as.controller.registry.ManagementResourceRegistration;
 import org.jboss.as.controller.registry.OperationEntry;
+import org.jboss.as.controller.registry.Resource;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.msc.inject.InjectionException;
@@ -92,7 +94,7 @@ class JdbcRealmDefinition extends SimpleResourceDefinition {
 
         static final SimpleAttributeDefinition PASSWORD = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.PASSWORD_INDEX, ModelType.INT, false)
                 .setMinSize(1)
-                .setValidator(new IntRangeValidator(1))
+                .setValidator(IntRangeValidator.POSITIVE)
                 .setAllowExpression(true)
                 .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                 .build();
@@ -131,19 +133,19 @@ class JdbcRealmDefinition extends SimpleResourceDefinition {
 
         static final SimpleAttributeDefinition PASSWORD = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.PASSWORD_INDEX, ModelType.INT, false)
                 .setMinSize(1)
-                .setValidator(new IntRangeValidator(1))
+                .setValidator(IntRangeValidator.POSITIVE)
                 .setAllowExpression(true)
                 .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                 .build();
 
         static final SimpleAttributeDefinition ITERATION_COUNT = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.ITERATION_COUNT_INDEX, ModelType.INT, false)
-                .setValidator(new IntRangeValidator(1))
+                .setValidator(IntRangeValidator.POSITIVE)
                 .setAllowExpression(true)
                 .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                 .build();
 
         static final SimpleAttributeDefinition SALT = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.SALT_INDEX, ModelType.INT, false)
-                .setValidator(new IntRangeValidator(1))
+                .setValidator(IntRangeValidator.POSITIVE)
                 .setAllowExpression(true)
                 .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                 .build();
@@ -223,13 +225,13 @@ class JdbcRealmDefinition extends SimpleResourceDefinition {
 
         static final SimpleAttributeDefinition PASSWORD = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.PASSWORD_INDEX, ModelType.INT, false)
                 .setMinSize(1)
-                .setValidator(new IntRangeValidator(1))
+                .setValidator(IntRangeValidator.POSITIVE)
                 .setAllowExpression(true)
                 .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                 .build();
 
         static final SimpleAttributeDefinition SALT = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.SALT_INDEX, ModelType.INT, false)
-                .setValidator(new IntRangeValidator(1))
+                .setValidator(IntRangeValidator.POSITIVE)
                 .setAllowExpression(true)
                 .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                 .build();
@@ -303,7 +305,7 @@ class JdbcRealmDefinition extends SimpleResourceDefinition {
 
         static final SimpleAttributeDefinition PASSWORD = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.PASSWORD_INDEX, ModelType.INT, false)
                 .setMinSize(1)
-                .setValidator(new IntRangeValidator(1))
+                .setValidator(IntRangeValidator.POSITIVE)
                 .setAllowExpression(true)
                 .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                 .build();
@@ -363,19 +365,19 @@ class JdbcRealmDefinition extends SimpleResourceDefinition {
 
         static final SimpleAttributeDefinition PASSWORD = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.PASSWORD_INDEX, ModelType.INT, false)
                 .setMinSize(1)
-                .setValidator(new IntRangeValidator(1))
+                .setValidator(IntRangeValidator.POSITIVE)
                 .setAllowExpression(true)
                 .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                 .build();
 
         static final SimpleAttributeDefinition ITERATION_COUNT = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.ITERATION_COUNT_INDEX, ModelType.INT, false)
-                .setValidator(new IntRangeValidator(1))
+                .setValidator(IntRangeValidator.POSITIVE)
                 .setAllowExpression(true)
                 .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                 .build();
 
         static final SimpleAttributeDefinition SALT = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.SALT_INDEX, ModelType.INT, false)
-                .setValidator(new IntRangeValidator(1))
+                .setValidator(IntRangeValidator.POSITIVE)
                 .setAllowExpression(true)
                 .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                 .build();
@@ -434,7 +436,7 @@ class JdbcRealmDefinition extends SimpleResourceDefinition {
 
         static final SimpleAttributeDefinition PASSWORD = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.PASSWORD_INDEX, ModelType.INT, false)
                 .setMinSize(1)
-                .setValidator(new IntRangeValidator(1))
+                .setValidator(IntRangeValidator.POSITIVE)
                 .setAllowExpression(true)
                 .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                 .build();
@@ -455,13 +457,13 @@ class JdbcRealmDefinition extends SimpleResourceDefinition {
     }
 
     interface PasswordMapperObjectDefinition {
-        PasswordKeyMapper toPasswordKeyMapper(OperationContext context, ModelNode propertyNode) throws OperationFailedException, InvalidKeyException;
+        PasswordKeyMapper toPasswordKeyMapper(OperationContext context, ModelNode propertyNode) throws OperationFailedException;
     }
 
     static class AttributeMappingObjectDefinition {
         static final SimpleAttributeDefinition INDEX = new SimpleAttributeDefinitionBuilder(ElytronDescriptionConstants.INDEX, ModelType.INT, false)
                 .setAllowExpression(true)
-                .setValidator(new IntRangeValidator(1))
+                .setValidator(IntRangeValidator.POSITIVE)
                 .setFlags(AttributeAccess.Flag.RESTART_RESOURCE_SERVICES)
                 .build();
 
@@ -568,7 +570,6 @@ class JdbcRealmDefinition extends SimpleResourceDefinition {
 
     private static final AbstractAddStepHandler ADD = new RealmAddHandler();
     private static final OperationStepHandler REMOVE = new TrivialCapabilityServiceRemoveHandler(ADD, SECURITY_REALM_RUNTIME_CAPABILITY);
-    private static final OperationStepHandler WRITE = new ElytronReloadRequiredWriteAttributeHandler(ATTRIBUTES);
 
     JdbcRealmDefinition() {
         super(new Parameters(PathElement.pathElement(ElytronDescriptionConstants.JDBC_REALM), ElytronExtension.getResourceDescriptionResolver(ElytronDescriptionConstants.JDBC_REALM))
@@ -582,14 +583,21 @@ class JdbcRealmDefinition extends SimpleResourceDefinition {
     @Override
     public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
         for (AttributeDefinition current : ATTRIBUTES) {
-            resourceRegistration.registerReadWriteAttribute(current, null, WRITE);
+            resourceRegistration.registerReadWriteAttribute(current, null, ElytronReloadRequiredWriteAttributeHandler.INSTANCE);
         }
     }
 
     private static class RealmAddHandler extends BaseAddHandler {
 
         private RealmAddHandler() {
-            super(SECURITY_REALM_RUNTIME_CAPABILITY, ATTRIBUTES);
+            super(SECURITY_REALM_RUNTIME_CAPABILITY);
+        }
+
+        @Override
+        protected void populateModel(OperationContext context, ModelNode operation, Resource resource)
+                throws OperationFailedException {
+            super.populateModel(context, operation, resource);
+            context.addStep(new JdbcRealmDefinitionValidation(), Stage.MODEL);
         }
 
         @Override
@@ -654,6 +662,26 @@ class JdbcRealmDefinition extends SimpleResourceDefinition {
         }
     }
 
+    private static class JdbcRealmDefinitionValidation implements OperationStepHandler {
+
+        @Override
+        public void execute(OperationContext context, ModelNode operation) throws OperationFailedException {
+
+            ModelNode model = context.readResource(PathAddress.EMPTY_ADDRESS, false).getModel();
+            List<ModelNode> queries = model.get(PrincipalQueryAttributes.PRINCIPAL_QUERIES_7_0.getName()).asList();
+
+            for (ModelNode modelNode : queries) {
+                long mappersCount = modelNode.keys().stream()
+                        .filter(PrincipalQueryAttributes.SUPPORTED_PASSWORD_MAPPERS::containsKey).count();
+
+                // We need to make sure that the principal-query has only one mapper
+                if (mappersCount > 1) {
+                    throw ROOT_LOGGER.jdbcRealmOnlySingleKeyMapperAllowed();
+                }
+            }
+        }
+    }
+
     private static KeyMapper resolveKeyMappers(OperationContext context, ModelNode authenticationQueryNode) throws OperationFailedException {
         KeyMapper keyMapper = null;
 
@@ -670,17 +698,10 @@ class JdbcRealmDefinition extends SimpleResourceDefinition {
                 continue;
             }
 
-            if (keyMapper != null) {
-                throw ROOT_LOGGER.jdbcRealmOnlySingleKeyMapperAllowed();
-            }
-
-            try {
-                keyMapper = mapperResource.toPasswordKeyMapper(context, propertyNode);
-            } catch (InvalidKeyException e) {
-                throw new OperationFailedException("Invalid key type.", e);
-            }
+            keyMapper = mapperResource.toPasswordKeyMapper(context, propertyNode);
         }
 
         return keyMapper;
     }
+
 }

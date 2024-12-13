@@ -42,8 +42,8 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SSL
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.STATIC_DISCOVERY;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SUBSYSTEM;
 import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.SYSTEM_PROPERTY;
-import static org.jboss.as.controller.parsing.Namespace.CURRENT;
 import static org.jboss.as.controller.parsing.ParseUtils.isNoNamespaceAttribute;
+import static org.jboss.as.controller.parsing.ParseUtils.isXmlNamespaceAttribute;
 import static org.jboss.as.controller.parsing.ParseUtils.missingOneOf;
 import static org.jboss.as.controller.parsing.ParseUtils.missingRequired;
 import static org.jboss.as.controller.parsing.ParseUtils.missingRequiredElement;
@@ -77,11 +77,12 @@ import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.controller.parsing.Attribute;
 import org.jboss.as.controller.parsing.Element;
 import org.jboss.as.controller.parsing.ExtensionXml;
-import org.jboss.as.controller.parsing.Namespace;
+import org.jboss.as.controller.parsing.ManagementXmlSchema;
 import org.jboss.as.controller.parsing.ParseUtils;
 import org.jboss.as.controller.parsing.ProfileParsingCompletionHandler;
 import org.jboss.as.controller.parsing.WriteUtils;
 import org.jboss.as.controller.persistence.ModelMarshallingContext;
+import org.jboss.as.controller.xml.VersionedNamespace;
 import org.jboss.as.domain.management.parsing.AuditLogXml;
 import org.jboss.as.domain.management.parsing.ManagementXml;
 import org.jboss.as.domain.management.parsing.ManagementXmlDelegate;
@@ -102,9 +103,11 @@ import org.jboss.as.process.CommandLineConstants;
 import org.jboss.as.server.parsing.CommonXml;
 import org.jboss.as.server.parsing.SocketBindingsXml;
 import org.jboss.as.server.services.net.SocketBindingGroupResourceDefinition;
+import org.jboss.as.version.Stability;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.dmr.Property;
+import org.jboss.staxmapper.IntVersion;
 import org.jboss.staxmapper.XMLExtendedStreamReader;
 import org.jboss.staxmapper.XMLExtendedStreamWriter;
 
@@ -124,18 +127,23 @@ final class HostXml_20 extends CommonXml implements ManagementXmlDelegate {
     private final boolean isCachedDc;
     private final ExtensionRegistry extensionRegistry;
     private final ExtensionXml extensionXml;
-    private final Namespace namespace;
+    private final IntVersion version;
+    private final String namespace;
+    private final Stability stability;
 
     HostXml_20(String defaultHostControllerName, RunningMode runningMode, boolean isCachedDC,
-               final ExtensionRegistry extensionRegistry, final ExtensionXml extensionXml, final Namespace namespace) {
+               final ExtensionRegistry extensionRegistry, final ExtensionXml extensionXml,
+               final VersionedNamespace<IntVersion, ManagementXmlSchema> namespace) {
         super(new SocketBindingsXml.HostSocketBindingsXml());
-        this.auditLogDelegate = AuditLogXml.newInstance(namespace, true);
+        this.namespace = namespace.getUri();
+        this.version = namespace.getVersion();
+        this.auditLogDelegate = AuditLogXml.newInstance(version, true);
         this.defaultHostControllerName = defaultHostControllerName;
         this.runningMode = runningMode;
         this.isCachedDc = isCachedDC;
         this.extensionRegistry = extensionRegistry;
+        this.stability = namespace.getStability();
         this.extensionXml = extensionXml;
-        this.namespace = namespace;
     }
 
     @Override
@@ -146,14 +154,7 @@ final class HostXml_20 extends CommonXml implements ManagementXmlDelegate {
             throw unexpectedElement(reader);
         }
 
-        // Instead of having to list the remaining versions we just check it is actually a valid version.
-        for (Namespace current : Namespace.domainValues()) {
-            if (namespace.equals(current)) {
-                readHostElement(reader, address, operationList);
-                return;
-            }
-        }
-        throw unexpectedElement(reader);
+        readHostElement(reader, address, operationList);
     }
 
     void writeContent(final XMLExtendedStreamWriter writer, final ModelMarshallingContext context)
@@ -164,7 +165,7 @@ final class HostXml_20 extends CommonXml implements ManagementXmlDelegate {
         writer.writeStartDocument();
         writer.writeStartElement(Element.HOST.getLocalName());
 
-        writer.writeDefaultNamespace(Namespace.CURRENT.getUriString());
+        writer.writeDefaultNamespace(namespace);
         writeNamespaces(writer, modelNode);
         writeSchemaLocation(writer, modelNode);
 
@@ -190,7 +191,7 @@ final class HostXml_20 extends CommonXml implements ManagementXmlDelegate {
         boolean hasCoreServices = modelNode.hasDefined(CORE_SERVICE);
 
         if (hasCoreServices) {
-            ManagementXml managementXml = ManagementXml.newInstance(CURRENT, this, false);
+            ManagementXml managementXml = ManagementXml.newInstance(version, namespace, this, false);
             managementXml.writeManagement(writer, modelNode.get(CORE_SERVICE, MANAGEMENT), true);
         }
 
@@ -261,42 +262,37 @@ final class HostXml_20 extends CommonXml implements ManagementXmlDelegate {
         // attributes
         final int count = reader.getAttributeCount();
         for (int i = 0; i < count; i++) {
-            switch (Namespace.forUri(reader.getAttributeNamespace(i))) {
-                case NONE: {
-                    final String value = reader.getAttributeValue(i);
-                    final Attribute attribute = Attribute.forName(reader.getAttributeLocalName(i));
-                    switch (attribute) {
-                        case NAME: {
-                            hostName = value;
-                            break;
-                        }
-                        case ORGANIZATION : {
-                            organization = value;
-                            break;
-                        }
-                        default:
-                            throw unexpectedAttribute(reader, i);
+            if (isNoNamespaceAttribute(reader, i)) {
+                final String value = reader.getAttributeValue(i);
+                final Attribute attribute = Attribute.forName(reader.getAttributeLocalName(i));
+                switch (attribute) {
+                    case NAME: {
+                        hostName = value;
+                        break;
                     }
-                    break;
-                }
-                case XML_SCHEMA_INSTANCE: {
-                    switch (Attribute.forName(reader.getAttributeLocalName(i))) {
-                        case SCHEMA_LOCATION: {
-                            parseSchemaLocations(reader, address, namespaceOperations, i);
-                            break;
-                        }
-                        case NO_NAMESPACE_SCHEMA_LOCATION: {
-                            // todo, jeez
-                            break;
-                        }
-                        default: {
-                            throw unexpectedAttribute(reader, i);
-                        }
+                    case ORGANIZATION : {
+                        organization = value;
+                        break;
                     }
-                    break;
+                    default:
+                        throw unexpectedAttribute(reader, i);
                 }
-                default:
-                    throw unexpectedAttribute(reader, i);
+            } else if (isXmlNamespaceAttribute(reader, i)) {
+                switch (Attribute.forName(reader.getAttributeLocalName(i))) {
+                    case SCHEMA_LOCATION: {
+                        parseSchemaLocations(reader, address, namespaceOperations, i);
+                        break;
+                    }
+                    case NO_NAMESPACE_SCHEMA_LOCATION: {
+                        // todo, jeez
+                        break;
+                    }
+                    default: {
+                        throw unexpectedAttribute(reader, i);
+                    }
+                }
+            } else {
+                throw unexpectedAttribute(reader, i);
             }
         }
 
@@ -328,7 +324,7 @@ final class HostXml_20 extends CommonXml implements ManagementXmlDelegate {
             element = nextElement(reader, namespace);
         }
         if (element == Element.MANAGEMENT) {
-            ManagementXml managementXml = ManagementXml.newInstance(namespace, this, false);
+            ManagementXml managementXml = ManagementXml.newInstance(version, namespace, this, false);
             managementXml.parseManagement(reader, address, list, true);
             element = nextElement(reader, namespace);
         } else {
@@ -340,7 +336,7 @@ final class HostXml_20 extends CommonXml implements ManagementXmlDelegate {
         }
         final Set<String> interfaceNames = new HashSet<String>();
         if (element == Element.INTERFACES) {
-            parseInterfaces(reader, interfaceNames, address, namespace, list, true);
+            parseInterfaces(reader, interfaceNames, address, version, namespace, list, true);
             element = nextElement(reader, namespace);
         }
         if (element == Element.JVMS) {
@@ -403,6 +399,42 @@ final class HostXml_20 extends CommonXml implements ManagementXmlDelegate {
                     }
                     case ALLOWED_ORIGINS: {
                         HttpManagementResourceDefinition.ALLOWED_ORIGINS.getParser().parseAndSetParameter(HttpManagementResourceDefinition.ALLOWED_ORIGINS, value, addOp, reader);
+                        break;
+                    }
+                    case BACKLOG: {
+                        // Can't pull the Stability level from the attribute definition as to move would mean a new major version of the schema.
+                        if (stability.enables(Stability.COMMUNITY)) {
+                            HttpManagementResourceDefinition.BACKLOG.parseAndSetParameter(value, addOp, reader);
+                        } else {
+                            throw unexpectedAttribute(reader, i);
+                        }
+                        break;
+                    }
+                    case NO_REQUEST_TIMEOUT: {
+                        // Can't pull the Stability level from the attribute definition as to move would mean a new major version of the schema.
+                        if (stability.enables(Stability.COMMUNITY)) {
+                            HttpManagementResourceDefinition.NO_REQUEST_TIMEOUT.parseAndSetParameter(value, addOp, reader);
+                        } else {
+                            throw unexpectedAttribute(reader, i);
+                        }
+                        break;
+                    }
+                    case CONNECTION_HIGH_WATER: {
+                        // Can't pull the Stability level from the attribute definition as to move would mean a new major version of the schema.
+                        if (stability.enables(Stability.COMMUNITY)) {
+                            HttpManagementResourceDefinition.CONNECTION_HIGH_WATER.parseAndSetParameter(value, addOp, reader);
+                        } else {
+                            throw unexpectedAttribute(reader, i);
+                        }
+                        break;
+                    }
+                    case CONNECTION_LOW_WATER: {
+                        // Can't pull the Stability level from the attribute definition as to move would mean a new major version of the schema.
+                        if (stability.enables(Stability.COMMUNITY)) {
+                            HttpManagementResourceDefinition.CONNECTION_LOW_WATER.parseAndSetParameter(value, addOp, reader);
+                        } else {
+                            throw unexpectedAttribute(reader, i);
+                        }
                         break;
                     }
                     default:
@@ -1117,7 +1149,7 @@ final class HostXml_20 extends CommonXml implements ManagementXmlDelegate {
             final Element element = Element.forName(reader.getLocalName());
             switch (element) {
                 case JVM:
-                    JvmXml.parseJvm(reader, address, namespace, list, names, false);
+                    JvmXml.parseJvm(reader, address, version, namespace, list, names, false);
                     break;
                 default:
                     throw unexpectedElement(reader);
@@ -1189,7 +1221,7 @@ final class HostXml_20 extends CommonXml implements ManagementXmlDelegate {
             final Element element = Element.forName(reader.getLocalName());
             switch (element) {
                 case INTERFACES: { // THIS IS DIFFERENT FROM 1.0
-                    parseInterfaces(reader, interfaceNames, serverAddress, namespace, list, true);
+                    parseInterfaces(reader, interfaceNames, serverAddress, version, namespace, list, true);
                     break;
                 }
                 case JVM: {
@@ -1197,7 +1229,7 @@ final class HostXml_20 extends CommonXml implements ManagementXmlDelegate {
                         throw ControllerLogger.ROOT_LOGGER.alreadyDefined(element.getLocalName(), reader.getLocation());
                     }
 
-                    JvmXml.parseJvm(reader, serverAddress, namespace, list, new HashSet<String>(), true);
+                    JvmXml.parseJvm(reader, serverAddress, version, namespace, list, new HashSet<String>(), true);
                     sawJvm = true;
                     break;
                 }
@@ -1720,9 +1752,15 @@ final class HostXml_20 extends CommonXml implements ManagementXmlDelegate {
         HttpManagementResourceDefinition.SSL_CONTEXT.marshallAsAttribute(protocol, writer);
         HttpManagementResourceDefinition.CONSOLE_ENABLED.marshallAsAttribute(protocol, writer);
         HttpManagementResourceDefinition.ALLOWED_ORIGINS.getMarshaller().marshallAsAttribute(
-                HttpManagementResourceDefinition.ALLOWED_ORIGINS, protocol, true, writer);
+        HttpManagementResourceDefinition.ALLOWED_ORIGINS, protocol, true, writer);
         HttpManagementResourceDefinition.SASL_PROTOCOL.marshallAsAttribute(protocol, writer);
         HttpManagementResourceDefinition.SERVER_NAME.marshallAsAttribute(protocol, writer);
+        if (stability.enables(Stability.COMMUNITY)) {
+            HttpManagementResourceDefinition.BACKLOG.marshallAsAttribute(protocol, writer);
+            HttpManagementResourceDefinition.NO_REQUEST_TIMEOUT.marshallAsAttribute(protocol, writer);
+            HttpManagementResourceDefinition.CONNECTION_HIGH_WATER.marshallAsAttribute(protocol, writer);
+            HttpManagementResourceDefinition.CONNECTION_LOW_WATER.marshallAsAttribute(protocol, writer);
+        }
 
         if (HttpManagementResourceDefinition.HTTP_UPGRADE.isMarshallable(protocol)) {
             writer.writeEmptyElement(Element.HTTP_UPGRADE.getLocalName());

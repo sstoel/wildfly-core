@@ -136,9 +136,8 @@ class ExpressionResolverResourceDefinition extends SimpleResourceDefinition {
 
     @Override
     public void registerAttributes(ManagementResourceRegistration resourceRegistration) {
-        OperationStepHandler write = new ElytronReloadRequiredWriteAttributeHandler(ATTRIBUTES);
         for (AttributeDefinition current : ATTRIBUTES) {
-            resourceRegistration.registerReadWriteAttribute(current, null, write);
+            resourceRegistration.registerReadWriteAttribute(current, null, ElytronReloadRequiredWriteAttributeHandler.INSTANCE);
         }
     }
 
@@ -194,7 +193,7 @@ class ExpressionResolverResourceDefinition extends SimpleResourceDefinition {
 
         ExpressionResolverAddHandler(RuntimeCapability<ExpressionResolverExtension> expressionResolverRuntimeCapability,
                                      AtomicReference<ExpressionResolverExtension> resolverRef) {
-            super(expressionResolverRuntimeCapability, ATTRIBUTES);
+            super(expressionResolverRuntimeCapability);
             this.expressionResolver = (ElytronExpressionResolver) expressionResolverRuntimeCapability.getRuntimeAPI();
             this.resolverRef = resolverRef;
         }

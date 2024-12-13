@@ -47,6 +47,7 @@ import org.jboss.as.controller.client.helpers.Operations;
 import org.jboss.as.controller.client.impl.AdditionalBootCliScriptInvoker;
 import org.jboss.as.controller.operations.common.Util;
 import org.jboss.as.test.integration.management.util.CLIWrapper;
+import org.jboss.as.test.shared.AssumeTestGroupUtil;
 import org.jboss.as.test.shared.TimeoutUtil;
 import org.jboss.dmr.ModelNode;
 import org.jboss.logging.Logger;
@@ -85,7 +86,7 @@ public class YamlExtensionTestCase {
     private ServerController container;
 
     private static final Path jbossHome = System.getProperty("ts.bootable") != null ? Path.of(WildFlySecurityManager.getPropertyPrivileged("basedir", "."),
-            "target" , "bootable-jar-build-artifacts", "wildfly") : Path.of(WildFlySecurityManager.getPropertyPrivileged("jboss.home", "toto"));
+            "target" , "server") : Path.of(WildFlySecurityManager.getPropertyPrivileged("jboss.home", "toto"));
     private static final Path basedir = jbossHome.resolve("standalone");
     private static Path markerDirectory;
     private static Path testYaml;
@@ -312,7 +313,7 @@ public class YamlExtensionTestCase {
 
     @Test
     public void testSimpleYamlWithCliBootOps() throws Exception {
-        Assume.assumeTrue("Boot CLI script can be used on only in admin-only mode which is no valid for bootable jar.", System.getProperty("ts.bootable") == null);
+        AssumeTestGroupUtil.assumeNotBootableJar();
         StringBuilder sb = new StringBuilder();
         sb.append(" -D" + AdditionalBootCliScriptInvoker.MARKER_DIRECTORY_PROPERTY + "=").append(markerDirectory.toAbsolutePath());
         sb.append(" -D" + AdditionalBootCliScriptInvoker.CLI_SCRIPT_PROPERTY + "=").append(cliScript.toAbsolutePath());
@@ -330,6 +331,7 @@ public class YamlExtensionTestCase {
 
     @Test
     public void testYamlChangesAppliedInAdminOnlyModeWithoutBootCliScript() throws Exception {
+        AssumeTestGroupUtil.assumeNotBootableJar();
         container.start(null, null, Server.StartMode.ADMIN_ONLY, System.out, false, null, null, null, null, new Path[]{testYaml});
         Assert.assertEquals("Yaml changes to configuration were persisted to xml. This should never happen as it's in read-only mode.", expectedXml, readConfigAsXml());
     }
@@ -431,7 +433,7 @@ public class YamlExtensionTestCase {
         result = Operations.readResult(client.execute(Operations.createReadResourceOperation(PathAddress.pathAddress("subsystem", "elytron").toModelNode(), true)));
         Assert.assertEquals("Yaml operation to undefine disallowed-providers was not executed.", "undefined", result.get("disallowed-providers").asString());
         ModelNode permissions = result.get("permission-set").get("default-permissions").get("permissions");
-        Assert.assertEquals("Yaml change to port set mail-smtp outbound socket binding is wrong", "[{\"class-name\" => \"org.wildfly.security.auth.permission.LoginPermission\",\"module\" => \"org.wildfly.security.elytron-base\",\"target-name\" => \"*\"}]", permissions.asString());
+        Assert.assertEquals("Yaml change to set default permissions is wrong", "[{\"class-name\" => \"org.wildfly.security.auth.permission.LoginPermission\",\"module\" => \"org.wildfly.security.elytron-base\",\"target-name\" => \"*\"}]", permissions.asString());
     }
 
     @Test
@@ -535,6 +537,7 @@ public class YamlExtensionTestCase {
 
     @Test
     public void testYamlChangesSurviveReload() throws Exception {
+        AssumeTestGroupUtil.assumeNotBootableJar();
         container.startYamlExtension(new Path[]{testYaml});
         Assert.assertEquals("Yaml changes to configuration were persisted to xml. This should never happen as it's in read-only mode.", expectedXml, readConfigAsXml());
         // read model and verify that test.yml changes are there
@@ -606,6 +609,7 @@ public class YamlExtensionTestCase {
 
     @Test
     public void testPostStartCLIChangesToModelDoNotSurviveRestart() throws Exception {
+        AssumeTestGroupUtil.assumeNotBootableJar();
         container.startYamlExtension(new Path[]{testYaml});
         Assert.assertEquals("Yaml changes to configuration were persisted to xml. This should never happen as it's in read-only mode.", expectedXml, readConfigAsXml());
         // read model and verify that test.yml changes are there
