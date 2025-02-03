@@ -16,7 +16,8 @@ import org.wildfly.service.descriptor.NullaryServiceDescriptor;
  * @author Brian Stansberry (c) 2019 Red Hat Inc.
  */
 public interface ProcessStateNotifier {
-    NullaryServiceDescriptor<ProcessStateNotifier> SERVICE_DESCRIPTOR = NullaryServiceDescriptor.of("org.wildfly.management.process-state-notifier", ProcessStateNotifier.class);
+    NullaryServiceDescriptor<ProcessStateNotifier> SERVICE_DESCRIPTOR =
+            NullaryServiceDescriptor.of("org.wildfly.management.process-state-notifier", ProcessStateNotifier.class);
 
     /**
      * Gets the current state of the controlled process.

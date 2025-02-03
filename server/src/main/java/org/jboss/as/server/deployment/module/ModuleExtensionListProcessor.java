@@ -84,11 +84,11 @@ public final class ModuleExtensionListProcessor implements DeploymentUnitProcess
         }
 
         for (ModuleIdentifier extension : allExtensionListEntries) {
-            ModuleDependency dependency = new ModuleDependency(moduleLoader, extension, false, false, true, true);
+            ModuleDependency dependency = ModuleDependency.Builder.of(moduleLoader, extension.toString()).setImportServices(true).setUserSpecified(true).build();
             dependency.addImportFilter(PathFilters.getMetaInfSubdirectoriesFilter(), true);
             dependency.addImportFilter(PathFilters.getMetaInfFilter(), true);
             moduleSpecification.addLocalDependency(dependency);
-            nextPhaseDeps.add(ServiceModuleLoader.moduleSpecServiceName(extension));
+            nextPhaseDeps.add(ServiceModuleLoader.moduleSpecServiceName(extension.toString()));
         }
 
 
@@ -105,9 +105,8 @@ public final class ModuleExtensionListProcessor implements DeploymentUnitProcess
                                     .getSpecificationVersion(), entry.getImplementationVersion(), entry
                                     .getImplementationVendorId());
                             if (extension != null) {
-                                moduleSpecification.addLocalDependency(new ModuleDependency(moduleLoader, extension, false, false,
-                                        true, false));
-                                nextPhaseDeps.add(ServiceModuleLoader.moduleSpecServiceName(extension));
+                                moduleSpecification.addLocalDependency(ModuleDependency.Builder.of(moduleLoader, extension.toString()).setImportServices(true).build());
+                                nextPhaseDeps.add(ServiceModuleLoader.moduleSpecServiceName(extension.toString()));
                             } else {
                                 ServerLogger.DEPLOYMENT_LOGGER.cannotFindExtensionListEntry(entry, resourceRoot);
                             }

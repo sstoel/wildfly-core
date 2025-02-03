@@ -78,7 +78,7 @@ public class ModuleLoadService implements Service<Module> {
             moduleLoader.relinkModule(module);
             for (ModuleDependency dependency : allDependencies) {
                 if (dependency.isUserSpecified()) {
-                    final ModuleIdentifier id = dependency.getIdentifier();
+                    final String id = dependency.getDependencyModule();
                     try {
                         String val = moduleLoader.loadModule(id).getProperty("jboss.api");
                         if (val != null) {
@@ -112,13 +112,13 @@ public class ModuleLoadService implements Service<Module> {
         return module;
     }
 
-    private static ServiceName install(final ServiceTarget target, final ModuleIdentifier identifier, ModuleLoadService service) {
+    private static ServiceName install(final ServiceTarget target, final String identifier, ModuleLoadService service) {
         final ServiceName serviceName = ServiceModuleLoader.moduleServiceName(identifier);
         final ServiceBuilder<Module> builder = target.addService(serviceName, service);
 
         builder.addDependency(Services.JBOSS_SERVICE_MODULE_LOADER, ServiceModuleLoader.class, service.getServiceModuleLoader());
-        builder.addDependency(ServiceModuleLoader.moduleSpecServiceName(identifier), ModuleDefinition.class, service.getModuleDefinitionInjectedValue());
-        builder.requires(ServiceModuleLoader.moduleResolvedServiceName(identifier)); //don't attempt to load until all dependent module specs are up, even transitive ones
+        builder.addDependency(ServiceModuleLoader.moduleSpecServiceName(identifier.toString()), ModuleDefinition.class, service.getModuleDefinitionInjectedValue());
+        builder.requires(ServiceModuleLoader.moduleResolvedServiceName(identifier.toString())); //don't attempt to load until all dependent module specs are up, even transitive ones
         builder.setInitialMode(Mode.ON_DEMAND);
 
         builder.install();
@@ -127,21 +127,21 @@ public class ModuleLoadService implements Service<Module> {
 
     public static ServiceName install(final ServiceTarget target, final ModuleIdentifier identifier){
         final ModuleLoadService service = new ModuleLoadService();
-        return install(target, identifier, service);
+        return install(target, identifier.toString(), service);
     }
 
-    public static ServiceName install(final ServiceTarget target, final ModuleIdentifier identifier, final Collection<ModuleDependency> systemDependencies, final Collection<ModuleDependency> localDependencies, final Collection<ModuleDependency> userDependencies) {
+    public static ServiceName install(final ServiceTarget target, final String identifier, final Collection<ModuleDependency> systemDependencies, final Collection<ModuleDependency> localDependencies, final Collection<ModuleDependency> userDependencies) {
         final ModuleLoadService service = new ModuleLoadService(systemDependencies, localDependencies, userDependencies);
         return install(target, identifier, service);
     }
 
-    public static ServiceName installAliases(final ServiceTarget target, final ModuleIdentifier identifier, final List<ModuleIdentifier> aliases) {
+    public static ServiceName installAliases(final ServiceTarget target, final ModuleIdentifier identifier, final List<String> aliases) {
         final ArrayList<ModuleDependency> dependencies = new ArrayList<ModuleDependency>(aliases.size());
-        for (final ModuleIdentifier i : aliases) {
-            dependencies.add(new ModuleDependency(null, i, false, false, false, false));
+        for (final String i : aliases) {
+            dependencies.add(ModuleDependency.Builder.of(null, i).build());
         }
         final ModuleLoadService service = new ModuleLoadService(dependencies);
-        return install(target, identifier, service);
+        return install(target, identifier.toString(), service);
     }
 
     public InjectedValue<ServiceModuleLoader> getServiceModuleLoader() {

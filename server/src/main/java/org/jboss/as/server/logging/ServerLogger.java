@@ -189,15 +189,15 @@ public interface ServerLogger extends BasicLogger {
 
     @LogMessage(level = WARN)
     @Message(id = 17, value = "Annotations import option %s specified in jboss-deployment-structure.xml for additional module %s has been ignored. Additional modules cannot import annotations.")
-    void annotationImportIgnored(ModuleIdentifier annotationModuleId, ModuleIdentifier additionalModuleId);
+    void annotationImportIgnored(String annotationModuleId, String additionalModuleId);
 
     @LogMessage(level = WARN)
     @Message(id = 18, value = "Deployment \"%s\" is using a private module (\"%s\") which may be changed or removed in future versions without notice.")
-    void privateApiUsed(String deployment, ModuleIdentifier dependency);
+    void privateApiUsed(String deployment, String dependency);
 
     @LogMessage(level = WARN)
     @Message(id = 19, value = "Deployment \"%s\" is using an unsupported module (\"%s\") which may be changed or removed in future versions without notice.")
-    void unsupportedApiUsed(String deployment, ModuleIdentifier dependency);
+    void unsupportedApiUsed(String deployment, String dependency);
 
     @LogMessage(level = WARN)
     @Message(id = 20, value = "Exception occurred removing deployment content %s")
@@ -733,7 +733,7 @@ public interface ServerLogger extends BasicLogger {
     IllegalStateException serviceModuleLoaderAlreadyStopped();
 
     @Message(id = 99, value = "'%s' cannot be loaded from a ServiceModuleLoader as its name does not start with '%s'")
-    IllegalArgumentException missingModulePrefix(ModuleIdentifier identifier, String prefix);
+    IllegalArgumentException missingModulePrefix(String name, String prefix);
 
     @Message(id = 100, value = "Failed to read '%s'")
     DeploymentUnitProcessingException failedToReadVirtualFile(VirtualFile file, @Cause IOException cause);
@@ -1153,7 +1153,7 @@ public interface ServerLogger extends BasicLogger {
 
     @LogMessage(level = WARN)
     @Message(id = 221, value = "Deployment \"%s\" is using a deprecated module (\"%s\") which may be removed in future versions without notice.")
-    void deprecatedApiUsed(String name, ModuleIdentifier id);
+    void deprecatedApiUsed(String name, String id);
 
     @Message(id = 222, value="Illegal permission name '%s'")
     IllegalArgumentException illegalPermissionName(String name);
@@ -1473,6 +1473,13 @@ public interface ServerLogger extends BasicLogger {
 
     @Message(id = 309, value = "%s stability level is not supported in %s")
     IllegalArgumentException unsupportedStability(Stability stability, String name);
+
+    @Message(id = 310, value = "Embedded process services are not available after %d seconds: %s")
+    @LogMessage(level = Logger.Level.ERROR)
+    void embeddedProcessServicesUnavailable(int timeout, String unavailable);
+
+    @Message(id = 311, value = "Cannot create a ServerEnvironment for an embedded server")
+    IllegalStateException cannotCreateServerEnvironment();
 
     ////////////////////////////////////////////////
     //Messages without IDs

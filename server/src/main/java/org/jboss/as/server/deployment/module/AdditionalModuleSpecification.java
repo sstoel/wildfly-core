@@ -10,7 +10,6 @@ import java.util.Collections;
 import java.util.List;
 
 import org.jboss.as.server.deployment.Attachable;
-import org.jboss.modules.ModuleIdentifier;
 
 
 /**
@@ -21,31 +20,35 @@ import org.jboss.modules.ModuleIdentifier;
  */
 public class AdditionalModuleSpecification extends ModuleSpecification implements Attachable {
 
-    private final ModuleIdentifier moduleIdentifier;
+    private final String moduleName;
 
     private final List<ResourceRoot> resourceRoots;
 
-    public AdditionalModuleSpecification(ModuleIdentifier moduleIdentifier, ResourceRoot resourceRoot) {
-        this.moduleIdentifier = moduleIdentifier;
-        this.resourceRoots = new ArrayList<ResourceRoot>();
+    public AdditionalModuleSpecification(String moduleName, ResourceRoot resourceRoot) {
+        this.moduleName = moduleName;
+        this.resourceRoots = new ArrayList<>(2);
         this.resourceRoots.add(resourceRoot);
     }
 
-    public AdditionalModuleSpecification(ModuleIdentifier moduleIdentifier, Collection<ResourceRoot> resourceRoots) {
-        this.moduleIdentifier = moduleIdentifier;
-        this.resourceRoots = new ArrayList<ResourceRoot>(resourceRoots);
+    public AdditionalModuleSpecification(String moduleName, Collection<ResourceRoot> resourceRoots) {
+        this.moduleName = moduleName;
+        this.resourceRoots = new ArrayList<>(resourceRoots);
     }
 
-    public ModuleIdentifier getModuleIdentifier() {
-        return moduleIdentifier;
+    public String getModuleName() {
+        return moduleName;
     }
 
 
+    /** @deprecated unused method will be removed */
+    @Deprecated(forRemoval = true)
     public void addResourceRoot(ResourceRoot resourceRoot) {
         this.resourceRoots.add(resourceRoot);
     }
 
 
+    /** @deprecated unused method will be removed */
+    @Deprecated(forRemoval = true)
     public void addResourceRoots(Collection<ResourceRoot> resourceRoots) {
         this.resourceRoots.addAll(resourceRoots);
     }

@@ -14,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -57,7 +58,7 @@ public class ModuleSpecification extends SimpleAttachable {
      * <p/>
      * User dependencies are not affected by exclusions.
      */
-    private final Set<ModuleDependency> userDependenciesSet = new HashSet<>();
+    private final Set<ModuleDependency> userDependenciesSet = new CopyOnWriteArraySet<>();
 
     private final List<ResourceLoaderSpec> resourceLoaders = new ArrayList<>();
 
@@ -129,12 +130,12 @@ public class ModuleSpecification extends SimpleAttachable {
     private final List<PermissionFactory> permissionFactories = new ArrayList<>();
 
     public void addSystemDependency(final ModuleDependency dependency) {
-        if (!exclusions.contains(dependency.getIdentifier().getName())) {
+        if (!exclusions.contains(dependency.getDependencyModule())) {
             if (systemDependenciesSet.add(dependency)) {
                 resetDependencyLists();
             }
         } else {
-            excludedDependencies.add(dependency.getIdentifier().getName());
+            excludedDependencies.add(dependency.getDependencyModule());
         }
     }
 
@@ -163,22 +164,28 @@ public class ModuleSpecification extends SimpleAttachable {
      */
     public void removeUserDependencies(final Predicate<ModuleDependency> predicate) {
         Iterator<ModuleDependency> iter = userDependenciesSet.iterator();
-        while (iter.hasNext()) {
-            ModuleDependency md = iter.next();
+        Set<ModuleDependency> toRemove = null;
+        for (ModuleDependency md : userDependenciesSet) {
             if (predicate.test(md)) {
-                iter.remove();
-                resetDependencyLists();
+                if (toRemove == null) {
+                    toRemove = new HashSet<>();
+                }
+                toRemove.add(md);
             }
+        }
+        if (toRemove != null) {
+            userDependenciesSet.removeAll(toRemove);
+            resetDependencyLists();
         }
     }
 
     public void addLocalDependency(final ModuleDependency dependency) {
-        if (!exclusions.contains(dependency.getIdentifier().getName())) {
+        if (!exclusions.contains(dependency.getDependencyModule())) {
             if (this.localDependenciesSet.add(dependency)) {
                 resetDependencyLists();
             }
         } else {
-            excludedDependencies.add(dependency.getIdentifier().getName());
+            excludedDependencies.add(dependency.getDependencyModule());
         }
     }
 
@@ -205,7 +212,7 @@ public class ModuleSpecification extends SimpleAttachable {
      */
     @Deprecated(forRemoval = true)
     public void addExclusion(final ModuleIdentifier exclusion) {
-        addModuleExclusion(exclusion.getName());
+        addModuleExclusion(exclusion.toString());
     }
 
     /**
@@ -227,7 +234,7 @@ public class ModuleSpecification extends SimpleAttachable {
         Iterator<ModuleDependency> it = systemDependenciesSet.iterator();
         while (it.hasNext()) {
             final ModuleDependency dep = it.next();
-            if (dep.getIdentifier().getName().equals(exclusion)) {
+            if (dep.getDependencyModule().equals(exclusion)) {
                 it.remove();
                 resetDependencyLists();
             }
@@ -235,7 +242,7 @@ public class ModuleSpecification extends SimpleAttachable {
         it = localDependenciesSet.iterator();
         while (it.hasNext()) {
             final ModuleDependency dep = it.next();
-            if (dep.getIdentifier().getName().equals(exclusion)) {
+            if (dep.getDependencyModule().equals(exclusion)) {
                 it.remove();
                 resetDependencyLists();
             }
@@ -370,7 +377,7 @@ public class ModuleSpecification extends SimpleAttachable {
     @Deprecated(forRemoval = true)
     @SuppressWarnings("unused")
     public void addAlias(final ModuleIdentifier moduleIdentifier) {
-        addModuleAlias(moduleIdentifier.getName());
+        addModuleAlias(moduleIdentifier.toString());
     }
 
     /**
@@ -390,7 +397,7 @@ public class ModuleSpecification extends SimpleAttachable {
     @Deprecated(forRemoval = true)
     public void addAliases(final Collection<ModuleIdentifier> moduleIdentifiers) {
         for (ModuleIdentifier id : moduleIdentifiers) {
-            addModuleAlias(id.getName());
+            addModuleAlias(id.toString());
         }
     }
 

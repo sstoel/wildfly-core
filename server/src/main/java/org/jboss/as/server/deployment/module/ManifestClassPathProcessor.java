@@ -16,6 +16,9 @@ import java.util.Set;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
 
+import org.jboss.as.controller.ModuleIdentifierUtil;
+import org.jboss.as.server.deployment.AttachmentKey;
+import org.jboss.as.server.deployment.AttachmentList;
 import org.jboss.as.server.logging.ServerLogger;
 import org.jboss.as.server.deployment.Attachable;
 import org.jboss.as.server.deployment.Attachments;
@@ -56,6 +59,11 @@ import org.jboss.vfs.VirtualFile;
  */
 public final class ManifestClassPathProcessor implements DeploymentUnitProcessor {
 
+    /**
+     * Module identifiers for Class-Path information.
+     */
+    static final AttachmentKey<AttachmentList<String>> CLASS_PATH_MODULES = AttachmentKey.createList(String.class);
+
     private static final String[] EMPTY_STRING_ARRAY = {};
 
     /**
@@ -77,9 +85,9 @@ public final class ManifestClassPathProcessor implements DeploymentUnitProcessor
 
         //These are resource roots that are already accessible by default
         //such as ear/lib jars an web-inf/lib jars
-        final Set<VirtualFile> existingAccessibleRoots = new HashSet<VirtualFile>();
+        final Set<VirtualFile> existingAccessibleRoots = new HashSet<>();
 
-        final Map<VirtualFile, ResourceRoot> subDeployments = new HashMap<VirtualFile, ResourceRoot>();
+        final Map<VirtualFile, ResourceRoot> subDeployments = new HashMap<>();
         for (ResourceRoot root : DeploymentUtils.allResourceRoots(topLevelDeployment)) {
             if (SubDeploymentMarker.isSubDeployment(root)) {
                 subDeployments.put(root.getRoot(), root);
@@ -90,7 +98,7 @@ public final class ManifestClassPathProcessor implements DeploymentUnitProcessor
             }
         }
 
-        final ArrayDeque<RootEntry> resourceRoots = new ArrayDeque<RootEntry>();
+        final ArrayDeque<RootEntry> resourceRoots = new ArrayDeque<>();
         if (deploymentUnit.getParent() != null) {
             //top level deployments already had their exiting roots processed above
             for (ResourceRoot root : DeploymentUtils.allResourceRoots(deploymentUnit)) {
@@ -112,10 +120,9 @@ public final class ManifestClassPathProcessor implements DeploymentUnitProcessor
         // build a map of the additional module locations
         // note that if a resource root has been added to two different additional modules
         // and is then referenced via a Class-Path entry the behaviour is undefined
-        final Map<VirtualFile, AdditionalModuleSpecification> additionalModules = new HashMap<VirtualFile, AdditionalModuleSpecification>();
+        final Map<VirtualFile, AdditionalModuleSpecification> additionalModules = new HashMap<>();
         final List<AdditionalModuleSpecification> additionalModuleList = topLevelDeployment.getAttachmentList(Attachments.ADDITIONAL_MODULES);
         // Must synchronize on list as subdeployments executing Phase.STRUCTURE may be concurrently modifying it
-        //noinspection SynchronizationOnLocalVariableOrMethodParameter
         synchronized (additionalModuleList) {
             for (AdditionalModuleSpecification module : additionalModuleList) {
                 for (ResourceRoot additionalModuleResourceRoot : module.getResourceRoots()) {
@@ -147,7 +154,7 @@ public final class ManifestClassPathProcessor implements DeploymentUnitProcessor
                 if (item.startsWith("/")) {
                     if (externalModuleService.isValidFile(item)) {
                         final ModuleIdentifier moduleIdentifier = externalModuleService.addExternalModule(item, phaseContext.getServiceRegistry(), externalServiceTarget);
-                        target.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES, moduleIdentifier);
+                        target.addToAttachmentList(CLASS_PATH_MODULES, moduleIdentifier.toString());
                         ServerLogger.DEPLOYMENT_LOGGER.debugf("Resource %s added as external jar %s", classPathFile, resourceRoot.getRoot());
                     } else {
                         ServerLogger.DEPLOYMENT_LOGGER.classPathEntryNotValid(item, resourceRoot.getRoot().getPathName());
@@ -196,23 +203,23 @@ public final class ManifestClassPathProcessor implements DeploymentUnitProcessor
         } else if (additionalModules.containsKey(classPathFile)) {
             final AdditionalModuleSpecification moduleSpecification = additionalModules.get(classPathFile);
             //as class path entries are exported, transitive dependencies will also be available
-            target.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES, moduleSpecification.getModuleIdentifier());
+            target.addToAttachmentList(CLASS_PATH_MODULES, moduleSpecification.getModuleName());
         } else if (subDeployments.containsKey(classPathFile)) {
             //now we need to calculate the sub deployment module identifier
             //unfortunately the sub deployment has not been setup yet, so we cannot just
             //get it from the sub deployment directly
             final ResourceRoot otherRoot = subDeployments.get(classPathFile);
-            target.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES, ModuleIdentifierProcessor.createModuleIdentifier(otherRoot.getRootName(), otherRoot, topLevelDeployment, topLevelRoot, false));
+            target.addToAttachmentList(CLASS_PATH_MODULES, ModuleIdentifierProcessor.createModuleIdentifier(otherRoot.getRootName(), otherRoot, topLevelDeployment, topLevelRoot, false).toString());
         } else {
-            ModuleIdentifier identifier = createAdditionalModule(resourceRoot, topLevelDeployment, topLevelRoot, additionalModules, classPathFile, resourceRoots);
-            target.addToAttachmentList(Attachments.CLASS_PATH_ENTRIES, identifier);
+            String identifier = createAdditionalModule(resourceRoot, topLevelDeployment, topLevelRoot, additionalModules, classPathFile, resourceRoots);
+            target.addToAttachmentList(CLASS_PATH_MODULES, identifier);
         }
     }
 
-    private ModuleIdentifier createAdditionalModule(final ResourceRoot resourceRoot, final DeploymentUnit topLevelDeployment, final VirtualFile topLevelRoot, final Map<VirtualFile, AdditionalModuleSpecification> additionalModules, final VirtualFile classPathFile, final ArrayDeque<RootEntry> resourceRoots) throws DeploymentUnitProcessingException {
+    private String createAdditionalModule(final ResourceRoot resourceRoot, final DeploymentUnit topLevelDeployment, final VirtualFile topLevelRoot, final Map<VirtualFile, AdditionalModuleSpecification> additionalModules, final VirtualFile classPathFile, final ArrayDeque<RootEntry> resourceRoots) throws DeploymentUnitProcessingException {
         final ResourceRoot root = createResourceRoot(classPathFile, topLevelDeployment, topLevelRoot);
         final String pathName = root.getRoot().getPathNameRelativeTo(topLevelRoot);
-        ModuleIdentifier identifier = ModuleIdentifier.create(ServiceModuleLoader.MODULE_PREFIX + topLevelDeployment.getName() + "." + pathName);
+        String identifier = ModuleIdentifierUtil.canonicalModuleIdentifier(ServiceModuleLoader.MODULE_PREFIX + topLevelDeployment.getName() + "." + pathName, null);
         AdditionalModuleSpecification module = new AdditionalModuleSpecification(identifier, root);
         topLevelDeployment.addToAttachmentList(Attachments.ADDITIONAL_MODULES, module);
         additionalModules.put(classPathFile, module);
@@ -251,7 +258,6 @@ public final class ManifestClassPathProcessor implements DeploymentUnitProcessor
      *
      * @param file           The file for which the resource root will be created
      * @return Returns the created {@link ResourceRoot}
-     * @throws java.io.IOException
      */
     private synchronized ResourceRoot createResourceRoot(final VirtualFile file, final DeploymentUnit deploymentUnit, final VirtualFile deploymentRoot) throws DeploymentUnitProcessingException {
         try {
@@ -275,7 +281,7 @@ public final class ManifestClassPathProcessor implements DeploymentUnitProcessor
         }
     }
 
-    private class RootEntry {
+    private static class RootEntry {
         private final ResourceRoot resourceRoot;
         private final Attachable target;
 

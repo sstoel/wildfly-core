@@ -8,6 +8,7 @@ package org.wildfly.extension.elytron;
 import static org.jboss.as.model.test.FailedOperationTransformationConfig.REJECTED_RESOURCE;
 import static org.jboss.as.model.test.ModelTestControllerVersion.EAP_7_4_0;
 import static org.jboss.as.model.test.ModelTestControllerVersion.EAP_8_0_0;
+import static org.jboss.as.model.test.ModelTestControllerVersion.WILDFLY_31_0_0;
 import static org.junit.Assert.assertTrue;
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.TRUST_MANAGER;
 
@@ -110,10 +111,17 @@ public class SubsystemTransformerTestCase extends AbstractElytronSubsystemBaseTe
         testTransformation(EAP_8_0_0);
     }
 
-    private KernelServices buildKernelServices(String xml, ModelTestControllerVersion controllerVersion, ModelVersion version, String... mavenResourceURLs) throws Exception {
-        KernelServicesBuilder builder = this.createKernelServicesBuilder(AdditionalInitialization.MANAGEMENT).setSubsystemXml(xml);
+    @Test
+    public void testTransformerWFLY31() throws Exception {
+        testTransformation(WILDFLY_31_0_0);
+    }
 
-        builder.createLegacyKernelServicesBuilder(AdditionalInitialization.MANAGEMENT, controllerVersion, version)
+    private KernelServices buildKernelServices(String xml, ModelTestControllerVersion controllerVersion, ModelVersion version, String... mavenResourceURLs) throws Exception {
+        AdditionalInitialization additionalInitialization = AdditionalInitialization.fromModelTestControllerVersion(controllerVersion);
+
+        KernelServicesBuilder builder = this.createKernelServicesBuilder(additionalInitialization).setSubsystemXml(xml);
+
+        builder.createLegacyKernelServicesBuilder(additionalInitialization, controllerVersion, version)
                 .addMavenResourceURL(mavenResourceURLs)
                 .skipReverseControllerCheck()
                 .addParentFirstClassPattern("org.jboss.as.controller.logging.ControllerLogger*")
@@ -151,8 +159,8 @@ public class SubsystemTransformerTestCase extends AbstractElytronSubsystemBaseTe
         ModelVersion elytronVersion = controllerVersion.getSubsystemModelVersion(getMainSubsystemName());
 
         //Boot up empty controllers with the resources needed for the ops coming from the xml to work
-        KernelServicesBuilder builder = createKernelServicesBuilder(AdditionalInitialization.withCapabilities(
-                RuntimeCapability.buildDynamicCapabilityName(Capabilities.DATA_SOURCE_CAPABILITY_NAME, "ExampleDS")
+        KernelServicesBuilder builder = createKernelServicesBuilder(AdditionalInitialization.withCapabilities(controllerVersion.getStability(),
+                        RuntimeCapability.buildDynamicCapabilityName(Capabilities.DATA_SOURCE_CAPABILITY_NAME, "ExampleDS")
         ));
         builder.createLegacyKernelServicesBuilder(AdditionalInitialization.MANAGEMENT, controllerVersion, elytronVersion)
                 .addMavenResourceURL(controllerVersion.getCoreMavenGroupId() + ":wildfly-elytron-integration:" + controllerVersion.getCoreVersion())
