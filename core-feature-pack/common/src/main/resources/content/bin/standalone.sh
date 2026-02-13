@@ -212,8 +212,9 @@ fi
 # clean server opts
 for var in $SERVER_OPTS
 do
-   if [ "${var#"-Djboss.server.base.dir"}" != "$var" ]; then
-      SERVER_OPTS=${SERVER_OPTS#"$var"}
+   v=`echo "${var}" | sed 's/-Djboss.server.base.dir//g'`
+   if [ "${v}" != "${var}" ]; then
+     SERVER_OPTS=`echo "${SERVER_OPTS}" | sed "s|${var}||g"`
    fi
 done
 
@@ -253,7 +254,7 @@ if [ "$PRESERVE_JAVA_OPTS" != "true" ]; then
     if [ "$GC_LOG" = "true" ]; then
         # Enable rotating GC logs if the JVM supports it and GC logs are not already enabled
         mkdir -p $JBOSS_LOG_DIR
-        NO_GC_LOG_ROTATE=`echo $JAVA_OPTS | $GREP "\-Xlog\:\?gc"`
+        NO_GC_LOG_ROTATE=`echo $JAVA_OPTS | $GREP "\-Xlog:\?gc"`
         if [ "x$NO_GC_LOG_ROTATE" = "x" ]; then
             # backup prior gc logs
             mv -f "$JBOSS_LOG_DIR/gc.log" "$JBOSS_LOG_DIR/backupgc.log" >/dev/null 2>&1
@@ -289,8 +290,10 @@ if [ "$PRESERVE_JAVA_OPTS" != "true" ]; then
     JAVA_OPTS="$JAVA_OPTS $DEFAULT_MODULAR_JVM_OPTIONS"
 
     # Set default Security Manager configuration value
-    setSecurityManagerDefault
-    JAVA_OPTS="$JAVA_OPTS $SECURITY_MANAGER_CONFIG_OPTION"
+    if [ "$SECMGR" = "true" ]; then
+        setSecurityManagerDefault
+        JAVA_OPTS="$JAVA_OPTS $SECURITY_MANAGER_CONFIG_OPTION"
+    fi
 
     JAVA_OPTS="$PREPEND_JAVA_OPTS $JAVA_OPTS"
 fi

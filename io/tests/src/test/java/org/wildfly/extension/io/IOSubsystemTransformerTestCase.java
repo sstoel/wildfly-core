@@ -32,7 +32,7 @@ public class IOSubsystemTransformerTestCase extends AbstractSubsystemTest {
 
     @Parameters
     public static Iterable<ModelTestControllerVersion> parameters() {
-        return EnumSet.of(ModelTestControllerVersion.EAP_7_4_0, ModelTestControllerVersion.EAP_8_0_0);
+        return EnumSet.of(ModelTestControllerVersion.EAP_7_4_0, ModelTestControllerVersion.EAP_8_0_0, ModelTestControllerVersion.EAP_8_1_0);
     }
 
     private final ModelTestControllerVersion controller;
@@ -40,7 +40,7 @@ public class IOSubsystemTransformerTestCase extends AbstractSubsystemTest {
     private final ModelVersion version;
 
     public IOSubsystemTransformerTestCase(ModelTestControllerVersion controller) {
-        super(IOSubsystemRegistrar.NAME, new IOExtension());
+        super(IOSubsystemResourceDefinitionRegistrar.REGISTRATION.getName(), new IOExtension());
         this.controller = controller;
         this.version = this.getModelVersion().getVersion();
         this.additionalInitialization = AdditionalInitialization.MANAGEMENT;
@@ -59,6 +59,8 @@ public class IOSubsystemTransformerTestCase extends AbstractSubsystemTest {
             case EAP_7_4_0:
             case EAP_8_0_0:
                 return IOSubsystemModel.VERSION_5_0_0;
+            case EAP_8_1_0:
+                return IOSubsystemModel.VERSION_6_0_0;
             default:
                 throw new IllegalArgumentException();
         }
@@ -70,6 +72,11 @@ public class IOSubsystemTransformerTestCase extends AbstractSubsystemTest {
             case EAP_8_0_0:
                 return new String[] {
                         formatSubsystemArtifact(),
+                };
+            case EAP_8_1_0:
+                return new String[] {
+                        formatArtifact("org.wildfly.core:wildfly-io:%s"),
+                        formatArtifact("org.wildfly.core:wildfly-subsystem:%s"),
                 };
             default:
                 throw new IllegalArgumentException();
@@ -89,8 +96,7 @@ public class IOSubsystemTransformerTestCase extends AbstractSubsystemTest {
 
         // initialize the legacy services and add required jars
         builder.createLegacyKernelServicesBuilder(this.additionalInitialization, this.controller, this.version)
-                .addMavenResourceURL(this.getDependencies())
-//                .addSingleChildFirstClass(AdditionalInitialization.class)
+                .addMavenResourceURL(getDependencies())
                 .skipReverseControllerCheck()
                 .dontPersistXml();
 
@@ -114,7 +120,6 @@ public class IOSubsystemTransformerTestCase extends AbstractSubsystemTest {
         // initialize the legacy services and add required jars
         builder.createLegacyKernelServicesBuilder(this.additionalInitialization, this.controller, this.version)
                 .addMavenResourceURL(this.getDependencies())
-//                .addSingleChildFirstClass(AdditionalInitialization.class)
                 .dontPersistXml();
 
         KernelServices services = builder.build();
@@ -129,10 +134,10 @@ public class IOSubsystemTransformerTestCase extends AbstractSubsystemTest {
 
     private FailedOperationTransformationConfig createFailedOperationTransformationConfig() {
         FailedOperationTransformationConfig config = new FailedOperationTransformationConfig();
-        PathAddress subsystemAddress = PathAddress.pathAddress(IOSubsystemRegistrar.PATH);
+        PathAddress subsystemAddress = PathAddress.pathAddress(IOSubsystemResourceDefinitionRegistrar.REGISTRATION.getPathElement());
 
         if (IOSubsystemModel.VERSION_6_0_0.requiresTransformation(this.version)) {
-            config.addFailedAttribute(subsystemAddress, new FailedOperationTransformationConfig.NewAttributesConfig(IOSubsystemRegistrar.DEFAULT_WORKER.getName()));
+            config.addFailedAttribute(subsystemAddress, new FailedOperationTransformationConfig.NewAttributesConfig(IOSubsystemResourceDefinitionRegistrar.DEFAULT_WORKER.getName()));
         }
 
         return config;

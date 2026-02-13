@@ -251,7 +251,7 @@ if not "%PRESERVE_JAVA_OPTS%" == "true" (
   )
 )
 
-if not "%PRESERVE_JAVA_OPT%" == "true" (
+if not "%PRESERVE_JAVA_OPTS%" == "true" (
     if "%GC_LOG%" == "true" (
         if not exist "%JBOSS_LOG_DIR%" > nul 2>&1 (
             mkdir "%JBOSS_LOG_DIR%"
@@ -289,12 +289,14 @@ if not "%PRESERVE_JAVA_OPT%" == "true" (
 
     rem set default modular jvm parameters
     setlocal EnableDelayedExpansion
-    call "!DIRNAME!common.bat" :setDefaultModularJvmOptions !JAVA_OPTS!
+    call "!DIRNAME!common.bat" :setDefaultModularJvmOptions "!JAVA_OPTS!"
     set "JAVA_OPTS=!JAVA_OPTS! !DEFAULT_MODULAR_JVM_OPTIONS!"
 
     rem Set default Security Manager configuration value
-    call "!DIRNAME!common.bat" :setSecurityManagerDefault
-    set "JAVA_OPTS=!JAVA_OPTS! !SECURITY_MANAGER_CONFIG_OPTION!"
+    if "%SECMGR%" == "true" (
+        call "!DIRNAME!common.bat" :setSecurityManagerDefault
+        set "JAVA_OPTS=!JAVA_OPTS! !SECURITY_MANAGER_CONFIG_OPTION!"
+    )
     setlocal DisableDelayedExpansion
 )
 

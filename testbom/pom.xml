@@ -9,7 +9,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>28.0.0.Beta2-SNAPSHOT</version>
+        <version>32.0.0.Beta4-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-core-testbom</artifactId>
@@ -202,6 +202,15 @@
                 <version>${version.org.apache.velocity}</version>
                 <scope>test</scope>
             </dependency>
+
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-bom</artifactId>
+                <version>${version.org.assertj}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <dependency>
                 <groupId>org.codehaus.plexus</groupId>
                 <artifactId>plexus-utils</artifactId>
@@ -277,9 +286,10 @@
             </dependency>
             <dependency>
                 <groupId>org.mockito</groupId>
-                <artifactId>mockito-core</artifactId>
+                <artifactId>mockito-bom</artifactId>
                 <version>${version.org.mockito}</version>
-                <scope>test</scope>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>org.jmockit</groupId>
@@ -301,6 +311,19 @@
                 <type>test-jar</type>
                 <scope>test</scope>
             </dependency>
+            
+            <dependency>
+	            <groupId>ch.qos.logback</groupId>
+	            <artifactId>logback-classic</artifactId>
+	            <version>${version.ch.qos.logback}</version>
+	            <scope>test</scope>
+        	</dependency>
+        	<dependency>
+	            <groupId>ch.qos.logback</groupId>
+	            <artifactId>logback-core</artifactId>
+	            <version>${version.ch.qos.logback}</version>
+	            <scope>test</scope>
+        	</dependency>
         </dependencies>
     </dependencyManagement>
 

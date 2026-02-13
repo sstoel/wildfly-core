@@ -12,7 +12,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-model-test</artifactId>
-        <version>28.0.0.Beta2-SNAPSHOT</version>
+        <version>32.0.0.Beta4-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-core-model-test-tests</artifactId>
@@ -38,6 +38,13 @@
               <version>${version.surefire.plugin}</version>
               <configuration>
                   <reuseForks>false</reuseForks>
+              </configuration>
+          </plugin>
+          <plugin>
+              <groupId>org.sonatype.plugins</groupId>
+              <artifactId>nxrm3-maven-plugin</artifactId>
+              <configuration>
+                  <skipNexusStagingDeployMojo>true</skipNexusStagingDeployMojo>
               </configuration>
           </plugin>
        </plugins>

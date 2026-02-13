@@ -31,7 +31,6 @@ import org.jboss.as.server.moduleservice.ModuleResolvePhaseService;
 import org.jboss.as.server.moduleservice.ServiceModuleLoader;
 import org.jboss.modules.DependencySpec;
 import org.jboss.modules.ModuleDependencySpecBuilder;
-import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoader;
 import org.jboss.modules.ModuleSpec;
 import org.jboss.modules.ResourceLoaderSpec;
@@ -43,11 +42,10 @@ import org.jboss.modules.security.ImmediatePermissionFactory;
 import org.jboss.modules.security.PermissionFactory;
 import org.jboss.msc.service.Service;
 import org.jboss.msc.service.ServiceBuilder;
-import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.ServiceController.Mode;
+import org.jboss.msc.service.ServiceName;
 import org.jboss.msc.service.StartContext;
 import org.jboss.msc.service.StopContext;
-
 import org.jboss.vfs.VirtualFile;
 import org.jboss.vfs.VirtualFilePermission;
 
@@ -122,9 +120,9 @@ public class ModuleSpecProcessor implements DeploymentUnitProcessor {
         phaseContext.addDeploymentDependency(moduleServiceName, Attachments.MODULE);
 
         for (final DeploymentUnit subDeployment : deploymentUnit.getAttachmentList(Attachments.SUB_DEPLOYMENTS)) {
-            ModuleIdentifier moduleId = subDeployment.getAttachment(Attachments.MODULE_IDENTIFIER);
+            String moduleId = subDeployment.getAttachment(Attachments.MODULE_NAME);
             if (moduleId != null) {
-                phaseContext.addToAttachmentList(Attachments.NEXT_PHASE_DEPS, ServiceModuleLoader.moduleSpecServiceName(moduleId.toString()));
+                phaseContext.addToAttachmentList(Attachments.NEXT_PHASE_DEPS, ServiceModuleLoader.moduleSpecServiceName(moduleId));
             }
         }
 
@@ -261,7 +259,7 @@ public class ModuleSpecProcessor implements DeploymentUnitProcessor {
         specBuilder.setClassFileTransformer(delegatingClassTransformer);
         deploymentUnit.putAttachment(DelegatingClassTransformer.ATTACHMENT_KEY, delegatingClassTransformer);
         final ModuleSpec moduleSpec = specBuilder.create();
-        final ServiceName moduleSpecServiceName = ServiceModuleLoader.moduleSpecServiceName(moduleIdentifier.toString());
+        final ServiceName moduleSpecServiceName = ServiceModuleLoader.moduleSpecServiceName(moduleIdentifier);
 
         ModuleDefinition moduleDefinition = new ModuleDefinition(moduleIdentifier, new HashSet<>(moduleSpecification.getAllDependencies()), moduleSpec);
 
@@ -282,15 +280,14 @@ public class ModuleSpecProcessor implements DeploymentUnitProcessor {
 
         ModuleLoader moduleLoader = deploymentUnit.getAttachment(Attachments.SERVICE_MODULE_LOADER);
         for (final String aliasName : moduleSpecification.getModuleAliases()) {
-            final ModuleIdentifier alias = ModuleIdentifier.fromString(aliasName);
 
-            final ServiceName moduleSpecServiceName = ServiceModuleLoader.moduleSpecServiceName(alias.toString());
+            final ServiceName moduleSpecServiceName = ServiceModuleLoader.moduleSpecServiceName(aliasName);
             final ModuleSpec spec = ModuleSpec.buildAlias(aliasName, moduleIdentifier).create();
 
             HashSet<ModuleDependency> dependencies = new HashSet<>(moduleSpecification.getAllDependencies());
             //we need to add the module we are aliasing as a dependency, to make sure that it will be resolved
-            dependencies.add(ModuleDependency.Builder.of(moduleLoader, moduleIdentifier.toString()).build());
-            ModuleDefinition moduleDefinition = new ModuleDefinition(alias, dependencies, spec);
+            dependencies.add(ModuleDependency.Builder.of(moduleLoader, moduleIdentifier).build());
+            ModuleDefinition moduleDefinition = new ModuleDefinition(aliasName, dependencies, spec);
 
             final ServiceBuilder sb = phaseContext.getServiceTarget().addService(moduleSpecServiceName);
             final Consumer<ModuleDefinition> moduleDefinitionConsumer = sb.provides(moduleSpecServiceName);
@@ -300,7 +297,7 @@ public class ModuleSpecProcessor implements DeploymentUnitProcessor {
             sb.setInstance(new ModuleDefinitionService(moduleDefinitionConsumer, moduleDefinition));
             sb.install();
 
-            ModuleLoadService.installAliases(phaseContext.getServiceTarget(), alias, Collections.singletonList(moduleIdentifier));
+            ModuleLoadService.installAliases(phaseContext.getServiceTarget(), aliasName, Collections.singletonList(moduleIdentifier));
 
             ModuleResolvePhaseService.installService(phaseContext.getServiceTarget(), moduleDefinition);
         }
@@ -346,7 +343,7 @@ public class ModuleSpecProcessor implements DeploymentUnitProcessor {
                         .setExportFilter(exportFilter)
                         .build();
                 specBuilder.addDependency(depSpec);
-                logger.debugf("Adding dependency %s to module %s", dependency, specBuilder.getIdentifier());
+                logger.debugf("Adding dependency %s to module %s", dependency, specBuilder.getName());
             }
         }
     }

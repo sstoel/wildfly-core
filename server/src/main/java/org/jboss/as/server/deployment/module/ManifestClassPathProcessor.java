@@ -17,10 +17,9 @@ import java.util.jar.Attributes;
 import java.util.jar.Manifest;
 
 import org.jboss.as.controller.ModuleIdentifierUtil;
+import org.jboss.as.server.deployment.Attachable;
 import org.jboss.as.server.deployment.AttachmentKey;
 import org.jboss.as.server.deployment.AttachmentList;
-import org.jboss.as.server.logging.ServerLogger;
-import org.jboss.as.server.deployment.Attachable;
 import org.jboss.as.server.deployment.Attachments;
 import org.jboss.as.server.deployment.DeploymentPhaseContext;
 import org.jboss.as.server.deployment.DeploymentUnit;
@@ -30,9 +29,9 @@ import org.jboss.as.server.deployment.DeploymentUtils;
 import org.jboss.as.server.deployment.MountedDeploymentOverlay;
 import org.jboss.as.server.deployment.SubDeploymentMarker;
 import org.jboss.as.server.deployment.annotation.ResourceRootIndexer;
+import org.jboss.as.server.logging.ServerLogger;
 import org.jboss.as.server.moduleservice.ExternalModule;
 import org.jboss.as.server.moduleservice.ServiceModuleLoader;
-import org.jboss.modules.ModuleIdentifier;
 import org.jboss.msc.service.ServiceTarget;
 import org.jboss.vfs.VFS;
 import org.jboss.vfs.VFSUtils;
@@ -153,8 +152,8 @@ public final class ManifestClassPathProcessor implements DeploymentUnitProcessor
                 final VirtualFile topLevelClassPathFile = deploymentRoot.getRoot().getParent().getChild(item);
                 if (item.startsWith("/")) {
                     if (externalModuleService.isValidFile(item)) {
-                        final ModuleIdentifier moduleIdentifier = externalModuleService.addExternalModule(item, phaseContext.getServiceRegistry(), externalServiceTarget);
-                        target.addToAttachmentList(CLASS_PATH_MODULES, moduleIdentifier.toString());
+                        final String moduleIdentifier = externalModuleService.addExternalModuleAsString(item, phaseContext.getServiceRegistry(), externalServiceTarget);
+                        target.addToAttachmentList(CLASS_PATH_MODULES, moduleIdentifier);
                         ServerLogger.DEPLOYMENT_LOGGER.debugf("Resource %s added as external jar %s", classPathFile, resourceRoot.getRoot());
                     } else {
                         ServerLogger.DEPLOYMENT_LOGGER.classPathEntryNotValid(item, resourceRoot.getRoot().getPathName());
@@ -209,7 +208,7 @@ public final class ManifestClassPathProcessor implements DeploymentUnitProcessor
             //unfortunately the sub deployment has not been setup yet, so we cannot just
             //get it from the sub deployment directly
             final ResourceRoot otherRoot = subDeployments.get(classPathFile);
-            target.addToAttachmentList(CLASS_PATH_MODULES, ModuleIdentifierProcessor.createModuleIdentifier(otherRoot.getRootName(), otherRoot, topLevelDeployment, topLevelRoot, false).toString());
+            target.addToAttachmentList(CLASS_PATH_MODULES, ModuleIdentifierProcessor.createModuleIdentifierAsString(otherRoot.getRootName(), otherRoot, topLevelDeployment, topLevelRoot, false));
         } else {
             String identifier = createAdditionalModule(resourceRoot, topLevelDeployment, topLevelRoot, additionalModules, classPathFile, resourceRoots);
             target.addToAttachmentList(CLASS_PATH_MODULES, identifier);

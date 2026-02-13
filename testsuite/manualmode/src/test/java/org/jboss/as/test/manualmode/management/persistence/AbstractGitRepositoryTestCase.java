@@ -81,8 +81,9 @@ public class AbstractGitRepositoryTestCase {
     protected void closeEmptyRemoteRepository() throws Exception {
         if (emptyRemoteRepository != null) {
             emptyRemoteRepository.close();
+            emptyRemoteRepository = null;
         }
-        FileUtils.delete(emptyRemoteRoot.getParent().toFile(), FileUtils.RECURSIVE | FileUtils.RETRY);
+        FileUtils.delete(emptyRemoteRoot.getParent().toFile(), FileUtils.RECURSIVE | FileUtils.RETRY | FileUtils.SKIP_MISSING);
     }
 
     protected Repository createRepository() throws IOException {
@@ -98,12 +99,13 @@ public class AbstractGitRepositoryTestCase {
     protected void closeRepository() throws Exception{
         if (repository != null) {
             repository.close();
+            repository = null;
         }
         if (Files.exists(getDotGitDir())) {
-            FileUtils.delete(getDotGitDir().toFile(), FileUtils.RECURSIVE | FileUtils.RETRY);
+            FileUtils.delete(getDotGitDir().toFile(), FileUtils.RECURSIVE | FileUtils.RETRY | FileUtils.SKIP_MISSING);
         }
-        if(Files.exists(getDotGitIgnore())) {
-            FileUtils.delete(getDotGitIgnore().toFile(), FileUtils.RECURSIVE | FileUtils.RETRY);
+        if (Files.exists(getDotGitIgnore())) {
+            FileUtils.delete(getDotGitIgnore().toFile(), FileUtils.RECURSIVE | FileUtils.RETRY | FileUtils.SKIP_MISSING);
         }
     }
 
@@ -155,7 +157,7 @@ public class AbstractGitRepositoryTestCase {
                     treeWalk.setRecursive(true);
                     List<DiffEntry> diff = DiffEntry.scan(treeWalk, false, null);
                     for (DiffEntry diffEntry : diff) {
-                        if(diffEntry.getChangeType() == DiffEntry.ChangeType.DELETE) {
+                        if (diffEntry.getChangeType() == DiffEntry.ChangeType.DELETE) {
                             result.add("-" + diffEntry.getOldPath());
                         } else {
                             result.add(diffEntry.getNewPath());

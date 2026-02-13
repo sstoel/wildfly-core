@@ -38,7 +38,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>28.0.0.Beta2-SNAPSHOT</version>
+        <version>32.0.0.Beta4-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-core-testsuite</artifactId>
@@ -54,6 +54,7 @@
         <module>embedded</module>
         <module>scripts</module>
         <module>unstable-api-annotation</module>
+        <module>bootable-configurator</module>
     </modules>
 
 
@@ -358,6 +359,22 @@
                             <phase>none</phase>
                         </execution>
                     </executions>
+                </plugin>
+
+                <!-- Don't sign - nothing to do. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-gpg-plugin</artifactId>
+                    <executions><execution><id>gpg-sign</id><phase>none</phase></execution></executions>
+                </plugin>
+
+                <!-- Don't deploy -->
+                <plugin>
+                    <groupId>org.sonatype.plugins</groupId>
+                    <artifactId>nxrm3-maven-plugin</artifactId>
+                    <configuration>
+                        <skipNexusStagingDeployMojo>true</skipNexusStagingDeployMojo>
+                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>

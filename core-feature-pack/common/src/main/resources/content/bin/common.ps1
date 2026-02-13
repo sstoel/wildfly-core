@@ -232,8 +232,10 @@ Param(
   $MODULAR_JDK = SetModularJDK
   $JAVA_OPTS = Get-Java-Opts #takes care of looking at defind settings and/or using env:JAVA_OPTS
   $DEFAULT_MODULAR_JVM_OPTS = Get-Default-Modular-Jvm-Options -opts $JAVA_OPTS -modularJDK $MODULAR_JDK
-  $ENHANCED_SM = SetEnhancedSecurityManager
-  $SECURITY_MANAGER_CONFIG_OPT = Get-Security-Manager-Default -enhancedSM $ENHANCED_SM
+  if ($SECMGR) {
+      $ENHANCED_SM = SetEnhancedSecurityManager
+      $SECURITY_MANAGER_CONFIG_OPT = Get-Security-Manager-Default -enhancedSM $ENHANCED_SM
+  }
 
   $PROG_ARGS = @()
   if ($JAVA_OPTS -ne $null){
@@ -252,7 +254,9 @@ Param(
   	$PROG_ARGS += "-Dlogging.configuration=file:$logFileProperties"
   }
   $PROG_ARGS += "-Djboss.home.dir=$JBOSS_HOME"
-  $PROG_ARGS += "-Djboss.server.base.dir=$global:JBOSS_BASE_DIR"
+  if (-not($SERVER_OPTS -match "-Djboss.server.base.dir")) {
+    $PROG_ARGS += "-Djboss.server.base.dir=$global:JBOSS_BASE_DIR"
+  }
   $PROG_ARGS += "-Djboss.server.config.dir=$global:JBOSS_CONFIG_DIR"
 
   if ($GC_LOG -eq $true){
@@ -260,7 +264,7 @@ Param(
     if ($PROG_ARGS -notmatch "-Xlog:?gc"){
         Rotate-GC-Logs
 
-        & $JAVA -Xverbosegclog:"$JBOSS_LOG_DIR\gc.log" java.se -version >$null 2>&1
+        & $JAVA -Xverbosegclog:"$JBOSS_LOG_DIR\gc.log" -version >$null 2>&1
         if ($LastExitCode -eq 0){
             $PROG_ARGS += "-Xverbosegclog:`\`"$JBOSS_LOG_DIR\gc.log`\`""
         }elseif ($MODULAR_JDK -eq $true)

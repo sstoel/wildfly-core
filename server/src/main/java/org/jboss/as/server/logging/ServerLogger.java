@@ -49,7 +49,6 @@ import org.jboss.logging.annotations.LogMessage;
 import org.jboss.logging.annotations.Message;
 import org.jboss.logging.annotations.MessageLogger;
 import org.jboss.logging.annotations.Param;
-import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoadException;
 import org.jboss.msc.service.ServiceController.State;
 import org.jboss.msc.service.ServiceName;
@@ -62,7 +61,6 @@ import org.wildfly.security.mechanism.AuthenticationMechanismException;
  * @author <a href="mailto:jperkins@redhat.com">James R. Perkins</a>
  * @author Mike M. Clark
  */
-@SuppressWarnings("deprecation")
 @MessageLogger(projectCode = "WFLYSRV", length = 4)
 public interface ServerLogger extends BasicLogger {
 
@@ -353,7 +351,7 @@ public interface ServerLogger extends BasicLogger {
 
     @LogMessage(level = Logger.Level.ERROR)
     @Message(id = 55, value = "Caught exception during boot")
-    void caughtExceptionDuringBoot(@Cause Exception e);
+    void caughtExceptionDuringBoot(@Cause Throwable e);
 
 
     @Message(id = 56, value = "Server boot has failed in an unrecoverable manner; exiting. See previous messages for details. %s")
@@ -997,7 +995,7 @@ public interface ServerLogger extends BasicLogger {
     IllegalStateException externalModuleServiceAlreadyStarted();
 
     @Message(id = 179, value = "Failed to load module: %s")
-    StartException failedToLoadModule(ModuleIdentifier module, @Cause ModuleLoadException cause);
+    StartException failedToLoadModule(String moduleName, @Cause ModuleLoadException cause);
 
     //@Message(id = 180, value = "Timeout waiting for module service: %s")
     //ModuleLoadException timeoutWaitingForModuleService(ModuleIdentifier module);
@@ -1075,8 +1073,8 @@ public interface ServerLogger extends BasicLogger {
     @Message(id = 204, value = "Null '%s'")
     OperationFailedException nullParameter(String name);
 
-    @Message(id = 205, value = "There is already a deployment called %s with the same runtime name %s")
-    OperationFailedException runtimeNameMustBeUnique(String existingDeployment, String runtimename);
+    @Message(id = 205, value = "Deployment '%s' is already ENABLED with the runtime name '%s'. Duplicate deployment '%s' will not be processed.")
+    OperationFailedException runtimeNameMustBeUnique(String existingDeployment, String runtimeName, String newDeployment);
 
     @Message(id = 206, value = "Multiple deployment unit processors registered with priority %s and class %s")
     IllegalStateException duplicateDeploymentUnitProcessor(int priority, Class aClass);
@@ -1387,8 +1385,8 @@ public interface ServerLogger extends BasicLogger {
     @Message(id = 283, value = "A non-graceful startup was requested in conjunction with a suspended startup. The server will start suspended.")
     void disregardingNonGraceful();
 
-    @Message(id = 284, value = "Failed to restore the configuration after failing to initialize the repository %s")
-    RuntimeException failedToRestoreConfiguration(@Cause Exception cause, String repository);
+//    @Message(id = 284, value = "Failed to restore the configuration after failing to initialize the repository %s")
+//    RuntimeException failedToRestoreConfiguration(@Cause Exception cause, String repository);
 
     @LogMessage(level = WARN)
     @Message(id = 285, value = "Vault support has been removed, no vault resources will be initialised.")
@@ -1480,6 +1478,27 @@ public interface ServerLogger extends BasicLogger {
 
     @Message(id = 311, value = "Cannot create a ServerEnvironment for an embedded server")
     IllegalStateException cannotCreateServerEnvironment();
+
+
+    @LogMessage(level = Logger.Level.ERROR)
+    @Message(id = 312, value = "Caught exception during shutdown")
+    void caughtExceptionDuringShutdown(@Cause Throwable e);
+
+    @LogMessage(level = Logger.Level.ERROR)
+    @Message(id = 313, value = "Caught exception during server suspend")
+    void suspendFailed(@Cause Throwable e);
+
+    @LogMessage(level = Logger.Level.ERROR)
+    @Message(id = 314, value = "Caught exception during server resume")
+    void resumeFailed(@Cause Throwable e);
+
+    @LogMessage(level = ERROR)
+    @Message(id = 315, value = "Failed to restore file %s after failing to initialize the git repository %s -- Cause: %s")
+    void failedToRestoreConfiguration(Path failed, String repository, String cause);
+
+    @LogMessage(level = WARN)
+    @Message(id = 316, value = "Server started as %s. If this user has elevated privileges, it is discouraged to run the server under this account, as it can compromise system security. You can dismiss this warning by starting the server with: -Djboss.ignore.root.username.warning=true")
+    void startedWithRootUser(String userName);
 
     ////////////////////////////////////////////////
     //Messages without IDs

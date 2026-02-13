@@ -12,7 +12,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>28.0.0.Beta2-SNAPSHOT</version>
+        <version>32.0.0.Beta4-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-embedded</artifactId>
@@ -76,16 +76,6 @@
         <dependency>
             <groupId>org.jboss</groupId>
             <artifactId>jboss-dmr</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>*</groupId>
-                    <artifactId>*</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>org.jboss.threads</groupId>
-            <artifactId>jboss-threads</artifactId>
             <exclusions>
                 <exclusion>
                     <groupId>*</groupId>

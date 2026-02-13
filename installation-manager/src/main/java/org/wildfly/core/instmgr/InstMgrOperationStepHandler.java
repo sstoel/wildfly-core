@@ -78,9 +78,17 @@ abstract class InstMgrOperationStepHandler implements OperationStepHandler {
                 if (!current.normalize().startsWith(targetDir.normalize())) {
                     throw InstMgrLogger.ROOT_LOGGER.zipEntryOutsideOfTarget(current.toRealPath().toString(), targetDir.toRealPath().toString());
                 }
+
                 if (entry.isDirectory()) {
+                    // if the entry is within the file we just create the folder structure and continue
                     current.toFile().mkdirs();
                 } else {
+                    // just in case the folders were not within the zip file we do check the folder
+                    // structure exists and we create it
+                    Path parentFolder = current.getParent();
+                    if (!Files.exists(parentFolder)) {
+                        parentFolder.toFile().mkdirs();
+                    }
                     Files.copy(zis, current, StandardCopyOption.REPLACE_EXISTING);
                 }
                 entry = zis.getNextEntry();
@@ -175,14 +183,15 @@ abstract class InstMgrOperationStepHandler implements OperationStepHandler {
             InstMgrLogger.ROOT_LOGGER.debug("Storing as Zip file attachment with index=" + index);
             try (InputStream is = context.getAttachmentStream(index)) {
                 Path tempFile = Files.createTempFile(baseWorkDir, tempFilePrefix, ".zip");
-                FileOutputStream outputStream = new FileOutputStream(tempFile.toFile());
-                byte[] buffer = new byte[1024];
+                try (FileOutputStream outputStream = new FileOutputStream(tempFile.toFile())) {
+                    byte[] buffer = new byte[1024];
 
-                int bytesRead;
-                while ((bytesRead = is.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
+                    int bytesRead;
+                    while ((bytesRead = is.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, bytesRead);
+                    }
+                    return tempFile;
                 }
-                return tempFile;
             }
         } catch (Exception e) {
             throw new RuntimeException(e);

@@ -9,19 +9,19 @@ import java.lang.management.ManagementFactory;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import javax.management.ObjectName;
 
 import org.jboss.as.controller.ControlledProcessState;
-import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.controller.ControlledProcessStateService;
+import org.jboss.as.controller.ProcessStateNotifier;
 import org.jboss.as.server.jmx.RunningStateJmx;
 import org.jboss.as.server.logging.ServerLogger;
-import org.jboss.as.server.suspend.SuspendController;
 import org.jboss.as.server.suspend.ServerSuspendController;
+import org.jboss.as.server.suspend.SuspendController;
 import org.jboss.modules.Module;
-import org.jboss.modules.ModuleIdentifier;
 import org.jboss.modules.ModuleLoadException;
 import org.jboss.modules.ModuleLoader;
 import org.jboss.msc.service.LifecycleEvent;
@@ -89,7 +89,7 @@ final class BootstrapImpl implements Bootstrap {
         assert configurationPersisterFactory != null : "configurationPersisterFactory is null";
 
         try {
-            Module.registerURLStreamHandlerFactoryModule(moduleLoader.loadModule(ModuleIdentifier.create("org.jboss.vfs")));
+            Module.registerURLStreamHandlerFactoryModule(moduleLoader.loadModule("org.jboss.vfs"));
         } catch (ModuleLoadException e) {
             throw ServerLogger.ROOT_LOGGER.vfsNotAvailable();
         }
@@ -219,6 +219,11 @@ final class BootstrapImpl implements Bootstrap {
             Runtime.getRuntime().addShutdownHook(this);
             synchronized (this) {
                 if (!down) {
+                    // WFLY-7045 JBoss Threads will turn off statistics tracking in a static initializer,
+                    // preventing our management API working, unless we tell it not to
+                    if (WildFlySecurityManager.getPropertyPrivileged("jboss.threads.eqe.statistics", null) == null) {
+                        WildFlySecurityManager.setPropertyPrivileged("jboss.threads.eqe.statistics", "true");
+                    }
                     container = ServiceContainer.Factory.create("jboss-as", MAX_THREADS, 30, TimeUnit.SECONDS, false);
                     return container;
                 } else {
@@ -293,13 +298,19 @@ final class BootstrapImpl implements Bootstrap {
                     // If necessary we'll wait 500 ms longer for it in the off chance a gc or something delays things
                     suspend.completeOnTimeout(null, millis + 500, TimeUnit.MILLISECONDS);
                 }
-                suspend.join();
+                try {
+                    suspend.get();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException e) {
+                    ServerLogger.ROOT_LOGGER.caughtExceptionDuringShutdown(e);
+                }
             }
         }
 
         private static long getSuspendTimeout() {
             String timeoutString = System.getProperty(SIGTERM_SUSPEND_TIMEOUT_PROP);
-            if (timeoutString != null && timeoutString.length() > 0) {
+            if (timeoutString != null && !timeoutString.isEmpty()) {
                 try {
                     return Integer.decode(timeoutString);
                 } catch (NumberFormatException ex) {

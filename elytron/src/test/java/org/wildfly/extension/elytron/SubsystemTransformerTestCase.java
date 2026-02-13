@@ -8,6 +8,7 @@ package org.wildfly.extension.elytron;
 import static org.jboss.as.model.test.FailedOperationTransformationConfig.REJECTED_RESOURCE;
 import static org.jboss.as.model.test.ModelTestControllerVersion.EAP_7_4_0;
 import static org.jboss.as.model.test.ModelTestControllerVersion.EAP_8_0_0;
+import static org.jboss.as.model.test.ModelTestControllerVersion.EAP_8_1_0;
 import static org.jboss.as.model.test.ModelTestControllerVersion.WILDFLY_31_0_0;
 import static org.junit.Assert.assertTrue;
 import static org.wildfly.extension.elytron.ElytronDescriptionConstants.TRUST_MANAGER;
@@ -111,6 +112,14 @@ public class SubsystemTransformerTestCase extends AbstractElytronSubsystemBaseTe
         testTransformation(EAP_8_0_0);
     }
 
+    /**
+     * Test case testing resources and attributes are appropriately transformed when transforming to EAP 8.1.0.
+     */
+    @Test
+    public void testTransformerEAP810() throws Exception {
+        testTransformation(EAP_8_1_0);
+    }
+
     @Test
     public void testTransformerWFLY31() throws Exception {
         testTransformation(WILDFLY_31_0_0);
@@ -124,7 +133,6 @@ public class SubsystemTransformerTestCase extends AbstractElytronSubsystemBaseTe
         builder.createLegacyKernelServicesBuilder(additionalInitialization, controllerVersion, version)
                 .addMavenResourceURL(mavenResourceURLs)
                 .skipReverseControllerCheck()
-                .addParentFirstClassPattern("org.jboss.as.controller.logging.ControllerLogger*")
                 .addParentFirstClassPattern("org.jboss.as.controller.PathAddress")
                 .addParentFirstClassPattern("org.jboss.as.controller.PathElement")
                 .addParentFirstClassPattern("org.jboss.as.server.logging.*")

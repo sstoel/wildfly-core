@@ -229,6 +229,7 @@ public enum Phase {
     public static final int STRUCTURE_DATASOURCE_RESOURCE_INJECTION                 = 0x1C01;
     public static final int STRUCTURE_JMS_CONNECTION_FACTORY_RESOURCE_INJECTION     = 0x1C02;
     public static final int STRUCTURE_BEAN_VALIDATION_RESOURCE_INJECTION_REGISTRY   = 0x1C03;
+    public static final int STRUCTURE_CONCURRENCY_RESOURCE_INJECTION_REGISTRY       = 0x1C04;
     public static final int STRUCTURE_DEPLOYMENT_DEPENDENCIES           = 0x1D00;
     public static final int STRUCTURE_GLOBAL_MODULES                    = 0x1E00;
     public static final int STRUCTURE_GLOBAL_DIRECTORIES                = 0x1E01;
@@ -312,6 +313,10 @@ public enum Phase {
     public static final int PARSE_RESOURCE_DEF_ANNOTATION_JMS_DESTINATION           = 0x2D03;
     public static final int PARSE_RESOURCE_DEF_ANNOTATION_JMS_CONNECTION_FACTORY    = 0x2D04;
     public static final int PARSE_RESOURCE_DEF_ANNOTATION_MAIL_SESSION              = 0x2D05;
+    public static final int PARSE_RESOURCE_DEF_ANNOTATION_CONTEXT_SERVICE           = 0x2D06;
+    public static final int PARSE_RESOURCE_DEF_ANNOTATION_MANAGED_EXECUTOR          = 0x2D07;
+    public static final int PARSE_RESOURCE_DEF_ANNOTATION_MANAGED_SCHEDULER         = 0x2D08;
+    public static final int PARSE_RESOURCE_DEF_ANNOTATION_MANAGED_THREAD_FACTORY    = 0x2D09;
     public static final int PARSE_EJB_CONTEXT_BINDING                   = 0x2E00;
     public static final int PARSE_EJB_TIMERSERVICE_BINDING              = 0x2E01;
     public static final int PARSE_PERSISTENCE_UNIT                      = 0x2F00;
@@ -379,6 +384,7 @@ public enum Phase {
     public static final int DEPENDENCIES_PERSISTENCE_ANNOTATION         = 0x0F00;
     public static final int DEPENDENCIES_JPA                            = 0x1000;
     public static final int DEPENDENCIES_HIBERNATE_SEARCH               = 0x1001;
+    public static final int DEPENDENCIES_JAKARTA_DATA                   = 0x1080;
     public static final int DEPENDENCIES_TRANSACTIONS                   = 0x1100;
     public static final int DEPENDENCIES_XTS                            = 0x1110;
     public static final int DEPENDENCIES_JDK                            = 0x1200;
@@ -486,8 +492,7 @@ public enum Phase {
     public static final int POST_MODULE_WELD_PORTABLE_EXTENSIONS        = 0x0E00;
     public static final int POST_MODULE_XTS_PORTABLE_EXTENSIONS         = 0x0E10;
     public static final int POST_MODULE_JMS_CDI_EXTENSIONS              = 0x0F00;
-    // TODO remove after no usage by wfly
-    public static final int POST_MODULE_JMS_DEFINITION_DEPLOYMENT       = 0x0F80;
+    public static final int POST_MODULE_JAKARTA_DATA_CDI_EXTENSIONS     = 0x0F80;
     // should come before ejb jndi bindings processor
     public static final int POST_MODULE_EJB_IMPLICIT_NO_INTERFACE_VIEW  = 0x1000;
     public static final int POST_MODULE_EJB_JNDI_BINDINGS               = 0x1100;
@@ -508,6 +513,12 @@ public enum Phase {
     public static final int POST_MODULE_RESOURCE_DEF_XML_JMS_DESTINATION            = 0x1703;
     public static final int POST_MODULE_RESOURCE_DEF_XML_JMS_CONNECTION_FACTORY     = 0x1704;
     public static final int POST_MODULE_RESOURCE_DEF_XML_MAIL_SESSION               = 0x1705;
+    public static final int POST_MODULE_RESOURCE_DEF_XML_CONTEXT_SERVICE            = 0x1706;
+    public static final int POST_MODULE_RESOURCE_DEF_XML_MANAGED_EXECUTOR           = 0x1707;
+    public static final int POST_MODULE_RESOURCE_DEF_XML_MANAGED_SCHEDULER          = 0x1708;
+    public static final int POST_MODULE_RESOURCE_DEF_XML_MANAGED_THREAD_FACTORY     = 0x1709;
+    public static final int POST_MODULE_CONCURRO_CDI_BEANS_BINDING      = 0x1710;
+    public static final int POST_MODULE_CONCURRO_CDI_BEANS_DESCRIPTOR   = 0x1711;
     public static final int POST_MODULE_WS_REF_DESCRIPTOR               = 0x1800;
     public static final int POST_MODULE_WS_REF_ANNOTATION               = 0x1801;
     public static final int POST_MODULE_WS_VERIFICATION                 = 0x1880;
@@ -600,8 +611,10 @@ public enum Phase {
     public static final int INSTALL_WELD_BEAN_MANAGER                   = 0x1C00;
     public static final int INSTALL_JNDI_DEPENDENCIES                   = 0x1C01;
     public static final int INSTALL_CDI_VALIDATOR_FACTORY               = 0x1C02;
+    public static final int INSTALL_WS_VERIFICATION                     = 0x1C09;
     public static final int INSTALL_WS_UNIVERSAL_META_DATA_MODEL        = 0x1C10;
     public static final int INSTALL_WS_DEPLOYMENT_ASPECTS               = 0x1C11;
+
     // IMPORTANT: WS integration installs deployment aspects dynamically
     // so consider INSTALL 0x1C10 - 0x1CFE reserved for WS subsystem!
     public static final int INSTALL_WEB_RESOLVE_SECURITY_DOMAIN         = 0x1CFF;

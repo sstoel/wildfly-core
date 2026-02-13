@@ -28,7 +28,7 @@ import org.xnio.OptionMap;
 
 /**
  * Connection utility allowing the {@linkplain DomainLifecycleUtil} to share a remoting connection between potentially
- * multiple controller clients, each using it's own channel.
+ * multiple controller clients, each using its own channel.
  *
  * @author Emanuel Muckenhuber
  */
@@ -74,7 +74,7 @@ class DomainTestConnection implements Closeable {
             }
 
             @Override
-            protected ManagementChannelAssociation getChannelAssociation() throws IOException {
+            protected ManagementChannelAssociation getChannelAssociation() {
                 return handler;
             }
 

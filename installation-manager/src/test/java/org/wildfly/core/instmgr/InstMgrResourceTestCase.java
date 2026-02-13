@@ -23,6 +23,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -39,6 +40,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -66,9 +68,13 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 import org.wildfly.installationmanager.ArtifactChange;
 import org.wildfly.installationmanager.Channel;
 import org.wildfly.installationmanager.ChannelChange;
+import org.wildfly.installationmanager.ManifestVersion;
 import org.wildfly.installationmanager.MavenOptions;
 import org.wildfly.installationmanager.Repository;
 import org.wildfly.test.installationmanager.TestInstallationManager;
@@ -76,7 +82,13 @@ import org.wildfly.test.installationmanager.TestInstallationManagerFactory;
 
 /**
  * Installation Manager unit tests.
+ * <p>
+ * This test case uses {@link org.wildfly.test.installationmanager.TestInstallationManager} as a mock of an
+ * {@link org.wildfly.installationmanager.spi.InstallationManager} SPI implementation. Its goal is to verify
+ * the execution of the management operations, asserting that the code path works as expected from the
+ * management operation until the invocation of an Installation Manager SPI implementation.
  */
+@RunWith(Parameterized.class)
 public class InstMgrResourceTestCase extends AbstractControllerTestBase {
     private static final ServiceName PATH_MANAGER_SVC = AbstractControllerService.PATH_MANAGER_CAPABILITY.getCapabilityServiceName();
     private static final ServiceName MANAGEMENT_EXECUTOR_SVC = AbstractControllerService.EXECUTOR_CAPABILITY.getCapabilityServiceName();
@@ -85,6 +97,17 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
     static final Path JBOSS_HOME = TARGET_DIR.resolve("InstMgrResourceTestCase").normalize().toAbsolutePath();
     static final Path JBOSS_CONTROLLER_TEMP_DIR = JBOSS_HOME.resolve("temp");
     static final Path INSTALLATION_MANAGER_PROPERTIES = JBOSS_HOME.resolve("bin").resolve("installation-manager.properties");
+
+    @Parameters
+    public static Iterable<BiConsumer<Path, Path>> zipHandlers() {
+        return List.of((source, target) -> zipDir(source, target, false), (source, target) -> zipDir(source, target, true));
+    }
+
+    private final BiConsumer<Path, Path> zipHandler;
+
+    public InstMgrResourceTestCase(BiConsumer<Path, Path> zipHandler) {
+        this.zipHandler = zipHandler;
+    }
 
     @Before
     public void setupController() throws InterruptedException, IOException {
@@ -364,13 +387,41 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
 
         ModelNode result = executeForResult(op);
         Assert.assertEquals(4, result.asListOrEmpty().size());
-        Assert.assertTrue(result.getType() == ModelType.LIST);
+        Assert.assertSame(ModelType.LIST, result.getType());
         List<ModelNode> entries = result.asListOrEmpty();
         for (ModelNode entry : entries) {
             Assert.assertTrue(entry.hasDefined(InstMgrConstants.HISTORY_RESULT_HASH));
             Assert.assertTrue(entry.hasDefined(InstMgrConstants.HISTORY_RESULT_TIMESTAMP));
             Assert.assertTrue(entry.hasDefined(InstMgrConstants.HISTORY_RESULT_TYPE));
             Assert.assertTrue(entry.hasDefined(InstMgrConstants.HISTORY_RESULT_DESCRIPTION));
+            switch (entry.get(InstMgrConstants.HISTORY_RESULT_TYPE).asString()) {
+                case "update": {
+                    Assert.assertTrue(entry.hasDefined(InstMgrConstants.HISTORY_RESULT_CHANNEL_VERSIONS));
+                    ModelNode channelVersions = entry.get(InstMgrConstants.HISTORY_RESULT_CHANNEL_VERSIONS);
+                    Assert.assertEquals(2, channelVersions.asList().size());
+                    List<String> actual = channelVersions.asList().stream().map(ModelNode::asString).toList();
+                    List<String> expected = TestInstallationManager.nullDescriptionMV.stream()
+                            .map(mv -> String.format("%s:%s", mv.getChannelId(), mv.getVersion()))
+                            .toList();
+                    Assert.assertTrue(actual.containsAll(expected));
+                    break;
+                }
+                case "install": {
+                    Assert.assertTrue(entry.hasDefined(InstMgrConstants.HISTORY_RESULT_CHANNEL_VERSIONS));
+                    ModelNode channelVersions = entry.get(InstMgrConstants.HISTORY_RESULT_CHANNEL_VERSIONS);
+                    Assert.assertEquals(2, channelVersions.asList().size());
+                    List<String> actual = channelVersions.asList().stream().map(ModelNode::asString).toList();
+                    List<String> expected = TestInstallationManager.descriptionMV.stream().map(ManifestVersion::getDescription).toList();
+                    Assert.assertTrue(actual.containsAll(expected));
+                    break;
+                }
+                case "rollback": {
+                    Assert.assertFalse(entry.hasDefined(InstMgrConstants.HISTORY_RESULT_CHANNEL_VERSIONS));
+                }
+                default:
+                    Assert.assertFalse(entry.hasDefined(InstMgrConstants.HISTORY_RESULT_CHANNEL_VERSIONS));
+            }
+
         }
     }
 
@@ -381,7 +432,7 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
         op.get(InstMgrConstants.REVISION).set("dummy");
 
         ModelNode result = executeForResult(op);
-        Assert.assertTrue(result.getType() == ModelType.OBJECT);
+        Assert.assertSame(ModelType.OBJECT, result.getType());
 
         // Verify Artifact Changes
         List<ModelNode> resultLst = result.get(InstMgrConstants.HISTORY_RESULT_DETAILED_ARTIFACT_CHANGES).asList();
@@ -632,6 +683,7 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
 
         executeForResult(op);
     }
+
     @Test
     public void listUpdatesWithRepositories() throws OperationFailedException, IOException, URISyntaxException {
         PathAddress pathElements = PathAddress.pathAddress(CORE_SERVICE, InstMgrConstants.TOOL_NAME);
@@ -690,7 +742,7 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
         // remove all temporal files
         op = Util.createEmptyOperation(InstMgrCleanHandler.OPERATION_NAME, pathElements);
         executeForResult(op);
-        Assert.assertTrue(!Paths.get(new URL(mavenZipRepo.getUrl()).toURI()).toFile().exists());
+        Assert.assertFalse(Paths.get(new URL(mavenZipRepo.getUrl()).toURI()).toFile().exists());
     }
 
 
@@ -727,7 +779,7 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
         // remove all temporal files
         op = Util.createEmptyOperation(InstMgrCleanHandler.OPERATION_NAME, pathElements);
         executeForResult(op);
-        Assert.assertTrue(!Paths.get(new URL(mavenZipRepo.getUrl()).toURI()).toFile().exists());
+        Assert.assertFalse(Paths.get(new URL(mavenZipRepo.getUrl()).toURI()).toFile().exists());
     }
 
 
@@ -769,7 +821,7 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
     public void verifyListUpdatesUploadedZipRepository(Repository mavenZipRepo, int streamIndex, String tempDirPrefix, String artifactName) throws MalformedURLException, URISyntaxException {
         Assert.assertEquals(InstMgrConstants.INTERNAL_REPO_PREFIX + streamIndex, mavenZipRepo.getId());
         Path repoUrlPath = Paths.get(new URL(mavenZipRepo.getUrl()).toURI());
-        Assert.assertEquals(repoUrlPath.getFileName().toString(), "maven-repository");
+        Assert.assertEquals("maven-repository", repoUrlPath.getFileName().toString());
         Assert.assertEquals(repoUrlPath.getParent().getFileName().toString(), InstMgrConstants.INTERNAL_REPO_PREFIX + streamIndex);
         Assert.assertTrue(repoUrlPath.getParent().getParent().getFileName().toString().startsWith(tempDirPrefix));
         Assert.assertTrue(repoUrlPath.toFile().exists());
@@ -1002,7 +1054,7 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
         verifyPrepareUploadedZipRepository(mavenZipRepo, 0, "prepare-updates-");
 
         // verify the prepared server
-        Assert.assertTrue(instMgrService.getPreparedServerDir().toFile().listFiles().length == 1);
+        Assert.assertEquals(1, instMgrService.getPreparedServerDir().toFile().listFiles().length);
         Assert.assertEquals(InstMgrCandidateStatus.Status.PREPARED, instMgrService.getCandidateStatus());
         Assert.assertFalse(instMgrService.canPrepareServer());
     }
@@ -1040,7 +1092,7 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
         verifyPrepareUploadedZipRepository(mavenZipRepo, 1, "prepare-updates-");
 
         // verify the prepared server
-        Assert.assertTrue(instMgrService.getPreparedServerDir().toFile().listFiles().length == 1);
+        Assert.assertEquals(1, instMgrService.getPreparedServerDir().toFile().listFiles().length);
         Assert.assertEquals(InstMgrCandidateStatus.Status.PREPARED, instMgrService.getCandidateStatus());
         Assert.assertFalse(instMgrService.canPrepareServer());
     }
@@ -1078,7 +1130,6 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
     }
 
 
-
     /**
      * Verifies that we have created the expected structure for a repository created to supply the artifacts included in an Uploaded Maven Zip File.
      *
@@ -1090,7 +1141,7 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
     public void verifyPrepareUploadedZipRepository(Repository mavenZipRepo, int streamIndex, String tempDirPrefix) throws MalformedURLException, URISyntaxException {
         Assert.assertEquals(InstMgrConstants.INTERNAL_REPO_PREFIX + streamIndex, mavenZipRepo.getId());
         Path repoUrlPath = Paths.get(new URL(mavenZipRepo.getUrl()).toURI());
-        Assert.assertEquals(repoUrlPath.getFileName().toString(), "maven-repository");
+        Assert.assertEquals("maven-repository", repoUrlPath.getFileName().toString());
         Assert.assertEquals(repoUrlPath.getParent().getFileName().toString(), InstMgrConstants.INTERNAL_REPO_PREFIX + streamIndex);
         Assert.assertTrue(repoUrlPath.getParent().getParent().getFileName().toString().startsWith(tempDirPrefix));
         // The temporal directory used to prepare the candidate server should have been deleted once the candidate server is prepared.
@@ -1119,7 +1170,7 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
         try (FileInputStream in = new FileInputStream(scriptPropertiesFile.toFile())) {
             final Properties prop = new Properties();
             prop.load(in);
-            Assert.assertEquals(JBOSS_HOME.resolve("bin") + TestInstallationManager.APPLY_UPDATE_BASE_GENERATED_COMMAND+instMgrService.getPreparedServerDir(), prop.get(InstMgrCandidateStatus.INST_MGR_COMMAND_KEY));
+            Assert.assertEquals(JBOSS_HOME.resolve("bin") + TestInstallationManager.APPLY_UPDATE_BASE_GENERATED_COMMAND + instMgrService.getPreparedServerDir(), prop.get(InstMgrCandidateStatus.INST_MGR_COMMAND_KEY));
         }
     }
 
@@ -1254,7 +1305,7 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
         verifyPrepareUploadedZipRepository(mavenZipRepo, 0, "prepare-revert-");
 
         // verify the prepared server
-        Assert.assertTrue(instMgrService.getPreparedServerDir().toFile().listFiles().length == 1);
+        Assert.assertEquals(1, instMgrService.getPreparedServerDir().toFile().listFiles().length);
         Assert.assertEquals(InstMgrCandidateStatus.Status.PREPARED, instMgrService.getCandidateStatus());
         Assert.assertFalse(instMgrService.canPrepareServer());
     }
@@ -1326,7 +1377,7 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
         verifyPrepareUploadedZipRepository(mavenZipRepo, 1, "prepare-revert-");
 
         // verify the prepared server
-        Assert.assertTrue(instMgrService.getPreparedServerDir().toFile().listFiles().length == 1);
+        Assert.assertEquals(1, instMgrService.getPreparedServerDir().toFile().listFiles().length);
         Assert.assertEquals(InstMgrCandidateStatus.Status.PREPARED, instMgrService.getCandidateStatus());
         Assert.assertFalse(instMgrService.canPrepareServer());
     }
@@ -1492,15 +1543,14 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
 
     public void removeCustomPatch(String customPatchManifest) throws OperationFailedException {
         final InstMgrService instMgrService = (InstMgrService) this.recordedServices.get(InstMgrResourceDefinition.INSTALLATION_MANAGER_CAPABILITY.getCapabilityServiceName()).get();
-        final String customPatchManifestGA = customPatchManifest;
-        final String customPatchManifestGAOperationAttr = customPatchManifestGA.replace(":", "_");
+        final String customPatchManifestGAOperationAttr = customPatchManifest.replace(":", "_");
         final String customPatchChannelName = InstMgrConstants.DEFAULT_CUSTOM_CHANNEL_NAME_PREFIX + customPatchManifestGAOperationAttr;
 
         Path customPatchDir = instMgrService.getCustomPatchDir(customPatchManifestGAOperationAttr);
 
         PathAddress pathElements = PathAddress.pathAddress(CORE_SERVICE, InstMgrConstants.TOOL_NAME);
         ModelNode op = Util.createEmptyOperation(InstMgrCustomPatchRemoveHandler.OPERATION_NAME, pathElements);
-        op.get(InstMgrConstants.MANIFEST).set(customPatchManifestGA);
+        op.get(InstMgrConstants.MANIFEST).set(customPatchManifest);
         executeForResult(op);
         Assert.assertFalse(customPatchDir.resolve(InstMgrConstants.MAVEN_REPO_DIR_NAME_IN_ZIP_FILES).toFile().exists());
 
@@ -1544,12 +1594,16 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
         Assert.assertEquals(hasWorkDir, response.hasDefined(InstMgrConstants.LIST_UPDATES_WORK_DIR));
     }
 
-    public static void zipDir(Path sourcePath, Path target) throws IOException {
+    public void zipDir(Path sourcePath, Path target) {
+        zipHandler.accept(sourcePath, target);
+    }
+
+    public static void zipDir(Path sourcePath, Path target, boolean addFolderEntry) {
         try (FileOutputStream fos = new FileOutputStream(target.toFile()); ZipOutputStream zos = new ZipOutputStream(fos)) {
             Files.walkFileTree(sourcePath, new SimpleFileVisitor<>() {
                 @Override
                 public FileVisitResult preVisitDirectory(final Path dir, final BasicFileAttributes attrs) throws IOException {
-                    if (!sourcePath.equals(dir)) {
+                    if (addFolderEntry && !sourcePath.equals(dir)) {
                         zos.putNextEntry(new ZipEntry(sourcePath.relativize(dir) + "/"));
                         zos.closeEntry();
                     }
@@ -1564,6 +1618,8 @@ public class InstMgrResourceTestCase extends AbstractControllerTestBase {
                     return FileVisitResult.CONTINUE;
                 }
             });
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 

@@ -12,7 +12,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-testsuite</artifactId>
-        <version>28.0.0.Beta2-SNAPSHOT</version>
+        <version>32.0.0.Beta4-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -151,6 +151,18 @@
         <dependency>
             <groupId>org.wildfly.security</groupId>
             <artifactId>wildfly-elytron-x500-cert</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpcore</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpmime</artifactId>
         </dependency>
     </dependencies>
 
@@ -301,6 +313,24 @@
                             </environmentVariables>
                             <argLine>-Djava.util.logging.manager=org.jboss.logmanager.LogManager -Dmaven.repo.local=${settings.localRepository} ${surefire.system.args}</argLine>
                         </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>${version.antrun.plugin}</version>
+                        <executions>
+                            <execution>
+                                <phase>process-test-resources</phase>
+                                <configuration>
+                                    <target>
+                                        <copy file="${project.basedir}/src/test/resources/wildfly/standalone/configuration/mgmt-users.properties" todir="${project.build.directory}/wildfly-core/standalone/configuration" overwrite="true" />
+                                    </target>
+                                </configuration>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                            </execution>
+                        </executions>
                     </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
@@ -520,6 +550,9 @@
                                     <bootableJar>true</bootableJar>
                                     <skipDeployment>true</skipDeployment>
                                     <bootableJarName>test-wildfly.jar</bootableJarName>
+                                    <extra-server-content-dirs>
+                                        <dir>${project.basedir}/src/test/resources/wildfly</dir>
+                                    </extra-server-content-dirs>
                                     <record-provisioning-state>false</record-provisioning-state>
                                     <log-provisioning-time>${galleon.log.time}</log-provisioning-time>
                                     <offline-provisioning>true</offline-provisioning>
@@ -634,6 +667,8 @@
                                         <exclude>org.wildfly.core.test.standalone.mgmt.events.*TestCase</exclude>
                                         <!-- Requires modification of the process-uuid file inside the Jar -->
                                         <exclude>org.jboss.as.test.manualmode.logging.ProcessUuidTestCase</exclude>
+                                        <!-- installation manager is not supported in the bootstrap jar -->
+                                        <exclude>org.jboss.as.test.manualmode.installationmanager.InstallationManagerIntegrationTestCase</exclude>
                                     </excludes>
                                 </configuration>
                             </execution>

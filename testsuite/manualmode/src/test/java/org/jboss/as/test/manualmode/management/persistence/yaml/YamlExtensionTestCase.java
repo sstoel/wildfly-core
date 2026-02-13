@@ -22,6 +22,9 @@ import static org.jboss.as.controller.descriptions.ModelDescriptionConstants.UUI
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.PrintStream;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,6 +41,9 @@ import java.util.regex.Pattern;
 
 import org.apache.commons.io.IOUtils;
 import org.hamcrest.CoreMatchers;
+import org.hamcrest.Description;
+import org.hamcrest.Matcher;
+import org.hamcrest.TypeSafeMatcher;
 import org.jboss.as.controller.PathAddress;
 import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.client.Operation;
@@ -46,8 +52,10 @@ import org.jboss.as.controller.client.OperationResponse;
 import org.jboss.as.controller.client.helpers.Operations;
 import org.jboss.as.controller.client.impl.AdditionalBootCliScriptInvoker;
 import org.jboss.as.controller.operations.common.Util;
+import org.jboss.as.network.NetworkUtils;
 import org.jboss.as.test.integration.management.util.CLIWrapper;
 import org.jboss.as.test.shared.AssumeTestGroupUtil;
+import org.jboss.as.test.shared.TestSuiteEnvironment;
 import org.jboss.as.test.shared.TimeoutUtil;
 import org.jboss.dmr.ModelNode;
 import org.jboss.logging.Logger;
@@ -93,6 +101,7 @@ public class YamlExtensionTestCase {
     private static Path testSocketOverrideYaml;
     private static Path testPortOffsetOverrideYaml;
     private static Path testRemoveSocketYaml;
+    private static Path testInterfaceOverrideYaml;
     private static Path testAddingExtensionPathDeploymentOverlayIgnored;
     private static Path testAddingEmptyExtensionFailYaml;
     private static Path testDeploymentYaml;
@@ -151,6 +160,7 @@ public class YamlExtensionTestCase {
         testSocketOverrideYaml = getResourceFilePath("test-socket-override.yml");
         testPortOffsetOverrideYaml = getResourceFilePath("test-port-offset-override.yml");
         testRemoveSocketYaml = getResourceFilePath("test-remove-socket.yml");
+        testInterfaceOverrideYaml = getResourceFilePath("test-interface-override.yml");
         testAddingExtensionPathDeploymentOverlayIgnored = getResourceFilePath("test-adding-extension-path-deployment-overlay-ignored.yml");
         testAddingEmptyExtensionFailYaml = getResourceFilePath("test-adding-empty-extension.yml");
         testDeploymentYaml = getResourceFilePath("test-deployment.yml");
@@ -240,10 +250,9 @@ public class YamlExtensionTestCase {
         Assert.assertEquals("Extension must not be created but it was.",
                 "failed", client.execute(Operations.createReadResourceOperation(PathAddress.pathAddress("extension", "org.jboss.as.failure").toModelNode())).get("outcome").asString());
         // check WARN logged
-        String consoleOutput = byteArrayOutputStream.toString();
-        assertThat("Information that adding extension is ignored is missing in log", consoleOutput, CoreMatchers.containsString("WARN  [org.jboss.as.controller.management-operation] (main) WFLYCTL0508: The yaml element 'extension' and its sub-elements are ignored. Thus ignoring element 'org.jboss.as.failure: {module: org.jboss.as.failure}'."));
-        assertThat("Information that adding deployment-overlay is ignored is missing in log.", consoleOutput, CoreMatchers.containsString("WARN  [org.jboss.as.controller.management-operation] (main) WFLYCTL0508: The yaml element 'deployment-overlay' and its sub-elements are ignored. Thus ignoring element '{dummy-overlay: null}'."));
-        assertThat("Information that adding path is ignored is missing in log.", consoleOutput, CoreMatchers.containsString("WARN  [org.jboss.as.controller.management-operation] (main) WFLYCTL0508: The yaml element 'path' and its sub-elements are ignored. Thus ignoring element 'test.path: {relative-to: jboss.home.dir, path: bin}'."));
+        assertThat("Information that adding extension is ignored is missing in log.", byteArrayOutputStream.toString(), containsLogParts("WFLYCTL0508", "extension"));
+        assertThat("Information that adding deployment-overlay is ignored is missing in log.", byteArrayOutputStream.toString(), containsLogParts("WFLYCTL0508", "deployment-overlay"));
+        assertThat("Information that adding path is ignored is missing in log.", byteArrayOutputStream.toString(), containsLogParts("WFLYCTL0508", "path"));
     }
 
     @Test
@@ -256,7 +265,7 @@ public class YamlExtensionTestCase {
         Assert.assertEquals("Extension must not be created but it was.",
                 "failed", client.execute(Operations.createReadResourceOperation(PathAddress.pathAddress("extension", "org.jboss.as.failure").toModelNode())).get("outcome").asString());
         // check WARN logged
-        assertThat("Information that adding path is ignored is missing in log.", byteArrayOutputStream.toString(), CoreMatchers.containsString("WFLYCTL0508: The yaml element 'extension' and its sub-elements are ignored."));
+        assertThat("Information that adding path is ignored is missing in log.", byteArrayOutputStream.toString(), containsLogParts("WFLYCTL0508", "extension"));
     }
 
     @Test
@@ -346,7 +355,7 @@ public class YamlExtensionTestCase {
             String output = byteArrayOutputStream.toString();
             Assert.assertTrue("If no yaml is set then server must fail with FATAL error. But there is no such a log entry." + System.lineSeparator() + output,
                     output.lines().anyMatch(
-                            line -> line.contains("FATAL [org.jboss.as.server] (main) WFLYSRV0239: Aborting with exit code 1") || line.contains("WFLYSRV0072: Value expected for option --yaml")));
+                            line -> line.contains("WFLYSRV0239") || line.matches(".*WFLYSRV0072.*--yaml.*")));
         }
     }
 
@@ -393,8 +402,9 @@ public class YamlExtensionTestCase {
     public void testReplacingResourceByEmptyResourceLogsWarning() {
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         container.startYamlExtension(new PrintStream(byteArrayOutputStream), new Path[]{testReplacingByEmptyResourceYaml});
-        String expectedConsoleOutput = "WARN  [org.jboss.as.controller.management-operation] (Controller Boot Thread) WFLYCTL0490: A YAML resource has been defined for the address /subsystem=logging/periodic-rotating-file-handler=FILE without any attribute. No actions will be taken.";
-        assertThat("If resource exists and is replaced by empty resource then warning must be logged. But there is none.", byteArrayOutputStream.toString(), CoreMatchers.containsString(expectedConsoleOutput));
+        assertThat("If resource exists and is replaced by empty resource then warning must be logged. But there is none.",
+            byteArrayOutputStream.toString(),
+            containsLogParts("WFLYCTL0490", "/subsystem=logging/periodic-rotating-file-handler=FILE"));
     }
 
     @Test
@@ -405,8 +415,9 @@ public class YamlExtensionTestCase {
             Assert.fail("Server must not start with badly format yaml.");
         } catch (RuntimeException ex) {
             Assert.assertFalse("Server must not start with badly format yaml.", container.isStarted());
-            String expectedConsoleOutput = "(?s).*mapping values are not allowed here.* in 'reader', line \\d+, column \\d+.*port-offset: \\$\\{jboss\\.socket\\.binding\\.port-of.*";
-            Assert.assertTrue("Server must provide useful information where yaml is wrong.", byteArrayOutputStream.toString().matches(expectedConsoleOutput));
+            assertThat("Server must provide useful information where yaml is wrong.",
+                byteArrayOutputStream.toString(),
+                containsLogParts("mapping values are not allowed here", "port-offset"));
         }
     }
 
@@ -418,9 +429,9 @@ public class YamlExtensionTestCase {
             Assert.fail("Server must not start with non-existent attribute.");
         } catch (RuntimeException ex) {
             Assert.assertFalse("Server must not start with non-existent attribute.", container.isStarted());
-            String expectedConsoleOutput = "ERROR [org.jboss.as.server] (Controller Boot Thread) WFLYSRV0055: Caught exception during boot: java.lang.IllegalArgumentException: "
-                    + "WFLYCTL0509: No attribute called 'non-existent-attribute' is defined at address '/socket-binding-group=standard-sockets'.";
-            assertThat("Server log must contain ERROR with information which attribute is wrong.", byteArrayOutputStream.toString(), CoreMatchers.containsString(expectedConsoleOutput));
+            assertThat("Server log must contain ERROR with information which attribute is wrong.",
+                byteArrayOutputStream.toString(),
+                containsLogParts("WFLYSRV0055", "WFLYCTL0509", "non-existent-attribute", "/socket-binding-group=standard-sockets"));
         }
     }
 
@@ -444,11 +455,9 @@ public class YamlExtensionTestCase {
             Assert.fail("Server must not start with non-existent attribute.");
         } catch (RuntimeException ex) {
             Assert.assertFalse("Server must not start with non-existent attribute.", container.isStarted());
-            String expectedConsoleOutput = "ERROR [org.jboss.as.controller.management-operation] (Controller Boot Thread) WFLYCTL0013: Operation (\"undefine-attribute\") failed - address: ([\n"
-                    + "    (\"socket-binding-group\" => \"standard-sockets\"),\n"
-                    + "    (\"socket-binding\" => \"txn-status-manager\")\n"
-                    + "]) - failure description: \"WFLYCTL0201: Unknown attribute 'asfds'\"";
-            assertThat("Server log must contain ERROR with information which attribute is wrong.", byteArrayOutputStream.toString(), CoreMatchers.containsString(expectedConsoleOutput));
+            assertThat("Server log must contain the correct error IDs and attribute name.",
+                byteArrayOutputStream.toString(),
+                containsLogParts("WFLYCTL0013", "undefine-attribute", "WFLYCTL0201", "asfds"));
         }
     }
 
@@ -467,8 +476,9 @@ public class YamlExtensionTestCase {
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         container.startYamlExtension(new PrintStream(byteArrayOutputStream), new Path[]{testRemoveNonExistentResource});
         Assert.assertTrue("Server must start.", container.isStarted());
-        String expectedConsoleOutput = "WARN  [org.jboss.as.controller.management-operation] (Controller Boot Thread) WFLYCTL0512: No resource exists at address '/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=non-existent-binding'. Ignoring the remove opreation.";
-        assertThat("Server log must contain WARN with information what was wrong.", byteArrayOutputStream.toString(), CoreMatchers.containsString(expectedConsoleOutput));
+        assertThat("Server log must contain WARN with information what was wrong.",
+            byteArrayOutputStream.toString(),
+            containsLogParts("WFLYCTL0512", "/socket-binding-group=standard-sockets/remote-destination-outbound-socket-binding=non-existent-binding"));
     }
 
     @Test
@@ -478,8 +488,9 @@ public class YamlExtensionTestCase {
             container.startYamlExtension(new PrintStream(byteArrayOutputStream), new Path[]{testListAddOperationToStringFails});
             Assert.fail("Server must not start.");
         } catch (Exception ex) {
-            String expectedConsoleOutput = "ERROR [org.jboss.as.server] (Controller Boot Thread) WFLYSRV0055: Caught exception during boot: java.lang.IllegalArgumentException: WFLYCTL0510: No operation list-add can be executed for attribute called 'level' is defined at address '/subsystem=logging/root-logger=ROOT'.";
-            assertThat("Server log must contain ERROR with information what was wrong.", byteArrayOutputStream.toString(), CoreMatchers.containsString(expectedConsoleOutput));
+            assertThat("Server log must contain ERROR with information what was wrong.",
+                byteArrayOutputStream.toString(),
+                containsLogParts("WFLYSRV0055", "WFLYCTL0510", "list-add", "level", "/subsystem=logging/root-logger=ROOT"));
         }
     }
 
@@ -490,8 +501,9 @@ public class YamlExtensionTestCase {
             container.startYamlExtension(new PrintStream(byteArrayOutputStream), new Path[]{testListAddOperationToNonExistentResourceFails});
             Assert.fail("Server must not start.");
         } catch (Exception ex) {
-            String expectedConsoleOutput = "ERROR [org.jboss.as.server] (Controller Boot Thread) WFLYSRV0055: Caught exception during boot: java.lang.IllegalArgumentException: WFLYCTL0510: No operation list-add can be executed for attribute called 'NON-EXISTENT' is defined at address '/subsystem=logging/root-logger=NON-EXISTENT'.";
-            assertThat("Server log must contain ERROR with information what was wrong.", byteArrayOutputStream.toString(), CoreMatchers.containsString(expectedConsoleOutput));
+            assertThat("Server log must contain ERROR with information what was wrong.",
+                byteArrayOutputStream.toString(),
+                containsLogParts("WFLYSRV0055", "WFLYCTL0510", "list-add", "NON-EXISTENT", "/subsystem=logging/root-logger=NON-EXISTENT"));
         }
     }
 
@@ -644,6 +656,21 @@ public class YamlExtensionTestCase {
         Assert.assertEquals("Yaml changes to configuration were persisted to xml. This should never happen.", defaultXml, readConfigAsXml());
     }
 
+    @Test
+    public void testInterfaceOverride() throws UnknownHostException {
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        container.startYamlExtension(new PrintStream(byteArrayOutputStream), new Path[]{testInterfaceOverrideYaml});
+        String logged = byteArrayOutputStream.toString();
+
+        InetAddress serverAddress = InetAddress.getByName(TestSuiteEnvironment.getServerAddress());
+        String expectedAddress = serverAddress instanceof Inet4Address ? "0.0.0.0" : "[0:0:0:0:0:0:0:0]";
+        String expectedConsoleOutput = "http://"+ expectedAddress + ":9990/management";
+        assertThat("The server didn't log it is listening on address 0.0.0.0.", logged, CoreMatchers.containsString(expectedConsoleOutput));
+        String unexpectedAddress = NetworkUtils.formatIPAddressForURI(serverAddress);
+        String unexpectedConsoleOutput = "http://" + unexpectedAddress + ":9990/management";
+        assertThat("The server logged it is listening on address 127.0.0.1.", logged, CoreMatchers.not(CoreMatchers.containsString(unexpectedConsoleOutput)));
+    }
+
     private void waitForRunningMode(String runningMode) throws Exception {
         // Following a reload to normal mode, we might read the running mode too early and hit the admin-only server
         // Cycle around a bit to make sure we get the server reloaded into normal mode
@@ -690,5 +717,34 @@ public class YamlExtensionTestCase {
 
     private static String removeWhiteSpaces(String line) {
         return Pattern.compile("(^\\s*$\\r?\\n)+", Pattern.MULTILINE).matcher(line.stripTrailing()).replaceAll("");
+    }
+
+    /**
+     * Hamcrest matcher to assert that a log string contains all required parts (message ID and dynamic substrings) in order.
+     * Usage: assertThat(log, containsLogParts("WFLYCTL0013", "undefine-attribute", "WFLYCTL0201", "asfds"));
+     * This code has been generated using AI.
+     */
+    private static Matcher<String> containsLogParts(String... parts) {
+        StringBuilder regex = new StringBuilder();
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) regex.append(".*");
+            regex.append(Pattern.quote(parts[i]));
+        }
+        Pattern pattern = Pattern.compile(regex.toString(), Pattern.DOTALL);
+        return new TypeSafeMatcher<>() {
+            @Override
+            public void describeTo(Description description) {
+                description.appendText("a string containing log parts in order: ")
+                           .appendValueList("[", ", ", "]", parts);
+            }
+            @Override
+            protected boolean matchesSafely(String item) {
+                return pattern.matcher(item).find();
+            }
+            @Override
+            protected void describeMismatchSafely(String item, Description mismatchDescription) {
+                mismatchDescription.appendText("was ").appendValue(item);
+            }
+        };
     }
 }

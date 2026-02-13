@@ -178,7 +178,7 @@ public class ManagementHttpServer {
         String context = fixPath(contextName);
         // Reject reserved contexts or duplicate extensions
         if (extensionHandlers.reservedContexts.contains(context) || !extensionHandlers.extensionContexts.add(context)) {
-            throw new IllegalStateException();
+            throw HttpServerLogger.ROOT_LOGGER.conflictingContextNames(context);
         }
         ResourceHandlerDefinition def = DomainUtil.createStaticContentHandler(resourceManager, context);
         HttpHandler readinessHandler = new RedirectReadinessHandler(extensionHandlers.readyFunction, def.getHandler(),
@@ -192,7 +192,7 @@ public class ManagementHttpServer {
         String context = fixPath(contextName);
         // Reject reserved contexts or duplicate extensions
         if (extensionHandlers.reservedContexts.contains(context) || !extensionHandlers.extensionContexts.add(context)) {
-            throw new IllegalStateException();
+            throw HttpServerLogger.ROOT_LOGGER.conflictingContextNames(context);
         }
         final Function<HttpServerExchange, Boolean> readyFunction;
         if (requireSecurity) {
@@ -210,7 +210,7 @@ public class ManagementHttpServer {
         String context = fixPath(contextName);
         // Reject reserved contexts or duplicate extensions
         if (extensionHandlers.reservedContexts.contains(context) || !extensionHandlers.extensionContexts.add(context)) {
-            throw new IllegalStateException();
+            throw HttpServerLogger.ROOT_LOGGER.conflictingContextNames(context);
         }
         HttpHandler remapHandler = new RemapHandler(remapper, extensionHandlers.managementHandler);
         extensionHandlers.extensionPathHandler.addPrefixPath(context, remapHandler);
@@ -221,7 +221,7 @@ public class ManagementHttpServer {
         String context = fixPath(contextName);
         // Reject reserved contexts or non-existent extensions
         if (extensionHandlers.reservedContexts.contains(context) || !extensionHandlers.extensionContexts.contains(context)) {
-            throw new IllegalStateException();
+            throw HttpServerLogger.ROOT_LOGGER.conflictingContextNames(context);
         }
         extensionHandlers.extensionContexts.remove(context);
         extensionHandlers.extensionPathHandler.removePrefixPath(context);
@@ -252,15 +252,17 @@ public class ManagementHttpServer {
             }
         }
 
-        ROOT_LOGGER.debugf("HTTP Management API Connection Constraints - backlog=%d, noRequestTimeout=%d, connectionHighWater=%d, connectionLowWater=%d",
-            builder.backlog, builder.noRequestTimeout, builder.connectionHighWater, builder.connectionLowWater);
+        ROOT_LOGGER.debugf("HTTP Management API Connection Constraints - backlog=%d, noRequestTimeout=%d, connectionHighWater=%d, connectionLowWater=%d, uploadLimit=%d",
+            builder.backlog, builder.noRequestTimeout, builder.connectionHighWater, builder.connectionLowWater, builder.uploadLimit);
 
         final OptionMap undertowOptions;
+        final OptionMap.Builder optionsBuilder = OptionMap.builder();
+        optionsBuilder.set(UndertowOptions.MAX_ENTITY_SIZE, builder.uploadLimit).set(UndertowOptions.MULTIPART_MAX_ENTITY_SIZE, builder.uploadLimit);
         if (builder.noRequestTimeout != null) {
-            undertowOptions = OptionMap.create(UndertowOptions.NO_REQUEST_TIMEOUT, builder.noRequestTimeout);
-        } else {
-            undertowOptions = OptionMap.EMPTY;
+            optionsBuilder.set(UndertowOptions.NO_REQUEST_TIMEOUT, builder.noRequestTimeout);
         }
+
+        undertowOptions = optionsBuilder.getMap();
 
         HttpOpenListener openListener = new HttpOpenListener(bufferPool, undertowOptions);
 
@@ -486,6 +488,7 @@ public class ManagementHttpServer {
         private Integer connectionHighWater;
         private Integer connectionLowWater;
         private Integer noRequestTimeout;
+        private Long uploadLimit;
 
         private Builder() {
         }
@@ -652,6 +655,12 @@ public class ManagementHttpServer {
             assertNotBuilt();
             this.consoleAvailability = consoleAvailability;
 
+            return this;
+        }
+
+        public Builder setUploadLimit(Long uploadLimit) {
+            assertNotBuilt();
+            this.uploadLimit = uploadLimit;
             return this;
         }
     }

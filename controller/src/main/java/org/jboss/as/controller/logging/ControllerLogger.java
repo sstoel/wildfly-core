@@ -16,6 +16,7 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.net.UnknownHostException;
 import java.nio.file.Path;
 import java.util.Collection;
@@ -49,6 +50,8 @@ import org.jboss.as.controller.parsing.Element;
 import org.jboss.as.controller.persistence.ConfigurationPersistenceException;
 import org.jboss.as.controller.registry.OperationEntry;
 import org.jboss.as.controller.registry.Resource;
+import org.jboss.as.controller.xml.XMLCardinality;
+import org.jboss.as.controller.xml.XMLElement;
 import org.jboss.dmr.ModelNode;
 import org.jboss.dmr.ModelType;
 import org.jboss.logging.BasicLogger;
@@ -256,8 +259,8 @@ public interface ControllerLogger extends BasicLogger {
      * @param opAddress the address the operation failed on.
      */
     @LogMessage(level = ERROR)
-    @Message(id = 13, value = "Operation (%s) failed - address: (%s)")
-    void operationFailed(@Cause Throwable cause, ModelNode op, ModelNode opAddress);
+    @Message(id = 13, value = "Operation (%s) failed - address: (%s) - Stage: (%s)")
+    void operationFailed(@Cause Throwable cause, ModelNode op, ModelNode opAddress, OperationContext.Stage stage);
 
     /**
      * Logs an error message indicating operation failed.
@@ -267,8 +270,8 @@ public interface ControllerLogger extends BasicLogger {
      * @param failureDescription the failure description.
      */
     @LogMessage(level = ERROR)
-    @Message(id = Message.INHERIT, value = "Operation (%s) failed - address: (%s) - failure description: %s")
-    void operationFailed(ModelNode op, ModelNode opAddress, ModelNode failureDescription);
+    @Message(id = Message.INHERIT, value = "Operation (%s) failed - address: (%s) - Stage: (%s) - failure description: %s")
+    void operationFailed(ModelNode op, ModelNode opAddress, OperationContext.Stage stage, ModelNode failureDescription);
 
     /**
      * Logs a debug message indicating operation failed.
@@ -280,8 +283,8 @@ public interface ControllerLogger extends BasicLogger {
      *                           from the variant used by legacy controllers
      */
     @LogMessage(level = DEBUG)
-    @Message(id = Message.INHERIT, value = "Operation (%s) failed - address: (%s) - failure description: %s%s")
-    void operationFailed(ModelNode op, ModelNode opAddress, ModelNode failureDescription, String emptyString);
+    @Message(id = Message.INHERIT, value = "Operation (%s) failed - address: (%s) - Stage: (%s) - failure description: %s%s")
+    void operationFailed(ModelNode op, ModelNode opAddress, OperationContext.Stage stage, ModelNode failureDescription, String emptyString);
 
     // WFCORE-792 -- no longer used
 //    /**
@@ -323,8 +326,8 @@ public interface ControllerLogger extends BasicLogger {
      * @param failureDescription the failure description.
      */
     @LogMessage(level = Logger.Level.DEBUG)
-    @Message(id = 17, value = "Operation (%s) failed - address: (%s) - failure description: %s")
-    void operationFailedOnClientError(ModelNode op, ModelNode opAddress, ModelNode failureDescription);
+    @Message(id = 17, value = "Operation (%s) failed - address: (%s) - Stage: (%s) - failure description: %s")
+    void operationFailedOnClientError(ModelNode op, ModelNode opAddress, OperationContext.Stage stage, ModelNode failureDescription);
 
 //    /**
 //     * Logs an error indicating that createWrapper should be called
@@ -3781,7 +3784,7 @@ public interface ControllerLogger extends BasicLogger {
     void noAttributeValueDefined(String name, String address);
 
     @LogMessage(level = WARN)
-    @Message(id = 512, value = "No resource exists at address '%s'. Ignoring the remove opreation.")
+    @Message(id = 512, value = "No resource exists at address '%s'. Ignoring the remove operation.")
     void removingUnexistingResource(String address);
 
     /**
@@ -3813,4 +3816,69 @@ public interface ControllerLogger extends BasicLogger {
     @Message(id = 518, value = "Resource /extension=%s uses a non-canonical module name; use the canonical form %s. " +
             "The canonical representation includes slot information in the module name only if the is slot is not 'main'.")
     String nonCanonicalExtensionName(String nonCanonical, String canonical);
+
+    @LogMessage(level = WARN)
+    @Message(id = 519, value = "Attribute '%2$s' of element '%1$s' is no longer supported and will be ignored")
+    void attributeIgnored(QName elementName, QName attributeName);
+
+    @LogMessage(level = WARN)
+    @Message(id = 520, value = "Element '%s' is no longer supported and will be ignored")
+    void elementIgnored(QName elementName);
+
+    @Message(id = 521, value = "Element '%s' already defines attribute: %s")
+    IllegalArgumentException duplicateAttributes(QName elementName, QName attributeName);
+
+    @Message(id = 522, value = "XML model group already defines element: %s")
+    IllegalArgumentException duplicateElements(QName elementName);
+
+    @Message(id = 523, value = "XML choice already defines resource: %s")
+    IllegalArgumentException duplicatePathElement(PathElement path);
+
+    @Message(id = 524, value = "Element(s) '%s' must occur at least %d time(s)")
+    String minOccursNotReached(Collection<QName> elements, int minOccurs);
+
+    @Message(id = 525, value = "Element(s) '%s' may not occur more than %d time(s)")
+    String maxOccursExceeded(Collection<QName> elements, int maxOccurs);
+
+    @Message(id = 526, value = "%s is not a valid wildcard path")
+    IllegalArgumentException nonWildcardPathNotAllowed(PathElement path);
+
+    @Message(id = 527, value = "%s is not a valid non-wildcard path")
+    IllegalArgumentException wildcardPathNotAllowed(PathElement path);
+
+    @Message(id = 528, value = "%s is not a valid subsystem resource path")
+    IllegalArgumentException invalidSubsystemPath(PathElement path);
+
+    @Message(id = 529, value = "%s is not a valid override path of %s")
+    IllegalArgumentException invalidOverridePath(PathElement path, PathElement wildcardPath);
+
+    @Message(id = 530, value = "Illegal cardinality: %s")
+    IllegalArgumentException illegalXMLCardinality(XMLCardinality cardinality);
+
+    @Message(id = 531, value = "Illegal cardinality for xs:all group member: %s")
+    IllegalArgumentException illegalXMLAllElementCardinality(XMLElement<?, ?> element);
+
+    /**
+     * Logs an error message indicating a failure during inspecting a loopback network interface. This serves to provide
+     * more context for observed failures such as "Caused by: java.net.SocketException: No such device (getFlags()
+     * failed)".
+     *
+     * @param cause the actual SocketException raised
+     * @param name  the name of the interface that was being attempted
+     */
+    @LogMessage(level = ERROR)
+    @Message(id = 532, value = "Error while inspecting network interface %s")
+    void errorInspectingNetworkInterface(@Cause Throwable cause, NetworkInterface name);
+
+    @Message(id = 533, value = "Value for parameter '%1$s' must be greater than '%3$s': '%2$s'")
+    OperationFailedException exclusiveLowerBoundExceeded(String name, Object value, Object lowerBound);
+
+    @Message(id = 534, value = "Value for parameter '%1$s' must be greater than or equal to '%3$s': '%2$s'")
+    OperationFailedException inclusiveLowerBoundExceeded(String name, Object value, Object lowerBound);
+
+    @Message(id = 535, value = "Value for parameter '%1$s' must be less than '%3$s': '%2$s'")
+    OperationFailedException exclusiveUpperBoundExceeded(String name, Object value, Object upperBound);
+
+    @Message(id = 536, value = "Value for parameter '%1$s' must be less than or equal to '%3$s': '%2$s'")
+    OperationFailedException inclusiveUpperBoundExceeded(String name, Object value, Object upperBound);
 }

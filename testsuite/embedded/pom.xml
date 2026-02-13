@@ -10,7 +10,7 @@
     <parent>
         <artifactId>wildfly-core-testsuite</artifactId>
         <groupId>org.wildfly.core</groupId>
-        <version>28.0.0.Beta2-SNAPSHOT</version>
+        <version>32.0.0.Beta4-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
     <modelVersion>4.0.0</modelVersion>
@@ -24,7 +24,6 @@
         <jbossas.ts.dir>${jbossas.ts.integ.dir}/..</jbossas.ts.dir>
         <jbossas.project.dir>${jbossas.ts.dir}</jbossas.project.dir>
         <wildfly.home>${project.basedir}/target/wildfly-core</wildfly.home>
-        <version.ch.qos.logback>1.5.16</version.ch.qos.logback>
     </properties>
 
     <dependencies>
@@ -54,17 +53,15 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-classic</artifactId>
-            <version>${version.ch.qos.logback}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>ch.qos.logback</groupId>
-            <artifactId>logback-core</artifactId>
-            <version>${version.ch.qos.logback}</version>
-            <scope>test</scope>
-        </dependency>
+		    <groupId>ch.qos.logback</groupId>
+		    <artifactId>logback-classic</artifactId>
+		    <scope>test</scope>
+		</dependency>
+		<dependency>
+		    <groupId>ch.qos.logback</groupId>
+		    <artifactId>logback-core</artifactId>
+		    <scope>test</scope>
+		</dependency>
     </dependencies>
 
     <build>

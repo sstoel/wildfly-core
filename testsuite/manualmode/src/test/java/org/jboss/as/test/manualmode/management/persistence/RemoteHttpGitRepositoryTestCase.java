@@ -51,6 +51,10 @@ public class RemoteHttpGitRepositoryTestCase extends AbstractGitRepositoryTestCa
         if (Files.exists(properties)) {
             Files.delete(properties);
         }
+        Path standaloneHistory = repoConfigDir.resolve("standalone_xml_history");
+        if (Files.exists(standaloneHistory)) {
+            PathUtil.deleteRecursively(standaloneHistory);
+        }
         File gitDir = new File(baseDir, Constants.DOT_GIT);
         if (!gitDir.exists()) {
             try (Git git = Git.init().setDirectory(baseDir).setInitialBranch(Constants.MASTER).call()) {
@@ -84,8 +88,9 @@ public class RemoteHttpGitRepositoryTestCase extends AbstractGitRepositoryTestCa
     private void closeRemoteRepository() throws Exception {
         if (remoteRepository != null) {
             remoteRepository.close();
+            remoteRepository = null;
         }
-        FileUtils.delete(remoteRoot.toFile(), FileUtils.RECURSIVE | FileUtils.RETRY);
+        FileUtils.delete(remoteRoot.toFile(), FileUtils.RECURSIVE | FileUtils.RETRY | FileUtils.SKIP_MISSING);
     }
 
     @Test

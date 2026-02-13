@@ -127,7 +127,9 @@ import org.jboss.msc.service.StopContext;
 import org.jboss.msc.value.InjectedValue;
 import org.jboss.threads.EnhancedQueueExecutor;
 import org.jboss.threads.JBossThreadFactory;
+import org.wildfly.common.function.Functions;
 import org.wildfly.security.manager.WildFlySecurityManager;
+import org.wildfly.service.Installer.StartWhen;
 import org.wildfly.service.ServiceInstaller;
 
 /**
@@ -302,7 +304,9 @@ public final class ServerService extends AbstractControllerService {
             final File[] newExtDirs = Arrays.copyOf(extDirs, extDirs.length + 1);
             newExtDirs[extDirs.length] = new File(serverEnvironment.getServerBaseDir(), "lib/ext");
             serviceTarget.addService(org.jboss.as.server.deployment.Services.JBOSS_DEPLOYMENT_EXTENSION_INDEX,
-                    new ExtensionIndexService(newExtDirs)).setInitialMode(ServiceController.Mode.ON_DEMAND).install();
+                    new ExtensionIndexService(newExtDirs))
+                    .setInitialMode(ServiceController.Mode.ON_DEMAND)
+                    .install();
             final boolean suspend = runningModeControl.getSuspend() != null ? runningModeControl.getSuspend() : serverEnvironment.isStartSuspended();
             final boolean gracefulStartup = serverEnvironment.isStartGracefully();
             this.suspendController.reset();
@@ -316,7 +320,11 @@ public final class ServerService extends AbstractControllerService {
                 ServerLogger.ROOT_LOGGER.startingNonGraceful();
                 this.suspendController.resume(ServerSuspendController.Context.STARTUP).toCompletableFuture().join();
             }
-            ServiceInstaller.builder(this.suspendController).provides(SUSPEND_CONTROLLER_CAPABILITY.getCapabilityServiceName()).build().install(context.getServiceTarget());
+            ServiceInstaller.BlockingBuilder.of(Functions.constantSupplier(this.suspendController))
+                    .provides(SUSPEND_CONTROLLER_CAPABILITY.getCapabilityServiceName())
+                    .startWhen(StartWhen.INSTALLED)
+                    .build()
+                    .install(context.getServiceTarget());
 
             // Activate module loader
             DeployerChainAddHandler.addDeploymentProcessor(SERVER_NAME, Phase.STRUCTURE, Phase.STRUCTURE_SERVICE_MODULE_LOADER, new DeploymentUnitProcessor() {

@@ -34,7 +34,10 @@ import java.lang.management.ClassLoadingMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.PlatformLoggingMXBean;
 import java.lang.management.ThreadMXBean;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +66,32 @@ import org.junit.Test;
  * @author Brian Stansberry (c) 2011 Red Hat Inc.
  */
 public class PlatformMBeanResourceUnitTestCase {
+
+    private static final Class<?> SUN_THREAD_MX_BEAN;
+    private static final Method isThreadAllocatedMemorySupported;
+    private static final Method isThreadAllocatedMemoryEnabled;
+    private static final Method setThreadAllocatedMemoryEnabled;
+
+    static {
+        Class<?> clazz;
+        Method supported;
+        Method enabled;
+        Method setEnabled;
+        try {
+            clazz = Class.forName("com.sun.management.ThreadMXBean");
+            supported = clazz.getMethod("isThreadAllocatedMemorySupported");
+            enabled = clazz.getMethod("isThreadAllocatedMemoryEnabled");
+            setEnabled = clazz.getMethod("setThreadAllocatedMemoryEnabled", boolean.class);
+        } catch (ClassNotFoundException | NoSuchMethodException e) {
+            clazz = null;
+            supported = enabled = setEnabled = null;
+        }
+
+        SUN_THREAD_MX_BEAN = clazz;
+        isThreadAllocatedMemorySupported = supported;
+        isThreadAllocatedMemoryEnabled = enabled;
+        setThreadAllocatedMemoryEnabled = setEnabled;
+    }
 
     private static ServiceContainer container;
     private static ModelController controller;
@@ -316,7 +345,7 @@ public class PlatformMBeanResourceUnitTestCase {
     }
 
     @Test
-    public void testThreadingMXBean() throws IOException {
+    public void testThreadingMXBean() throws IOException, InvocationTargetException, IllegalAccessException {
         DescribedResource describedResource = basicResourceTest("threading", null);
 
         ThreadMXBean mbean = ManagementFactory.getThreadMXBean();
@@ -475,6 +504,79 @@ public class PlatformMBeanResourceUnitTestCase {
         executeOp(op, false);
         Assert.assertEquals(mbean.isThreadContentionMonitoringEnabled(), !threadContentionEnabled);
         mbean.setThreadContentionMonitoringEnabled(threadContentionEnabled); // restore
+
+        if (SUN_THREAD_MX_BEAN != null && SUN_THREAD_MX_BEAN.isAssignableFrom(mbean.getClass())) {
+            boolean allocatedMemorySupported = describedResource.resource.get(PlatformMBeanConstants.THREAD_ALLOCATED_MEMORY_SUPPORTED).asBoolean();
+            boolean mbeanThreadAllocatedMemorySupported = (boolean) isThreadAllocatedMemorySupported.invoke(mbean);
+            Assert.assertEquals(mbeanThreadAllocatedMemorySupported, allocatedMemorySupported);
+            if (allocatedMemorySupported) {
+                boolean mbeanThreadAllocatedMemoryEnabled = (boolean) isThreadAllocatedMemoryEnabled.invoke(mbean);
+                boolean allocatedMemoryEnabled = describedResource.resource.get(PlatformMBeanConstants.THREAD_ALLOCATED_MEMORY_ENABLED).asBoolean();
+                Assert.assertEquals(mbeanThreadAllocatedMemoryEnabled, allocatedMemoryEnabled);
+
+                op = getOperation("write-attribute", "threading", null);
+                op.get("name").set("thread-allocated-memory-enabled");
+                op.get("value").set(!allocatedMemoryEnabled);
+                executeOp(op, false);
+                mbeanThreadAllocatedMemoryEnabled = (boolean) isThreadAllocatedMemoryEnabled.invoke(mbean);
+                Assert.assertEquals(mbeanThreadAllocatedMemoryEnabled, !allocatedMemoryEnabled);
+                setThreadAllocatedMemoryEnabled.invoke(mbean, mbeanThreadAllocatedMemoryEnabled); // restore
+
+                op = getOperation("get-thread-allocated-bytes", "threading", null);
+                op.get("id").set(mainThreadId);
+                result = executeOp(op, false);
+                Assert.assertEquals(ModelType.LONG, result.getType());
+                if (!allocatedMemoryEnabled) {
+                    Assert.assertEquals(-1L, result.asLong());
+                }
+
+                op = getOperation("get-threads-allocated-bytes", "threading", null);
+                op.get("ids").add(mainThreadId);
+                result = executeOp(op, false);
+                Assert.assertEquals(ModelType.LIST, result.getType());
+                List<ModelNode> allocatedBytes = result.asList();
+                Assert.assertEquals(1, allocatedBytes.size());
+                ModelNode allocatedByte = allocatedBytes.get(0);
+                Assert.assertEquals(ModelType.LONG, allocatedByte.getType());
+                if (!allocatedMemoryEnabled) {
+                    Assert.assertEquals(-1L, allocatedByte.asLong());
+                }
+            }
+            if (threadCPUSupported) {
+                op = getOperation("get-thread-cpu-times", "threading", null);
+                op.get("ids").add(mainThreadId);
+                result = executeOp(op, !threadCPUSupported);
+                Assert.assertEquals(ModelType.LIST, result.getType());
+                List<ModelNode> cpuTimes = result.asList();
+                Assert.assertEquals(1, cpuTimes.size());
+                ModelNode cpuTime = cpuTimes.get(0);
+                Assert.assertEquals(ModelType.LONG, cpuTime.getType());
+                if (!threadCPUEnabled) {
+                    Assert.assertEquals(-1L, cpuTime.asLong());
+                }
+
+                op = getOperation("get-thread-user-times", "threading", null);
+                op.get("ids").add(mainThreadId);
+                result = executeOp(op, !threadCPUSupported);
+                Assert.assertEquals(ModelType.LIST, result.getType());
+                List<ModelNode> userTimes = result.asList();
+                Assert.assertEquals(1, userTimes.size());
+                ModelNode userTime = userTimes.get(0);
+                Assert.assertEquals(ModelType.LONG, userTime.getType());
+                if (!threadCPUEnabled) {
+                    Assert.assertEquals(-1L, userTime.asLong());
+                }
+            }
+        }
+
+    }
+
+    @Test
+    public void testPlatformLoggingMXBean() throws IOException {
+        DescribedResource describedResource = basicResourceTest("platform-logging", null);
+        List<ModelNode> loggers = describedResource.resource.get(PlatformMBeanConstants.LOGGER_NAMES).asList();
+        List<String> apiLoggers = ManagementFactory.getPlatformMXBean(PlatformLoggingMXBean.class).getLoggerNames();
+        Assert.assertEquals(apiLoggers.size(), loggers.size());
     }
 
     private long findMainThread(ModelNode result) {

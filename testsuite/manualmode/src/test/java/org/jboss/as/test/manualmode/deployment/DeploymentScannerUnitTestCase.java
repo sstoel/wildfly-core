@@ -22,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import jakarta.inject.Inject;
@@ -87,7 +88,7 @@ public class DeploymentScannerUnitTestCase extends AbstractDeploymentScannerBase
                     // Wait until deployed ...
                     long timeout = System.currentTimeMillis() + TIMEOUT;
                     while (!(exists(client, DEPLOYMENT_ONE) && exists(client, DEPLOYMENT_TWO)) && System.currentTimeMillis() < timeout) {
-                        Thread.sleep(100);
+                        TimeUnit.MILLISECONDS.sleep(TimeoutUtil.adjust(300));
                     }
                     Assert.assertTrue(exists(client, DEPLOYMENT_ONE));
                     Assert.assertEquals("OK", deploymentState(client, DEPLOYMENT_ONE));
@@ -109,7 +110,7 @@ public class DeploymentScannerUnitTestCase extends AbstractDeploymentScannerBase
                     // Wait until started ...
                     timeout = System.currentTimeMillis() + TIMEOUT;
                     while (!isRunning(client) && System.currentTimeMillis() < timeout) {
-                        Thread.sleep(10);
+                        TimeUnit.MILLISECONDS.sleep(TimeoutUtil.adjust(300));
                     }
 
                     Assert.assertTrue(Files.exists(oneDeployed));
@@ -119,10 +120,10 @@ public class DeploymentScannerUnitTestCase extends AbstractDeploymentScannerBase
                     Assert.assertEquals("OK", deploymentState(client, DEPLOYMENT_ONE));
 
                     timeout = System.currentTimeMillis() + TIMEOUT;
-                    while (exists(client, DEPLOYMENT_TWO) && System.currentTimeMillis() < timeout) {
-                        Thread.sleep(10);
-                    }
-                    Assert.assertFalse("Deployment two should exist at " + TIME_FORMATTER.format(LocalDateTime.now()), exists(client, DEPLOYMENT_TWO));
+                    do {
+                        TimeUnit.MILLISECONDS.sleep(TimeoutUtil.adjust(300));
+                    } while (exists(client, DEPLOYMENT_TWO) && System.currentTimeMillis() < timeout);
+                    Assert.assertFalse("Deployment two should not exist at " + TIME_FORMATTER.format(LocalDateTime.now()), exists(client, DEPLOYMENT_TWO));
                     ModelNode disableScanner = Util.getWriteAttributeOperation(PathAddress.parseCLIStyleAddress("/subsystem=deployment-scanner/scanner=testScanner"), "scan-interval", 300000);
                     result = client.execute(disableScanner);
                     assertEquals("Unexpected outcome of disabling the test deployment scanner: " + disableScanner, ModelDescriptionConstants.SUCCESS, result.get(OUTCOME).asString());
@@ -136,7 +137,7 @@ public class DeploymentScannerUnitTestCase extends AbstractDeploymentScannerBase
                     timeout = System.currentTimeMillis() + TIMEOUT;
 
                     while (Files.exists(oneDeployed) && System.currentTimeMillis() < timeout) {
-                        Thread.sleep(10);
+                        TimeUnit.MILLISECONDS.sleep(TimeoutUtil.adjust(300));
                     }
                     Assert.assertFalse(Files.exists(oneDeployed));
                 } finally {
@@ -204,7 +205,7 @@ public class DeploymentScannerUnitTestCase extends AbstractDeploymentScannerBase
     /**
      * https://issues.jboss.org/browse/WFCORE-1890
      *
-     * When FS deployment is erplaced with a managed deployment with same name it is not marked as undeployed and reboot will fail.
+     * When FS deployment is replaced with a managed deployment with same name it is not marked as undeployed and reboot will fail.
      */
     @Test
     public void testReplaceDeploymentWithPersistentDeployment() throws Exception {
@@ -302,10 +303,27 @@ public class DeploymentScannerUnitTestCase extends AbstractDeploymentScannerBase
     private void addDebugDeploymentLogger(ModelControllerClient client) throws Exception {
         boolean ok = false;
         try {
-            final ModelNode op = Util.createAddOperation(getScannerLoggerResourcePath());
+            ModelNode op = Util.createAddOperation(getLoggerConsoleHandler());
+            op.get("level").set("TRACE");
+            ModelNode result = client.execute(op);
+            assertEquals("Unexpected outcome of adding a console handler for deployment scanner: " + op, SUCCESS, result.get(OUTCOME).asString());
+            ok = true;
+        } finally {
+            if (!ok) {
+                ModelNode removeOp = Util.createRemoveOperation(getScannerLoggerResourcePath());
+                ModelNode result = client.execute(removeOp);
+                assertEquals("Unexpected outcome of removing the test deployment logger: " + removeOp, ModelDescriptionConstants.SUCCESS, result.get(OUTCOME).asString());
+            }
+        }
+
+        ok = false;
+        try {
+            ModelNode op = Util.createAddOperation(getScannerLoggerResourcePath());
             op.get("category").set("org.jboss.as.server.deployment.scanner");
             op.get("level").set("TRACE");
-            op.get("use-parent-handlers").set(true);
+            op.get("handlers").setEmptyList().add("CONSOLE_TRACE");
+            op.get("use-parent-handlers").set(false);
+
             ModelNode result = client.execute(op);
             assertEquals("Unexpected outcome of setting the test deployment logger to debug: " + op, SUCCESS, result.get(OUTCOME).asString());
             ok = true;
@@ -328,11 +346,17 @@ public class DeploymentScannerUnitTestCase extends AbstractDeploymentScannerBase
         return PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM, "logging"), PathElement.pathElement("logger", "org.jboss.as.server.deployment.scanner"));
     }
 
+    private PathAddress getLoggerConsoleHandler() {
+        return PathAddress.pathAddress(PathElement.pathElement(SUBSYSTEM, "logging"), PathElement.pathElement("console-handler", "CONSOLE_TRACE"));
+    }
+
+
     private void waitFor(String message, ExceptionWrappingSupplier<Boolean> condition) throws Exception {
         long timeout = System.currentTimeMillis() + TimeoutUtil.adjust(TIMEOUT);
-        while (!condition.get() && System.currentTimeMillis() < timeout) {
-            Thread.sleep(100);
-        }
+        do {
+            TimeUnit.MILLISECONDS.sleep(TimeoutUtil.adjust(300));
+        } while (!condition.get() && System.currentTimeMillis() < timeout);
+
         Assert.assertTrue(message, condition.get());
     }
 

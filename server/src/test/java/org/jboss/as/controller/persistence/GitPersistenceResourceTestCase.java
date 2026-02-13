@@ -51,7 +51,7 @@ public class GitPersistenceResourceTestCase extends AbstractGitPersistenceResour
         if (repository != null) {
             repository.close();
         }
-        FileUtils.delete(root.getParent().toFile(), FileUtils.RECURSIVE | FileUtils.RETRY);
+        FileUtils.delete(root.getParent().toFile(), FileUtils.RECURSIVE | FileUtils.RETRY | FileUtils.SKIP_MISSING);
     }
 
     @Test

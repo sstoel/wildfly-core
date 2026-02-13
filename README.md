@@ -14,8 +14,8 @@ Building
 
 Prerequisites:
 
-* JDK 11 or newer - check `java -version`
-* Maven 3.6.0 or newer - check `mvn -v`
+* JDK 17 or newer - check `java -version`
+* Maven 3.6.0 or newer - check mvn -v (Maven 3.9.12 or a higher Maven 3 is recommended.)
 
 To build with your own Maven installation:
 
@@ -63,7 +63,7 @@ Contributing
 Using Eclipse
 -------------
 1. Install the latest version of Eclipse.
-2. Make sure Xmx in Eclipse.ini is at least 1280M, and it's using java 11
+2. Make sure Xmx in Eclipse.ini is at least 1280M, and it's using java 17
 3. Launch Eclipse and install the m2e plugin, make sure it uses your repo configs
    (get it from: https://www.eclipse.org/m2e/
    or install "Maven Integration for Eclipse" from the Eclipse Marketplace).
