@@ -266,10 +266,10 @@ Param(
 
         & $JAVA -Xverbosegclog:"$JBOSS_LOG_DIR\gc.log" -version >$null 2>&1
         if ($LastExitCode -eq 0){
-            $PROG_ARGS += "-Xverbosegclog:`\`"$JBOSS_LOG_DIR\gc.log`\`""
+            $PROG_ARGS += "-Xverbosegclog:$JBOSS_LOG_DIR\gc.log"
         }elseif ($MODULAR_JDK -eq $true)
         {
-            $PROG_ARGS += "-Xlog:gc*:file=`\`"$JBOSS_LOG_DIR\gc.log`\`":time,uptimemillis:filecount=5,filesize=3M"
+            $PROG_ARGS += "-Xlog:gc*:file=`"`"`"$JBOSS_LOG_DIR\gc.log`"`"`":time,uptimemillis:filecount=5,filesize=3M"
         } else {
             $PROG_ARGS += "-verbose:gc"
             $PROG_ARGS += "-XX:+PrintGCDetails"
@@ -387,7 +387,7 @@ Function Start-WildFly-Process {
 			} elseif ($LastExitCode -eq 20) { # :shutdown(perform-installation=true) was called
                 Write-Host "INFO: Starting Candidate Server installation using Management CLI Installer script"
                 $instMgrOutFile="$JBOSS_LOG_DIR\management-cli-installer-out.log"
-                & "$JBOSS_HOME\bin\installation-manager.ps1" -installationHome "$JBOSS_HOME" -instMgrLogProperties "$logFileProperties" -instMgrLogFile "$logFile" *>&1 | Out-File -FilePath $instMgrOutFile -Append -Encoding UTF8
+                & "$JBOSS_HOME\.installation\_installation-manager_helper.ps1" -installationHome "$JBOSS_HOME" -instMgrLogProperties "$logFileProperties" -instMgrLogFile "$logFile" *>&1 | Out-File -FilePath $instMgrOutFile -Append -Encoding UTF8
                 if ($LastExitCode -eq 0) {
                     Write-Host "INFO: Candidate Server installation completed successfully."
                 } else {

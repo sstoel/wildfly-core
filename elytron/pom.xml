@@ -9,7 +9,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>32.0.0.Beta4-SNAPSHOT</version>
+        <version>33.0.0.Beta4-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-elytron-integration</artifactId>
@@ -362,30 +362,6 @@
         </dependency>
 
         <dependency>
-            <groupId>org.wildfly.openssl</groupId>
-            <artifactId>wildfly-openssl-linux-x86_64</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.wildfly.openssl</groupId>
-            <artifactId>wildfly-openssl-linux-s390x</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.wildfly.openssl</groupId>
-            <artifactId>wildfly-openssl-macosx-x86_64</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.wildfly.openssl</groupId>
-            <artifactId>wildfly-openssl-windows-x86_64</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
             <groupId>org.jmockit</groupId>
             <artifactId>jmockit</artifactId>
             <scope>test</scope>
@@ -415,7 +391,7 @@
                                 <exclude>legacy*.xml</exclude>
                                 <exclude>elytron-subsystem-community*.xml</exclude>
                             </excludes>
-                            <systemId>src/main/resources/schema/wildfly-elytron_18_0.xsd</systemId>
+                            <systemId>src/main/resources/schema/wildfly-elytron_19_0.xsd</systemId>
                         </validationSet>
                         <validationSet>
                             <dir>src/main/resources/schema</dir>

@@ -9,7 +9,7 @@
     <parent>
         <groupId>org.wildfly.core</groupId>
         <artifactId>wildfly-core-parent</artifactId>
-        <version>32.0.0.Beta4-SNAPSHOT</version>
+        <version>33.0.0.Beta4-SNAPSHOT</version>
     </parent>
 
     <artifactId>wildfly-core-testbom</artifactId>
@@ -22,7 +22,7 @@
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-annotations</artifactId>
-                <version>${version.com.fasterxml.jackson}</version>
+                <version>${version.com.fasterxml.jackson.annotations}</version>
                 <scope>test</scope>
             </dependency>
             <dependency>

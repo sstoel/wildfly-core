@@ -30,12 +30,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -251,7 +251,7 @@ public abstract class AbstractInstallationManagerTestCase extends AbstractCliTes
             String output = cli.readOutput();
 
             String[] lines = output.split("\n");
-            assertEquals(4, lines.length);
+            assertEquals(10, lines.length);
 
             Set<String> expectedChangeKeys = TestInstallationManager.history.keySet();
             Set<String> expectedVersionsWithoutDescription = TestInstallationManager.nullDescriptionMV.stream()
@@ -259,38 +259,41 @@ public abstract class AbstractInstallationManagerTestCase extends AbstractCliTes
                     .collect(Collectors.toSet());
             List<String> expectedVersionsWithDescriptions = TestInstallationManager.descriptionMV.stream().map(ManifestVersion::getDescription).toList();
 
-            Set<String> actualResults = new HashSet<>(Arrays.asList(lines));
-            for (String actualResult : actualResults) {
-                for (Iterator<String> it = expectedChangeKeys.iterator(); it.hasNext(); ) {
-                    String expectedChangeKey = it.next();
-                    if (actualResult.contains(expectedChangeKey)) {
-                        switch (expectedChangeKey) {
-                            case "update": {
-                                for (String expected : expectedVersionsWithoutDescription) {
-                                    assertTrue(actualResult.contains(expected));
-                                }
-                                break;
+            Map<String, String> actualResults = expectedChangeKeys.stream()
+            .collect(Collectors.toMap(
+                key -> key,
+                key -> Arrays.asList(lines).stream()
+                    .filter(phrase -> phrase.contains(key))
+                    .collect(Collectors.joining(" "))
+            ));
+
+            for (Iterator<String> it = expectedChangeKeys.iterator(); it.hasNext(); ) {
+                String expectedChangeKey = it.next();
+                String actualResult = actualResults.get(expectedChangeKey);
+                    switch (expectedChangeKey) {
+                        case "update": {
+                            for (String expected : expectedVersionsWithoutDescription) {
+                                assertTrue(actualResult.contains(expected));
                             }
-                            case "install": {
-                                for (String expected : expectedVersionsWithDescriptions) {
-                                    assertTrue(actualResult.contains(expected));
-                                }
-                                break;
+                            break;
+                        }
+                        case "install": {
+                            for (String expected : expectedVersionsWithDescriptions) {
+                                assertTrue(actualResult.contains(expected));
                             }
-                            case "rollback":
-                            case "config_change": {
-                                for (String expected : expectedVersionsWithDescriptions) {
-                                    assertFalse(actualResult.contains(expected));
-                                }
-                                for (String expected : expectedVersionsWithoutDescription) {
-                                    assertFalse(actualResult.contains(expected));
-                                }
+                            break;
+                        }
+                        case "rollback":
+                        case "config_change": {
+                            for (String expected : expectedVersionsWithDescriptions) {
+                                assertFalse(actualResult.contains(expected));
+                            }
+                            for (String expected : expectedVersionsWithoutDescription) {
+                                assertFalse(actualResult.contains(expected));
                             }
                         }
-                        it.remove();
-                        break;
                     }
-                }
+                    it.remove();
             }
             Assert.assertTrue(Arrays.asList(lines).toString(), expectedChangeKeys.isEmpty());
         }
@@ -527,6 +530,28 @@ public abstract class AbstractInstallationManagerTestCase extends AbstractCliTes
         String expectedMessage = "WFLYIM0012:";
         String actualMessage = exception.getMessage();
         Assert.assertTrue(getCauseLogFailure(actualMessage, expectedMessage), actualMessage.contains(expectedMessage));
+    }
+
+    @Test
+    public void updateWithConfirmToManifestVersion() throws IOException {
+        // The server under test is a single installation; we start two host (primary/secondary) sharing the same server installation,
+        // but we cannot update the same installation twice, so we only test this case for primary host or the default host that represents a standalone mode
+        String host = getPrimaryOrDefaultHost();
+
+        cli.sendLine("installer update --repositories=id0::http://localhost --confirm --manifest-versions=test-channel::1.0.1 " + getHostSuffix(host));
+        String output = cli.readOutput();
+
+        Assert.assertTrue(output, output.contains("org.findupdates:findupdates.installed"));
+        Assert.assertTrue(output, output.contains("org.findupdates:findupdates.removed"));
+        Assert.assertTrue(output, output.contains("org.findupdates:findupdates.updated"));
+
+        Assert.assertTrue(Files.exists(getPreparedServerDir(host)) && Files.isDirectory(getPreparedServerDir(host)));
+        Assert.assertTrue(getPreparedServerDir(host) + " does not contain the expected file marker",
+                directoryOnlyContains(getPreparedServerDir(host), p -> getPreparedServerDir(host).relativize(p).toString().startsWith("server-prepare-marker-")));
+
+        String markerContents = getMarkerContents(getPreparedServerDir(host));
+        Assert.assertTrue(markerContents.contains("test-channel::1.0.1"));
+        Assert.assertTrue(markerContents.contains("id0::http://localhost"));
     }
 
     @Test
@@ -773,6 +798,38 @@ public abstract class AbstractInstallationManagerTestCase extends AbstractCliTes
         Assert.assertTrue(actualMessage, actualMessage.contains(expectedMessage));
     }
 
+    @Test
+    public void listManifestVersions() throws Exception {
+        // The server under test is a single installation; we start two host (primary/secondary) sharing the same server installation,
+        // but we cannot update the same installation twice, so we only test this case for primary host or the default host that represents a standalone mode
+        String host = getPrimaryOrDefaultHost();
+
+        cli.sendLine("installer list-manifest-versions" + getHostSuffix(host));
+        String output = cli.readOutput();
+
+        Assert.assertTrue(output, output.contains("Channel name: test-channel"));
+        Assert.assertTrue(output, output.contains("Manifest location: a:b"));
+        Assert.assertTrue(output, output.contains("Current manifest version: 1.0.0 (Logical version 1.0.0)"));
+        Assert.assertFalse(output, output.contains("- 0.0.9 (Logical version 0.0.9)"));
+        Assert.assertTrue(output, output.contains("- 1.0.1 (Logical version 1.0.1)"));
+    }
+
+    @Test
+    public void listManifestVersionsIncludingDowngrades() throws Exception {
+        // The server under test is a single installation; we start two host (primary/secondary) sharing the same server installation,
+        // but we cannot update the same installation twice, so we only test this case for primary host or the default host that represents a standalone mode
+        String host = getPrimaryOrDefaultHost();
+
+        cli.sendLine("installer list-manifest-versions --include-downgrades=true" + getHostSuffix(host));
+        String output = cli.readOutput();
+
+        Assert.assertTrue(output, output.contains("Channel name: test-channel"));
+        Assert.assertTrue(output, output.contains("Manifest location: a:b"));
+        Assert.assertTrue(output, output.contains("Current manifest version: 1.0.0 (Logical version 1.0.0)"));
+        Assert.assertTrue(output, output.contains("- 0.0.9 (Logical version 0.0.9)"));
+        Assert.assertTrue(output, output.contains("- 1.0.1 (Logical version 1.0.1)"));
+    }
+
     protected String getNoPreparedServerErrorCode() {
         return "WFLYHC0218:";
     }
@@ -1006,8 +1063,11 @@ public abstract class AbstractInstallationManagerTestCase extends AbstractCliTes
 
     protected void testHostParameter(String hostArgument, Consumer<String> acceptor) {
         final List<String> commands = List.of("update", "clean", "revert", "history", "channel-list",
-                "channel-add --channel-name test --manifest test --repositories test", "channel-edit --channel-name test --manifest test --repositories test",
-                "channel-remove --channel-name test", "upload-custom-patch --custom-patch-file=dummy --manifest=manifest");
+                "list-manifest-versions",
+                "channel-add --channel-name test --manifest test --repositories test",
+                "channel-edit --channel-name test --manifest test --repositories test",
+                "channel-remove --channel-name test",
+                "upload-custom-patch --custom-patch-file=dummy --manifest=manifest");
 
         for (String command : commands) {
             AssertionError exception = assertThrows(AssertionError.class, () ->
@@ -1015,6 +1075,14 @@ public abstract class AbstractInstallationManagerTestCase extends AbstractCliTes
             );
 
             acceptor.accept(exception.getMessage());
+        }
+    }
+
+    protected String getMarkerContents(Path serverDir) throws IOException {
+        try (Stream<Path> stream = Files.walk(serverDir)) {
+            Optional<Path> markerFile = stream.filter(p -> p.getFileName().toString().startsWith("server-prepare-marker-")).findAny();
+            Assert.assertTrue(markerFile.isPresent());
+            return Files.readString(markerFile.get());
         }
     }
 }

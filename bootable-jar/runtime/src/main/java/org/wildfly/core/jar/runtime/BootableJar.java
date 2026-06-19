@@ -11,6 +11,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.ObjectInputFilter;
 import java.io.UncheckedIOException;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.InvocationTargetException;
@@ -52,6 +53,7 @@ import static org.jboss.as.controller.client.helpers.ClientConstants.READ_ATTRIB
 import static org.jboss.as.controller.client.helpers.ClientConstants.RESULT;
 import static org.jboss.as.controller.client.helpers.ClientConstants.RUNTIME_NAME;
 import org.jboss.as.process.CommandLineConstants;
+import org.jboss.as.server.logging.EarlyLoggingInit;
 import org.jboss.as.process.ExitCodes;
 import org.jboss.as.version.ProductConfig;
 import org.jboss.dmr.ModelNode;
@@ -116,6 +118,8 @@ public final class BootableJar implements ShutdownHandler {
 
         // logging needs to be configured before other components have a chance to initialize a logger
         configureLogger();
+        // Some traces to log could have been captured during args handling
+        arguments.logArgumentsHandling(log);
         long t = System.currentTimeMillis();
         if (arguments.getDeployment() != null) {
             setupDeployment(arguments.getDeployment());
@@ -246,6 +250,7 @@ public final class BootableJar implements ShutdownHandler {
                     new LoggingOutputStream(org.jboss.logmanager.Logger.getLogger("stderr"), org.jboss.logmanager.Level.ERROR)
             );
             StdioContext.setStdioContextSelector(new SimpleStdioContextSelector(context));
+            EarlyLoggingInit.initSlf4j();
         }
     }
 
@@ -341,6 +346,13 @@ public final class BootableJar implements ShutdownHandler {
         if (arguments.isHelp()) {
             CmdUsage.printUsage(productConfig, System.out);
             return;
+        }
+
+        if (arguments.getRequiredSerialFilter() != null) {
+            ObjectInputFilter objInputFilter = ObjectInputFilter.Config.createFilter(arguments.getRequiredSerialFilter());
+            // If a filter has already been set (it should not), this call will fail
+            // with an IllegalStateException.
+            ObjectInputFilter.Config.setSerialFilter(objInputFilter);
         }
 
         // Side effect is to initialise Log Manager
@@ -448,27 +460,41 @@ public final class BootableJar implements ShutdownHandler {
         @Override
         public void run() {
             log.shuttingDown();
-            final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
-                final Thread thread = new Thread(r);
-                thread.setName("installation-cleaner");
-                return thread;
-            });
-            final InstallationCleaner cleaner = new InstallationCleaner(environment, log);
-            executor.submit(cleaner);
-            if (Files.exists(pidFile)) {
-                waitForShutdown();
-            }
-            executor.shutdown();
+            InstallationCleaner cleaner = null;
             try {
-                if (!executor.awaitTermination(environment.getTimeout(), TimeUnit.SECONDS)) {
-                    // For some reason we've timed out. The deletion should likely be executing.
-                    // We can't start a new cleanup to force it. On Windows we would have the side effect to have 2 cleaner processes to
-                    // be executed, with the risk that a new installation has been installed and the new cleaner cleaning the new installation
-                    log.cleanupTimeout(environment.getTimeout(), environment.getJBossHome());
+                cleaner = new InstallationCleaner(environment, log);
+            } catch(IOException ex) {
+                log.failedToStartCleanupProcess(ex, environment.getJBossHome());
+            }
+            if (cleaner != null && !cleaner.isAlreadyRunning()) {
+                final ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
+                    final Thread thread = new Thread(r);
+                    thread.setName("installation-cleaner");
+                    return thread;
+                });
+                try {
+                    executor.submit(cleaner);
+                    if (Files.exists(pidFile)) {
+                        waitForShutdown();
+                    }
+                    executor.shutdown();
+                    try {
+                        if (!executor.awaitTermination(environment.getTimeout(), TimeUnit.SECONDS)) {
+                            // For some reason we've timed out. The deletion should likely be executing.
+                            // We can't start a new cleanup to force it. On Windows we would have the side effect to have 2 cleaner processes to
+                            // be executed, with the risk that a new installation has been installed and the new cleaner cleaning the new installation
+                            log.cleanupTimeout(environment.getTimeout(), environment.getJBossHome());
+                        }
+                    } catch (InterruptedException e) {
+                        // The task has been interrupted, leaving
+                        log.cleanupTimeout(environment.getTimeout(), environment.getJBossHome());
+                        Thread.currentThread().interrupt();
+                    }
+                } finally {
+                    if (!executor.isTerminated()) {
+                        executor.shutdownNow();
+                    }
                 }
-            } catch (InterruptedException e) {
-                // The task has been interrupted, leaving
-                log.cleanupTimeout(environment.getTimeout(), environment.getJBossHome());
             }
         }
 
