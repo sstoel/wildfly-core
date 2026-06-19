@@ -41,6 +41,8 @@ import org.jboss.msc.value.InjectedValue;
  */
 final class DeploymentUnitPhaseService<T> implements Service<T> {
 
+    private static final AttachmentKey<AttachmentList<DeploymentUnit>> UNVISITED_DEFERRED_MODULES = AttachmentKey.createList(DeploymentUnit.class);
+
     private final InjectedValue<DeployerChains> deployerChainsInjector = new InjectedValue<DeployerChains>();
     private final DeploymentUnit deploymentUnit;
     private final Phase phase;
@@ -69,7 +71,8 @@ final class DeploymentUnitPhaseService<T> implements Service<T> {
 
     @SuppressWarnings("unchecked")
     public synchronized void start(final StartContext context) throws StartException {
-        if(runOnce.get()) {
+        boolean allowRestart = restartAllowed();
+        if(runOnce.get() && !allowRestart) {
             ServerLogger.DEPLOYMENT_LOGGER.deploymentRestartDetected(deploymentUnit.getName());
             //this only happens on deployment restart, which we don't support at the moment.
             //instead we are going to restart the complete deployment.
@@ -103,6 +106,7 @@ final class DeploymentUnitPhaseService<T> implements Service<T> {
         final ListIterator<RegisteredDeploymentUnitProcessor> iterator = list.listIterator();
         final ServiceContainer container = context.getController().getServiceContainer();
         final RequirementServiceTarget serviceTarget = RequirementServiceTarget.forTarget(context.getChildTarget().subTarget(), deploymentUnit.getAttachment(Attachments.CAPABILITY_SERVICE_SUPPORT));
+        final String name = deploymentUnit.getName();
         final DeploymentUnit parent = deploymentUnit.getParent();
 
         final List<Consumer<ServiceBuilder<?>>> dependencies = new LinkedList<>();
@@ -215,8 +219,29 @@ final class DeploymentUnitPhaseService<T> implements Service<T> {
                 phaseServiceBuilder.requires(du.getServiceName().append(phase.name()));
             }
 
+            // Defer the {@link Phase.FIRST_MODULE_USE} phase
+            List<String> deferredModules = DeploymentUtils.getDeferredModules(deploymentUnit);
+            if (nextPhase == Phase.FIRST_MODULE_USE) {
+                Mode initialMode = getDeferableInitialMode(deploymentUnit, deferredModules);
+                if (initialMode != Mode.ACTIVE) {
+                    ServerLogger.DEPLOYMENT_LOGGER.infoDeferDeploymentPhase(nextPhase, name, initialMode);
+                    phaseServiceBuilder.setInitialMode(initialMode);
+                }
+            }
+
             phaseServiceBuilder.install();
         }
+    }
+
+    private Boolean restartAllowed() {
+        final DeploymentUnit parent;
+        if (deploymentUnit.getParent() == null) {
+            parent = deploymentUnit;
+        } else {
+            parent = deploymentUnit.getParent();
+        }
+        Boolean allowed = parent.getAttachment(Attachments.ALLOW_PHASE_RESTART);
+        return allowed != null && allowed;
     }
 
     public synchronized void stop(final StopContext context) {
@@ -228,6 +253,41 @@ final class DeploymentUnitPhaseService<T> implements Service<T> {
             final RegisteredDeploymentUnitProcessor prev = iterator.previous();
             safeUndeploy(deploymentUnitContext, phase, prev);
         }
+    }
+
+    private Mode getDeferableInitialMode(final DeploymentUnit deploymentUnit, List<String> deferredModules) {
+        // Make the deferred module NEVER
+        if (deferredModules.contains(deploymentUnit.getName())) {
+            return Mode.NEVER;
+        }
+        Mode initialMode = Mode.ACTIVE;
+        DeploymentUnit parent = DeploymentUtils.getTopDeploymentUnit(deploymentUnit);
+        if (parent == deploymentUnit) {
+            List<DeploymentUnit> subDeployments = parent.getAttachmentList(Attachments.SUB_DEPLOYMENTS);
+            for (DeploymentUnit du : subDeployments) {
+                // Always make the EAR LAZY if it could contain deferrable sub-deployments
+                if (du.hasAttachment(Attachments.OSGI_MANIFEST)) {
+                    initialMode = Mode.LAZY;
+                    break;
+                }
+            }
+            // Initialize the list of unvisited deferred modules
+            if (initialMode == Mode.LAZY) {
+                for (DeploymentUnit du : subDeployments) {
+                    parent.addToAttachmentList(UNVISITED_DEFERRED_MODULES, du);
+                }
+            }
+        } else {
+            // Make the non-deferred sibling PASSIVE if it is not the last to visit
+            List<DeploymentUnit> unvisited = parent.getAttachmentList(UNVISITED_DEFERRED_MODULES);
+            synchronized (unvisited) {
+                unvisited.remove(deploymentUnit);
+                if (!deferredModules.isEmpty() || !unvisited.isEmpty()) {
+                    initialMode = Mode.PASSIVE;
+                }
+            }
+        }
+        return initialMode;
     }
 
     private static void safeUndeploy(final DeploymentUnit deploymentUnit, final Phase phase, final RegisteredDeploymentUnitProcessor prev) {
