@@ -88,6 +88,9 @@ public class WriteAttributeHandler implements OperationStepHandler {
             }
             AuthorizationResult authorizationResult = context.authorize(operation, attributeName, currentValue);
             if (authorizationResult.getDecision() == AuthorizationResult.Decision.DENY) {
+                // A denied write of a runtime attribute is audited too, the configuration attributes are read for update
+                // before they are authorized
+                context.deniedWriteAttempt();
                 throw ControllerLogger.ROOT_LOGGER.unauthorized(operation.require(OP).asString(), address, authorizationResult.getExplanation());
             }
 

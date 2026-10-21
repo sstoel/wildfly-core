@@ -1282,6 +1282,11 @@ final class OperationContextImpl extends AbstractOperationContext {
     }
 
     @Override
+    public void deniedWriteAttempt() {
+        readOnly = false;
+    }
+
+    @Override
     ManagementResourceRegistration getRootResourceRegistrationForUpdate() {
         return getMutableResourceRegistration(null);
     }

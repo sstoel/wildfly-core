@@ -828,6 +828,13 @@ public interface OperationContext extends ExpressionResolver, CapabilityServiceD
     AuthorizationResult authorize(ModelNode operation, String attribute, ModelNode currentValue);
 
     /**
+     * The operation tried to modify the model or the runtime state and was denied: it is audited as an operation that
+     * is not read-only, like a write that was allowed.
+     */
+    default void deniedWriteAttempt() {
+    }
+
+    /**
      * Check for authorization to read or modify an attribute, limiting the check to the given effects of the operation
      * @param operation the operation that will read or modify
      * @param attribute the attribute name
